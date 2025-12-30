@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - synced with Clerk
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings      Booking[]
+  savedCars     SavedCar[]
+  adminActions  AdminAuditLog[]
+  stripeCustomerId String?
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// Car model with proper constraints
+model Car {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  name        String
+  nameDe      String?
+  subtitle    String?
+  subtitleDe  String?
+  description String      @db.Text
+  descriptionDe String?   @db.Text
+  category    CarCategory
+  price       Int // price per day in cents
+  image       String
+  images      String[]  @default([])
+  status      CarStatus   @default(AVAILABLE)
+  
+  // Specs
+  gearbox      String
+  seats        Int
+  fuelType     String
+  acceleration String
+  year         Int?
+  
+  // Ratings
+  rating       Float       @default(0)
+  reviewCount  Int         @default(0)
+  
+  // Soft delete
+  isDeleted    Boolean     @default(false)
+  deletedAt    DateTime?
+  
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  bookings     Booking[]
+  savedBy      SavedCar[]
+  blockedDates BlockedDate[]
+
+  @@index([category])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([year])
+}
+
+enum CarCategory {
+  ELECTRIC
+  LUXURY
+  SUV
+  SEDAN
+  EV
+}
+
+enum CarStatus {
+  AVAILABLE
+  LOW_STOCK
+  RENTED
+  MAINTENANCE
+}
+
+// Booking with proper constraints to prevent double-booking
+model Booking {
+  id              String        @id @default(cuid())
+  bookingNumber   String        @unique @default(cuid())
+  transferCode    String        @unique
+  
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  
+  carId           String
+  car             Car           @relation(fields: [carId], references: [id])
+  
+  // Dates stored in UTC
+  pickupDate      DateTime
+  dropoffDate     DateTime
+  location        String
+  
+  // Pricing
+  pricePerDay     Int // in cents, locked at booking time
+  totalDays       Int
+  totalPrice      Int // in cents
+  depositAmount   Int // in cents
+  
+  // Status
+  status          BookingStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  
+  // Stripe
+  stripeSessionId    String?   @unique
+  stripePaymentIntentId String? @unique
+  
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  completedAt     DateTime?
+  
+  // Relations
+  payments        Payment[]
+  adminActions    AdminAuditLog[]
+
+  @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
+  @@index([userId])
+  @@index([carId])
+  @@index([status])
+  @@index([pickupDate, dropoffDate])
+  @@index([transferCode])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+// Payment tracking
+model Payment {
+  id                   String   @id @default(cuid())
+  bookingId            String
+  booking              Booking  @relation(fields: [bookingId], references: [id])
+  
+  amount               Int // in cents
+  currency             String   @default("usd")
+  status               PaymentStatus
+  
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+  
+  metadata             Json?
+  
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([stripePaymentIntentId])
+}
+
+// Blocked dates for maintenance or other reasons
+model BlockedDate {
+  id        String   @id @default(cuid())
+  carId     String
+  car       Car      @relation(fields: [carId], references: [id])
+  
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  
+  createdAt DateTime @default(now())
+
+  @@index([carId])
+  @@index([startDate, endDate])
+}
+
+// Saved cars (favorites)
+model SavedCar {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  carId     String
+  car       Car      @relation(fields: [carId], references: [id])
+  
+  createdAt DateTime @default(now())
+
+  @@unique([userId, carId])
+  @@index([userId])
+}
+
+// Admin audit log for accountability
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  admin       User     @relation(fields: [adminId], references: [id])
+  
+  action      AdminAction
+  targetType  String // "booking", "car", "user"
+  targetId    String
+  
+  bookingId   String?
+  booking     Booking? @relation(fields: [bookingId], references: [id])
+  
+  oldValue    Json?
+  newValue    Json?
+  reason      String?
+  
+  ipAddress   String?
+  userAgent   String?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+enum AdminAction {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_REJECTED
+  CAR_CREATED
+  CAR_UPDATED
+  CAR_DELETED
+  USER_ROLE_CHANGED
+  BLOCKED_DATE_ADDED
+  BLOCKED_DATE_REMOVED
+}

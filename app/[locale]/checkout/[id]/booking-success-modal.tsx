@@ -1,0 +1,204 @@
+"use client"
+
+import { formatCents } from "@/lib/money"
+import { Button } from "@/components/ui/button"
+
+interface BookingSuccessModalProps {
+  bookingNumber: string
+  transferCode: string
+  totalPrice: number
+  depositAmount: number
+  carName: string
+  pickupDate: Date
+  dropoffDate: Date
+  location: string
+  onClose: () => void
+}
+
+export function BookingSuccessModal({
+  bookingNumber,
+  transferCode,
+  totalPrice,
+  depositAmount,
+  carName,
+  pickupDate,
+  dropoffDate,
+  location,
+  onClose,
+}: BookingSuccessModalProps) {
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const handleCopyTransferCode = () => {
+    navigator.clipboard.writeText(transferCode)
+    // You could add a toast notification here
+  }
+
+  const handleCopyBookingNumber = () => {
+    navigator.clipboard.writeText(bookingNumber)
+    // You could add a toast notification here
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-background rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        {/* Success Header */}
+        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-t-2xl">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-center mb-2">Booking Confirmed!</h2>
+          <p className="text-center text-white/90">Your reservation has been created successfully</p>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Booking Reference */}
+          <div className="bg-muted rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Booking Number</span>
+              <button
+                onClick={handleCopyBookingNumber}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                Copy
+              </button>
+            </div>
+            <div className="font-mono font-bold text-xl">{bookingNumber}</div>
+          </div>
+
+          {/* Transfer Code */}
+          <div className="bg-primary/10 border-2 border-primary/20 rounded-xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-primary">Transfer Reference Code</span>
+              <button
+                onClick={handleCopyTransferCode}
+                className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+                Copy
+              </button>
+            </div>
+            <div className="font-mono font-bold text-2xl text-primary tracking-wider">{transferCode}</div>
+            <p className="text-xs text-muted-foreground">Use this code as reference when making payment</p>
+          </div>
+
+          {/* Booking Details */}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Booking Details</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Car</span>
+                <span className="font-medium">{carName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pick-up</span>
+                <span className="font-medium">{formatDate(pickupDate)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Drop-off</span>
+                <span className="font-medium">{formatDate(dropoffDate)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Location</span>
+                <span className="font-medium">{location}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Instructions */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+              </svg>
+              <div className="flex-1">
+                <h4 className="font-semibold text-amber-900 mb-2">Payment Required</h4>
+                <div className="space-y-2 text-sm text-amber-800">
+                  <p>Please complete payment via bank transfer:</p>
+                  <div className="bg-white rounded-lg p-3 space-y-1 font-mono text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Deposit (20%):</span>
+                      <span className="font-bold">{formatCents(depositAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Amount:</span>
+                      <span className="font-bold">{formatCents(totalPrice)}</span>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
+                    <p className="font-semibold text-amber-900">Bank Details:</p>
+                    <p>Bank Name: <span className="font-medium">Your Bank Name</span></p>
+                    <p>Account Name: <span className="font-medium">Car Rental Company</span></p>
+                    <p>Account Number: <span className="font-medium">1234567890</span></p>
+                    <p>Reference: <span className="font-mono font-bold text-primary">{transferCode}</span></p>
+                  </div>
+                  <p className="text-xs mt-2">
+                    <strong>Important:</strong> Include the transfer code <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we can process your booking.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Next Steps */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+            <h4 className="font-semibold text-blue-900 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Next Steps
+            </h4>
+            <ol className="text-sm text-blue-800 space-y-1 ml-7 list-decimal">
+              <li>Complete the bank transfer using the details above</li>
+              <li>You will receive a confirmation email with payment instructions</li>
+              <li>Once payment is verified, your booking will be confirmed</li>
+              <li>You'll receive a final confirmation email with pickup details</li>
+            </ol>
+          </div>
+
+          {/* Action Button */}
+          <Button onClick={onClose} className="w-full h-12 text-base font-semibold">
+            View My Bookings
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
+            A confirmation email has been sent with all the details above.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+

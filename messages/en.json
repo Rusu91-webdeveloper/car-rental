@@ -1,0 +1,291 @@
+{
+  "common": {
+    "appName": "RentCar",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "seeAll": "See All",
+    "popular": "Popular",
+    "recent": "Recent",
+    "searchPlaceholder": "Search location, dates...",
+    "bookNow": "Book Now",
+    "viewDetails": "View Details",
+    "close": "Close"
+  },
+  "home": {
+    "title": "Ready for your next trip?",
+    "subtitle": "Find the perfect car nearby",
+    "popularCars": "Popular Cars",
+    "noCarsFound": "No cars found",
+    "tryDifferentSearch": "Try a different search or filter"
+  },
+  "about": {
+    "title": "About Us",
+    "heroTitle": "Welcome to RentCar",
+    "subtitle": "Your trusted partner for car rentals",
+    "storyTitle": "Our Story",
+    "storyBody": "Founded in 2020, RentCar has been dedicated to providing exceptional car rental experiences. We understand that every journey is unique, and we're committed to offering a diverse fleet of vehicles to match your specific needs.",
+    "missionTitle": "Our Mission",
+    "missionBody": "To make car rentals simple, affordable, and accessible for everyone. We believe in transparent pricing, quality vehicles, and outstanding customer service.",
+    "whyTitle": "Why Choose Us",
+    "feature1Title": "Wide Selection",
+    "feature1Body": "From economy to luxury, electric to SUV - we have the perfect car for every occasion.",
+    "feature2Title": "Transparent Pricing",
+    "feature2Body": "No hidden fees. What you see is what you pay. Simple, clear, and honest.",
+    "feature3Title": "24/7 Support",
+    "feature3Body": "Our customer support team is always ready to assist you, anytime, anywhere.",
+    "setupTitle": "Setup Guide",
+    "setupDemoTitle": "Quick Start (Demo Mode)",
+    "setupDemoBody": "To test the app without setting up integrations, set <code>NEXT_PUBLIC_DEMO_MODE=true</code> in your environment variables (Vars section in the left sidebar).",
+    "setupDbTitle": "Database Setup (Production)",
+    "setupDbIntro": "Connect a PostgreSQL database (Neon recommended):",
+    "setupDbStep1": "Add <code>DATABASE_URL</code> in Vars section",
+    "setupDbStep2": "The app will automatically create tables on first run",
+    "setupAuthTitle": "Authentication (Clerk)",
+    "setupAuthIntro": "Sign up at <clerkLink>Clerk Dashboard</clerkLink> and add these keys in Vars:",
+    "setupAuthKey1": "<code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code>",
+    "setupAuthKey2": "<code>CLERK_SECRET_KEY</code>",
+    "setupPaymentsTitle": "Payments (Stripe)",
+    "setupPaymentsIntro": "Get your Stripe keys from <stripeLink>Stripe Dashboard</stripeLink>:",
+    "setupPaymentsKey1": "<code>STRIPE_SECRET_KEY</code>",
+    "setupPaymentsKey2": "<code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>",
+    "setupPaymentsKey3": "<code>STRIPE_WEBHOOK_SECRET</code>",
+    "setupHelp": "<strong>Need help?</strong> Check the <helpLink>Help page</helpLink> or view the full <code>SETUP.md</code> file in the project."
+  },
+  "help": {
+    "title": "Help & Support",
+    "heading": "How can we help you?",
+    "subtitle": "Find answers to common questions below",
+    "stillNeedHelpTitle": "Still need help?",
+    "stillNeedHelpBody": "Can't find what you're looking for? Our support team is here to help.",
+    "contactSupport": "Contact Support",
+    "faqs": {
+      "booking": {
+        "question": "How do I book a car?",
+        "answer": "Browse our available cars, select the one you like, choose your dates and location, and complete the checkout process. You'll receive a confirmation email immediately."
+      },
+      "documents": {
+        "question": "What documents do I need?",
+        "answer": "You'll need a valid driver's license, a credit card in your name, and proof of insurance. International customers may also need a passport."
+      },
+      "modify": {
+        "question": "Can I modify or cancel my booking?",
+        "answer": "Yes! You can modify or cancel your booking up to 24 hours before pickup through your account dashboard. Cancellation fees may apply depending on timing."
+      },
+      "pricing": {
+        "question": "What's included in the rental price?",
+        "answer": "Our prices include basic insurance, unlimited mileage, and 24/7 roadside assistance. Additional features like GPS or child seats can be added for a fee."
+      },
+      "late": {
+        "question": "What if I return the car late?",
+        "answer": "Late returns are charged hourly at 1/4 of the daily rate. If you're more than 2 hours late, you'll be charged for a full additional day."
+      },
+      "longTerm": {
+        "question": "Do you offer long-term rentals?",
+        "answer": "Yes! We offer discounted rates for rentals longer than 7 days. Contact our support team for custom long-term rental packages."
+      }
+    }
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "We'd love to hear from you. Send us a message anytime.",
+    "success": "Thank you! We'll get back to you soon.",
+    "info": {
+      "emailTitle": "Email",
+      "phoneTitle": "Phone",
+      "addressTitle": "Address"
+    },
+    "form": {
+      "name": "Name",
+      "email": "Email",
+      "subject": "Subject",
+      "message": "Message",
+      "send": "Send Message"
+    }
+  },
+  "login": {
+    "subtitle": "Log in to manage your bookings and hit the road."
+  },
+  "signup": {
+    "subtitle": "Create an account to book your first ride."
+  },
+  "verify": {
+    "subtitle": "We've sent a 6-digit verification code to <highlight>{email}</highlight>. Please enter it below."
+  },
+  "cars": {
+    "title": "All Cars",
+    "subtitle": "{count} {count, plural, one {car} other {cars}} available",
+    "noCars": "No cars found",
+    "adjustFilters": "Try adjusting your filters or search query",
+    "clearFilters": "Clear Filters"
+  },
+  "car": {
+    "category": "Category",
+    "pricePerDay": "Per Day",
+    "rating": "Rating",
+    "reviews": "{count} {count, plural, one {review} other {reviews}}",
+    "seats": "{count} {count, plural, one {seat} other {seats}}",
+    "gearbox": "Gearbox",
+    "fuel": "Fuel",
+    "acceleration": "Acceleration",
+    "description": "Description",
+    "specifications": "Specifications",
+    "features": "Features",
+    "capacity": "Capacity",
+    "accelerationLabel": "0-60 mph",
+    "about": "About this car",
+    "reviewsTitle": "Reviews",
+    "basedOnReviews": "based on {count} {count, plural, one {review} other {reviews}}"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "bookingDetails": "Booking Details",
+    "pickupDate": "Pick-up Date & Time",
+    "dropoffDate": "Drop-off Date & Time",
+    "location": "Pick-up Location",
+    "priceSummary": "Price Summary",
+    "rental": "Rental ({days} {days, plural, one {day} other {days}})",
+    "subtotal": "Subtotal",
+    "tax": "Tax (10%)",
+    "total": "Total",
+    "confirmBooking": "Confirm Booking",
+    "processing": "Processing...",
+    "bookingConfirmed": "Booking Confirmed!",
+    "reservationCreated": "Your reservation has been created successfully",
+    "bookingNumber": "Booking Number",
+    "transferCode": "Transfer Reference Code",
+    "useThisCode": "Use this code as reference when making payment",
+    "copy": "Copy",
+    "paymentRequired": "Payment Required",
+    "completePayment": "Please complete payment via bank transfer:",
+    "deposit": "Deposit (20%)",
+    "totalAmount": "Total Amount",
+    "bankDetails": "Bank Details",
+    "bankName": "Bank Name",
+    "accountName": "Account Name",
+    "accountNumber": "Account Number",
+    "swiftCode": "Swift Code",
+    "paymentReference": "Payment Reference",
+    "important": "Important",
+    "includeCode": "Include the transfer code {code} in your payment reference so we can process your booking.",
+    "nextSteps": "Next Steps",
+    "step1": "Complete the bank transfer using the details above",
+    "step2": "You will receive a confirmation email with payment instructions",
+    "step3": "Once payment is verified, your booking will be confirmed",
+    "step4": "You'll receive a final confirmation email with pickup details",
+    "viewBookings": "View My Bookings",
+    "confirmationEmail": "A confirmation email has been sent with all the details above."
+  },
+  "profile": {
+    "title": "Profile",
+    "myProfile": "My Profile",
+    "bookings": "Bookings",
+    "savedCars": "Saved Cars",
+    "logout": "Log Out",
+    "logoutDemo": "Log Out (Demo)",
+    "personalInfo": "Personal Information",
+    "email": "Email",
+    "name": "Name",
+    "role": "Role",
+    "admin": "Admin",
+    "user": "User",
+    "stats": "Statistics",
+    "totalBookings": "Total Bookings",
+    "upcomingBookings": "Upcoming Bookings"
+  },
+  "bookings": {
+    "title": "My Bookings",
+    "noBookings": "No bookings found",
+    "createFirst": "Create your first booking to get started",
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "rejected": "Rejected"
+    },
+    "pickup": "Pickup",
+    "dropoff": "Drop-off",
+    "total": "Total",
+    "bookingNumber": "Booking #"
+  },
+  "saved": {
+    "title": "Saved Cars",
+    "noSaved": "No saved cars",
+    "explore": "Explore cars and save your favorites"
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "subtitle": "Welcome back, {name}",
+    "logout": "Log Out",
+    "cars": "Cars",
+    "bookings": "Bookings",
+    "users": "Users",
+    "overview": "Overview",
+    "totalCars": "Total Cars",
+    "totalBookings": "Total Bookings",
+    "totalUsers": "Total Users"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?",
+    "dontHaveAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "demoMode": "Demo Mode"
+  },
+  "navigation": {
+    "home": "Home",
+    "cars": "Cars",
+    "bookings": "Bookings",
+    "trips": "Trips",
+    "saved": "Saved",
+    "profile": "Profile",
+    "admin": "Admin",
+    "about": "About Us",
+    "contact": "Contact",
+    "help": "Help & Support",
+    "language": "Language"
+  },
+  "categories": {
+    "all": "All",
+    "electric": "Electric",
+    "luxury": "Luxury",
+    "suv": "SUV",
+    "sedan": "Sedan",
+    "ev": "EV"
+  },
+  "carStatus": {
+    "available": "Available",
+    "lowStock": "Low Stock",
+    "rented": "Rented",
+    "maintenance": "Maintenance"
+  },
+  "filters": {
+    "year": "Year",
+    "allYears": "All Years",
+    "category": "Category",
+    "dateRange": "Date Range",
+    "pickupDate": "Pickup",
+    "dropoffDate": "Dropoff",
+    "selectPickupDate": "Select pickup date",
+    "selectDropoffDate": "Select dropoff date",
+    "clear": "Clear",
+    "showingAvailableCars": "Showing only cars available for selected dates"
+  }
+}

@@ -1,0 +1,291 @@
+{
+  "common": {
+    "appName": "RentCar",
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Zurück",
+    "search": "Suchen",
+    "filter": "Filter",
+    "all": "Alle",
+    "seeAll": "Alle anzeigen",
+    "popular": "Beliebt",
+    "recent": "Kürzlich",
+    "searchPlaceholder": "Ort, Daten suchen...",
+    "bookNow": "Jetzt buchen",
+    "viewDetails": "Details anzeigen",
+    "close": "Schließen"
+  },
+  "home": {
+    "title": "Bereit für Ihre nächste Reise?",
+    "subtitle": "Finden Sie das perfekte Auto in Ihrer Nähe",
+    "popularCars": "Beliebte Autos",
+    "noCarsFound": "Keine Autos gefunden",
+    "tryDifferentSearch": "Versuchen Sie eine andere Suche oder einen anderen Filter"
+  },
+  "about": {
+    "title": "Über uns",
+    "heroTitle": "Willkommen bei RentCar",
+    "subtitle": "Ihr zuverlässiger Partner für Mietwagen",
+    "storyTitle": "Unsere Geschichte",
+    "storyBody": "Seit 2020 steht RentCar für erstklassige Mietwagenerlebnisse. Wir wissen, dass jede Reise einzigartig ist, und bieten eine vielfältige Fahrzeugflotte, die zu Ihren Bedürfnissen passt.",
+    "missionTitle": "Unsere Mission",
+    "missionBody": "Mietwagen einfach, bezahlbar und für alle zugänglich zu machen. Wir glauben an transparente Preise, hochwertige Fahrzeuge und erstklassigen Service.",
+    "whyTitle": "Warum RentCar",
+    "feature1Title": "Große Auswahl",
+    "feature1Body": "Von Economy bis Luxus, elektrisch bis SUV – wir haben das passende Auto für jeden Anlass.",
+    "feature2Title": "Transparente Preise",
+    "feature2Body": "Keine versteckten Gebühren. Was Sie sehen, ist der Preis. Einfach, klar und ehrlich.",
+    "feature3Title": "24/7 Support",
+    "feature3Body": "Unser Support-Team ist jederzeit für Sie da, wann und wo immer Sie Hilfe brauchen.",
+    "setupTitle": "Einrichtungsleitfaden",
+    "setupDemoTitle": "Schnellstart (Demo-Modus)",
+    "setupDemoBody": "Um die App ohne Integrationen zu testen, setzen Sie <code>NEXT_PUBLIC_DEMO_MODE=true</code> in Ihren Umgebungsvariablen (Abschnitt Vars in der linken Seitenleiste).",
+    "setupDbTitle": "Datenbank-Setup (Produktion)",
+    "setupDbIntro": "Verbinden Sie eine PostgreSQL-Datenbank (Neon empfohlen):",
+    "setupDbStep1": "Fügen Sie <code>DATABASE_URL</code> im Abschnitt Vars hinzu",
+    "setupDbStep2": "Die App erstellt die Tabellen automatisch beim ersten Start",
+    "setupAuthTitle": "Authentifizierung (Clerk)",
+    "setupAuthIntro": "Registrieren Sie sich im <clerkLink>Clerk-Dashboard</clerkLink> und fügen Sie diese Schlüssel in Vars hinzu:",
+    "setupAuthKey1": "<code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code>",
+    "setupAuthKey2": "<code>CLERK_SECRET_KEY</code>",
+    "setupPaymentsTitle": "Zahlungen (Stripe)",
+    "setupPaymentsIntro": "Holen Sie sich Ihre Stripe-Schlüssel im <stripeLink>Stripe-Dashboard</stripeLink>:",
+    "setupPaymentsKey1": "<code>STRIPE_SECRET_KEY</code>",
+    "setupPaymentsKey2": "<code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>",
+    "setupPaymentsKey3": "<code>STRIPE_WEBHOOK_SECRET</code>",
+    "setupHelp": "<strong>Hilfe nötig?</strong> Besuchen Sie die <helpLink>Hilfeseite</helpLink> oder öffnen Sie die Datei <code>SETUP.md</code> im Projekt."
+  },
+  "help": {
+    "title": "Hilfe & Support",
+    "heading": "Wie können wir helfen?",
+    "subtitle": "Finden Sie unten Antworten auf häufige Fragen",
+    "stillNeedHelpTitle": "Brauchen Sie weitere Hilfe?",
+    "stillNeedHelpBody": "Sie finden nicht, was Sie suchen? Unser Support-Team hilft gerne.",
+    "contactSupport": "Support kontaktieren",
+    "faqs": {
+      "booking": {
+        "question": "Wie buche ich ein Auto?",
+        "answer": "Durchsuchen Sie unsere verfügbaren Autos, wählen Sie eines aus, legen Sie Ihre Daten und den Ort fest und schließen Sie den Checkout ab. Sie erhalten sofort eine Bestätigungs-E-Mail."
+      },
+      "documents": {
+        "question": "Welche Dokumente benötige ich?",
+        "answer": "Sie benötigen einen gültigen Führerschein, eine Kreditkarte auf Ihren Namen und einen Versicherungsnachweis. Internationale Kunden benötigen ggf. auch einen Reisepass."
+      },
+      "modify": {
+        "question": "Kann ich meine Buchung ändern oder stornieren?",
+        "answer": "Ja. Sie können Ihre Buchung bis 24 Stunden vor Abholung über Ihr Konto ändern oder stornieren. Je nach Zeitpunkt können Stornogebühren anfallen."
+      },
+      "pricing": {
+        "question": "Was ist im Mietpreis enthalten?",
+        "answer": "Unsere Preise beinhalten Basisversicherung, unbegrenzte Kilometer und 24/7 Pannenhilfe. Zusätzliche Extras wie GPS oder Kindersitze sind gegen Gebühr verfügbar."
+      },
+      "late": {
+        "question": "Was passiert bei einer verspäteten Rückgabe?",
+        "answer": "Verspätete Rückgaben werden stundenweise mit 1/4 des Tagespreises berechnet. Bei mehr als 2 Stunden Verspätung berechnen wir einen zusätzlichen Tag."
+      },
+      "longTerm": {
+        "question": "Bieten Sie Langzeitmieten an?",
+        "answer": "Ja. Für Mieten über 7 Tage bieten wir Rabatte. Kontaktieren Sie unseren Support für ein individuelles Angebot."
+      }
+    }
+  },
+  "contact": {
+    "title": "Kontakt",
+    "subtitle": "Wir freuen uns auf Ihre Nachricht. Schreiben Sie uns jederzeit.",
+    "success": "Vielen Dank! Wir melden uns in Kürze.",
+    "info": {
+      "emailTitle": "E-Mail",
+      "phoneTitle": "Telefon",
+      "addressTitle": "Adresse"
+    },
+    "form": {
+      "name": "Name",
+      "email": "E-Mail",
+      "subject": "Betreff",
+      "message": "Nachricht",
+      "send": "Nachricht senden"
+    }
+  },
+  "login": {
+    "subtitle": "Melden Sie sich an, um Ihre Buchungen zu verwalten und loszufahren."
+  },
+  "signup": {
+    "subtitle": "Erstellen Sie ein Konto, um Ihre erste Fahrt zu buchen."
+  },
+  "verify": {
+    "subtitle": "Wir haben einen 6-stelligen Bestätigungscode an <highlight>{email}</highlight> gesendet. Bitte geben Sie ihn unten ein."
+  },
+  "cars": {
+    "title": "Alle Autos",
+    "subtitle": "{count} {count, plural, one {Auto} other {Autos}} verfügbar",
+    "noCars": "Keine Autos gefunden",
+    "adjustFilters": "Versuchen Sie, Ihre Filter oder Suchanfrage anzupassen",
+    "clearFilters": "Filter löschen"
+  },
+  "car": {
+    "category": "Kategorie",
+    "pricePerDay": "Pro Tag",
+    "rating": "Bewertung",
+    "reviews": "{count} {count, plural, one {Bewertung} other {Bewertungen}}",
+    "seats": "{count} {count, plural, one {Sitzplatz} other {Sitzplätze}}",
+    "gearbox": "Getriebe",
+    "fuel": "Kraftstoff",
+    "acceleration": "Beschleunigung",
+    "description": "Beschreibung",
+    "specifications": "Spezifikationen",
+    "features": "Ausstattung",
+    "capacity": "Kapazität",
+    "accelerationLabel": "0-60 mph",
+    "about": "Über dieses Auto",
+    "reviewsTitle": "Bewertungen",
+    "basedOnReviews": "basierend auf {count} {count, plural, one {Bewertung} other {Bewertungen}}"
+  },
+  "checkout": {
+    "title": "Kasse",
+    "bookingDetails": "Buchungsdetails",
+    "pickupDate": "Abholung Datum & Uhrzeit",
+    "dropoffDate": "Rückgabe Datum & Uhrzeit",
+    "location": "Abholort",
+    "priceSummary": "Preisübersicht",
+    "rental": "Miete ({days} {days, plural, one {Tag} other {Tage}})",
+    "subtotal": "Zwischensumme",
+    "tax": "MwSt. (10%)",
+    "total": "Gesamt",
+    "confirmBooking": "Buchung bestätigen",
+    "processing": "Wird verarbeitet...",
+    "bookingConfirmed": "Buchung bestätigt!",
+    "reservationCreated": "Ihre Reservierung wurde erfolgreich erstellt",
+    "bookingNumber": "Buchungsnummer",
+    "transferCode": "Überweisungsreferenzcode",
+    "useThisCode": "Verwenden Sie diesen Code als Referenz bei der Zahlung",
+    "copy": "Kopieren",
+    "paymentRequired": "Zahlung erforderlich",
+    "completePayment": "Bitte schließen Sie die Zahlung per Banküberweisung ab:",
+    "deposit": "Anzahlung (20%)",
+    "totalAmount": "Gesamtbetrag",
+    "bankDetails": "Bankverbindung",
+    "bankName": "Bankname",
+    "accountName": "Kontoinhaber",
+    "accountNumber": "Kontonummer",
+    "swiftCode": "SWIFT-Code",
+    "paymentReference": "Zahlungsreferenz",
+    "important": "Wichtig",
+    "includeCode": "Bitte geben Sie den Überweisungscode {code} in Ihrer Zahlungsreferenz an, damit wir Ihre Buchung bearbeiten können.",
+    "nextSteps": "Nächste Schritte",
+    "step1": "Schließen Sie die Banküberweisung mit den oben angegebenen Daten ab",
+    "step2": "Sie erhalten eine Bestätigungs-E-Mail mit Zahlungsanweisungen",
+    "step3": "Sobald die Zahlung verifiziert wurde, wird Ihre Buchung bestätigt",
+    "step4": "Sie erhalten eine finale Bestätigungs-E-Mail mit Abholdetails",
+    "viewBookings": "Meine Buchungen anzeigen",
+    "confirmationEmail": "Eine Bestätigungs-E-Mail wurde mit allen oben genannten Details gesendet."
+  },
+  "profile": {
+    "title": "Profil",
+    "myProfile": "Mein Profil",
+    "bookings": "Buchungen",
+    "savedCars": "Gespeicherte Autos",
+    "logout": "Abmelden",
+    "logoutDemo": "Abmelden (Demo)",
+    "personalInfo": "Persönliche Informationen",
+    "email": "E-Mail",
+    "name": "Name",
+    "role": "Rolle",
+    "admin": "Administrator",
+    "user": "Benutzer",
+    "stats": "Statistiken",
+    "totalBookings": "Gesamtbuchungen",
+    "upcomingBookings": "Bevorstehende Buchungen"
+  },
+  "bookings": {
+    "title": "Meine Buchungen",
+    "noBookings": "Keine Buchungen gefunden",
+    "createFirst": "Erstellen Sie Ihre erste Buchung, um loszulegen",
+    "status": {
+      "pending": "Ausstehend",
+      "confirmed": "Bestätigt",
+      "inProgress": "In Bearbeitung",
+      "completed": "Abgeschlossen",
+      "cancelled": "Storniert",
+      "rejected": "Abgelehnt"
+    },
+    "pickup": "Abholung",
+    "dropoff": "Rückgabe",
+    "total": "Gesamt",
+    "bookingNumber": "Buchung #"
+  },
+  "saved": {
+    "title": "Gespeicherte Autos",
+    "noSaved": "Keine gespeicherten Autos",
+    "explore": "Durchsuchen Sie Autos und speichern Sie Ihre Favoriten"
+  },
+  "admin": {
+    "title": "Admin-Dashboard",
+    "subtitle": "Willkommen zurück, {name}",
+    "logout": "Abmelden",
+    "cars": "Autos",
+    "bookings": "Buchungen",
+    "users": "Benutzer",
+    "overview": "Übersicht",
+    "totalCars": "Gesamt Autos",
+    "totalBookings": "Gesamt Buchungen",
+    "totalUsers": "Gesamt Benutzer"
+  },
+  "auth": {
+    "signIn": "Anmelden",
+    "signUp": "Registrieren",
+    "signOut": "Abmelden",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "dontHaveAccount": "Noch kein Konto?",
+    "haveAccount": "Bereits ein Konto?",
+    "demoMode": "Demo-Modus"
+  },
+  "navigation": {
+    "home": "Startseite",
+    "cars": "Autos",
+    "bookings": "Buchungen",
+    "trips": "Fahrten",
+    "saved": "Gespeichert",
+    "profile": "Profil",
+    "admin": "Admin",
+    "about": "Über uns",
+    "contact": "Kontakt",
+    "help": "Hilfe & Support",
+    "language": "Sprache"
+  },
+  "categories": {
+    "all": "Alle",
+    "electric": "Elektrisch",
+    "luxury": "Luxus",
+    "suv": "SUV",
+    "sedan": "Limousine",
+    "ev": "Elektrofahrzeug"
+  },
+  "carStatus": {
+    "available": "Verfügbar",
+    "lowStock": "Niedriger Bestand",
+    "rented": "Vermietet",
+    "maintenance": "Wartung"
+  },
+  "filters": {
+    "year": "Jahr",
+    "allYears": "Alle Jahre",
+    "category": "Kategorie",
+    "dateRange": "Datumsbereich",
+    "pickupDate": "Abholung",
+    "dropoffDate": "Rückgabe",
+    "selectPickupDate": "Abholdatum auswählen",
+    "selectDropoffDate": "Rückgabedatum auswählen",
+    "clear": "Löschen",
+    "showingAvailableCars": "Nur verfügbare Autos für ausgewählte Daten anzeigen"
+  }
+}
