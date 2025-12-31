@@ -1,19 +1,18 @@
 /**
  * Resolves the database URL from environment variables.
- * Checks CAR_DATABASE_URL first, then falls back to DATABASE_URL.
- * This allows production to use CAR_DATABASE_URL while maintaining
- * backward compatibility with DATABASE_URL.
+ * Prefers DATABASE_URL, falls back to CAR_DATABASE_URL.
+ * This allows overrides via DATABASE_URL while keeping Neon defaults.
  */
 export function getDatabaseUrl(): string {
   const carDbUrl = process.env.CAR_DATABASE_URL
   const dbUrl = process.env.DATABASE_URL
 
-  if (carDbUrl) {
-    return carDbUrl
-  }
-
   if (dbUrl) {
     return dbUrl
+  }
+
+  if (carDbUrl) {
+    return carDbUrl
   }
 
   throw new Error(
@@ -31,4 +30,3 @@ export function normalizeDatabaseUrl(): void {
     process.env.DATABASE_URL = process.env.CAR_DATABASE_URL
   }
 }
-
