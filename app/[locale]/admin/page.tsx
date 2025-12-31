@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import AdminDashboard from "./admin-client"
+import type { Car, Booking, User } from "@prisma/client"
 
 export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -40,7 +41,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     <AdminDashboard
       currentUser={{ name: adminUser.name || adminUser.email, email: adminUser.email }}
       isDemoMode={config.isDemoMode}
-      cars={cars.map((car) => ({
+      cars={cars.map((car: Car) => ({
         id: car.id,
         name: car.name,
         nameDe: car.nameDe,
@@ -63,7 +64,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         description: car.description,
         descriptionDe: car.descriptionDe,
       }))}
-      bookings={bookings.map((booking) => ({
+      bookings={bookings.map((booking: Booking) => ({
         id: booking.id,
         userId: booking.userId,
         carId: booking.carId,
@@ -74,7 +75,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         status: booking.status,
         createdAt: booking.createdAt.toISOString(),
       }))}
-      users={users.map((item) => ({
+      users={users.map((item: User) => ({
         id: item.id,
         name: item.name,
         email: item.email,

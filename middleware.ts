@@ -59,7 +59,7 @@ export default function middleware(req: NextRequest) {
       await auth.protect()
     }
     return intlMiddleware(request)
-  })(req)
+  })(req, undefined as any)
 }
 
 export const config = {
