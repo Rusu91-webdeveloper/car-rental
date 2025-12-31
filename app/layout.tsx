@@ -56,5 +56,14 @@ export default async function RootLayout({
   }
 
   // In production mode, wrap with Clerk
-  return <ClerkProvider>{content}</ClerkProvider>
+  // Clerk will automatically use NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY from environment
+  return (
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      // Production-specific configuration will be handled via environment variables
+      // Clerk reads domain configuration from NEXT_PUBLIC_CLERK_DOMAIN if set
+    >
+      {content}
+    </ClerkProvider>
+  )
 }
