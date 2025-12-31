@@ -1,4 +1,9 @@
 import { PrismaClient } from "@prisma/client"
+import { normalizeDatabaseUrl } from "./db-url"
+
+// Normalize database URL before creating PrismaClient
+// This ensures CAR_DATABASE_URL is used if DATABASE_URL is not set
+normalizeDatabaseUrl()
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

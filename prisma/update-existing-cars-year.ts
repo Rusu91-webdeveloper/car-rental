@@ -1,4 +1,8 @@
 import { PrismaClient } from "@prisma/client"
+import { normalizeDatabaseUrl } from "../lib/db-url"
+
+// Normalize database URL before creating PrismaClient
+normalizeDatabaseUrl()
 
 const prisma = new PrismaClient()
 

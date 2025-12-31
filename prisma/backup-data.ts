@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client"
 import { writeFileSync } from "fs"
 import { join } from "path"
+import { normalizeDatabaseUrl } from "../lib/db-url"
+
+// Normalize database URL before creating PrismaClient
+normalizeDatabaseUrl()
 
 const prisma = new PrismaClient()
 
