@@ -185,14 +185,55 @@ export async function getCarAvailability(carId: string) {
 
 export async function filterCarsByAvailability(carIds: string[], pickupDate: string, dropoffDate: string) {
   try {
-    await cancelExpiredBookings()
-    const pickup = new Date(pickupDate)
-    const dropoff = new Date(dropoffDate)
+    // Validate input parameters
+    if (!Array.isArray(carIds) || carIds.length === 0) {
+      return {
+        availableCarIds: [],
+      }
+    }
 
+    if (!pickupDate || !dropoffDate) {
+      return {
+        error: "Pickup and dropoff dates are required",
+      }
+    }
+
+    // Validate and parse dates
+    // Normalize dates to midnight local time to avoid timezone issues
+    const pickup = new Date(pickupDate + "T00:00:00")
+    const dropoff = new Date(dropoffDate + "T00:00:00")
+
+    if (isNaN(pickup.getTime()) || isNaN(dropoff.getTime())) {
+      return {
+        error: "Invalid date format provided",
+      }
+    }
+
+    if (pickup >= dropoff) {
+      return {
+        error: "Pickup date must be before dropoff date",
+      }
+    }
+
+    // Cancel expired bookings first
+    try {
+      await cancelExpiredBookings()
+    } catch (cancelError) {
+      console.error("[CANCEL_EXPIRED_BOOKINGS_ERROR]", cancelError)
+      // Continue with filtering even if cancellation fails
+    }
+
+    // Check availability for each car
     const availabilityChecks = await Promise.all(
       carIds.map(async (carId) => {
-        const available = await isCarAvailable(carId, pickup, dropoff)
-        return { carId, available }
+        try {
+          const available = await isCarAvailable(carId, pickup, dropoff)
+          return { carId, available }
+        } catch (carError) {
+          console.error(`[CAR_AVAILABILITY_CHECK_ERROR] Car ID: ${carId}`, carError)
+          // If we can't check availability for a specific car, assume it's unavailable
+          return { carId, available: false }
+        }
       })
     )
 
@@ -201,6 +242,9 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
     }
   } catch (error) {
     console.error("[FILTER_CARS_BY_AVAILABILITY_ERROR]", error)
-    return { error: "Failed to filter cars by availability" }
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+    return {
+      error: `Failed to filter cars by availability: ${errorMessage}`,
+    }
   }
 }
