@@ -2,12 +2,32 @@
 
 **Quick checklist to get Clerk working in production on Vercel**
 
+## ⚠️ IMPORTANT: Domain Requirement
+
+**Clerk requires a custom domain for production instances.** The default Vercel URL (`*.vercel.app`) cannot be used.
+
+**Options:**
+1. **Add a custom domain** to your Vercel project (recommended for production)
+2. **Use Clerk Development instance** with production keys (workaround for testing)
+
+See `CLERK_DOMAIN_SETUP.md` for detailed domain setup instructions.
+
+---
+
 ## ✅ Essential Steps
 
 ### 1. Get Production Keys from Clerk
+
+**Option A: With Custom Domain (Production)**
 - Go to [Clerk Dashboard](https://dashboard.clerk.com)
-- Switch to **Production** instance
-- Copy keys (must start with `pk_live_` and `sk_live_`, NOT `pk_test_`)
+- Create/select **Production** instance
+- Enter your custom domain (e.g., `https://yourdomain.com`)
+- Copy keys (must start with `pk_live_` and `sk_live_`)
+
+**Option B: Development Instance (Testing)**
+- Stay in Clerk **Development** instance
+- Get keys (may be `pk_test_` or production-like keys)
+- Use these for testing until you get a custom domain
 
 ### 2. Add to Vercel Environment Variables
 In Vercel → Settings → Environment Variables → Production:
@@ -21,7 +41,10 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxx
 CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxx
 
 # Set your production URL
-NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+# Use custom domain if available, otherwise use vercel.app for testing
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+# OR for testing without custom domain:
+# NEXT_PUBLIC_APP_URL=https://car-rental-psi-cyan.vercel.app
 ```
 
 ### 3. Configure Clerk Dashboard URLs
@@ -60,7 +83,9 @@ In Clerk Dashboard → Configure → Paths:
 
 ---
 
-## 📖 Full Guide
+## 📖 Full Guides
 
-See `CLERK_PRODUCTION_SETUP.md` for detailed instructions and troubleshooting.
+- `CLERK_PRODUCTION_SETUP.md` - Detailed production setup instructions
+- `CLERK_DOMAIN_SETUP.md` - **Custom domain setup guide** (IMPORTANT!)
+- `CLERK_MULTI_LOCALE_SETUP.md` - Multi-locale (en/de) configuration
 
