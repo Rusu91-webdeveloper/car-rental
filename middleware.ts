@@ -15,6 +15,10 @@ const localeMatcher = `/:locale(${locales.join("|")})`
 const isPublicRoute = createRouteMatcher([
   "/",
   localeMatcher,
+  "/login(.*)",
+  "/signup(.*)",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
   `${localeMatcher}/cars(.*)`,
   `${localeMatcher}/about`,
   `${localeMatcher}/contact`,
@@ -64,4 +68,3 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 }
-

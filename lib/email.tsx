@@ -1,7 +1,64 @@
+import nodemailer from "nodemailer"
 import { Resend } from "resend"
 import { formatCents } from "@/lib/money"
+import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
+import { getPaymentDetails } from "@/lib/payment-details"
+import { prisma } from "@/lib/db"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "RentCar <noreply@rentcar.com>"
+const smtpHost = process.env.EMAIL_HOST
+const smtpPort = process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : 587
+const smtpUser = process.env.EMAIL_USER
+const smtpPass = process.env.EMAIL_PASS
+const smtpEnabled = Boolean(smtpHost && smtpUser && smtpPass)
+const smtpTransport = smtpEnabled
+  ? nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    })
+  : null
+
+type SendEmailInput = {
+  to: string | string[]
+  subject: string
+  html: string
+}
+
+async function sendEmail({ to, subject, html }: SendEmailInput) {
+  if (smtpTransport) {
+    const info = await smtpTransport.sendMail({
+      from: emailFrom,
+      to,
+      subject,
+      html,
+    })
+
+    return { id: info.messageId }
+  }
+
+  if (!process.env.RESEND_API_KEY) {
+    return { error: "Email provider not configured" }
+  }
+
+  const { data, error } = await resend.emails.send({
+    from: emailFrom,
+    to,
+    subject,
+    html,
+  })
+
+  if (error) {
+    return { error: error.message || "Failed to send email" }
+  }
+
+  return { id: data?.id }
+}
 
 interface BookingEmailData {
   to: string
@@ -17,8 +74,7 @@ interface BookingEmailData {
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   try {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "RentCar <noreply@rentcar.com>",
+    const { id, error } = await sendEmail({
       to: data.to,
       subject: `Booking Confirmed - ${data.carName}`,
       html: `
@@ -95,8 +151,13 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       `,
     })
 
-    console.log("[EMAIL] Booking confirmation sent to:", data.to)
-    return { success: true }
+    if (error) {
+      console.error("[EMAIL_ERROR]", error)
+      return { error }
+    }
+
+    console.log("[EMAIL] Booking confirmation sent to:", data.to, id ? `(id: ${id})` : "")
+    return { success: true, id }
   } catch (error) {
     console.error("[EMAIL_ERROR]", error)
     return { error: "Failed to send email" }
@@ -132,8 +193,7 @@ export async function sendBookingStatusEmail(
         return { success: true }
     }
 
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "RentCar <noreply@rentcar.com>",
+    const { id, error } = await sendEmail({
       to,
       subject,
       html: `
@@ -154,8 +214,13 @@ export async function sendBookingStatusEmail(
       `,
     })
 
-    console.log("[EMAIL] Status update sent to:", to)
-    return { success: true }
+    if (error) {
+      console.error("[EMAIL_ERROR]", error)
+      return { error }
+    }
+
+    console.log("[EMAIL] Status update sent to:", to, id ? `(id: ${id})` : "")
+    return { success: true, id }
   } catch (error) {
     console.error("[EMAIL_ERROR]", error)
     return { error: "Failed to send email" }
@@ -176,112 +241,175 @@ export async function sendManualPaymentEmail(data: {
   bookingNumber: string
 }) {
   try {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "RentCar <noreply@rentcar.com>",
+    // Get payment details and company settings from database
+    const paymentDetails = await getPaymentDetails()
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+    })
+
+    const companyName = companySettings?.companyName || "Car Rental Company"
+    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+    const depositPercentage = companySettings?.depositPercentage ?? 0.2
+    const depositPercent = Math.round(depositPercentage * 100)
+
+    const { id, error } = await sendEmail({
       to: data.to,
-      subject: `Payment Required - Booking ${data.bookingNumber}`,
+      subject: `Booking Confirmed! - ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
           <head>
             <meta charset="utf-8">
             <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #0066FF; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-              .transfer-code { background: #fff; border: 2px solid #0066FF; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; margin: 20px 0; border-radius: 4px; letter-spacing: 2px; }
-              .payment-box { background: #FFF9E6; border: 2px solid #FFB800; padding: 20px; border-radius: 8px; margin: 20px 0; }
-              .bank-details { background: white; padding: 15px; border-radius: 4px; margin: 15px 0; border-left: 4px solid #0066FF; }
-              .details { background: white; padding: 20px; border-radius: 4px; margin: 20px 0; }
-              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-              .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
-              .highlight { color: #0066FF; font-weight: bold; }
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; background: #f5f5f5; }
+              .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 40px 20px; text-align: center; }
+              .header h1 { margin: 0 0 10px 0; font-size: 28px; font-weight: bold; }
+              .header p { margin: 0; font-size: 16px; opacity: 0.95; }
+              .content { background: white; padding: 30px; }
+              .booking-number-box { background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0; }
+              .booking-number-label { font-size: 14px; color: #6b7280; margin-bottom: 8px; }
+              .booking-number-value { font-family: monospace; font-size: 24px; font-weight: bold; color: #111827; }
+              .transfer-code-box { background: #eff6ff; border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 20px 0; }
+              .transfer-code-label { font-size: 14px; font-weight: 600; color: #3b82f6; margin-bottom: 8px; }
+              .transfer-code-value { font-family: monospace; font-size: 28px; font-weight: bold; color: #3b82f6; letter-spacing: 2px; margin-bottom: 8px; }
+              .transfer-code-hint { font-size: 12px; color: #6b7280; }
+              .booking-details { margin: 30px 0; }
+              .booking-details h3 { font-size: 18px; font-weight: 600; margin-bottom: 15px; color: #111827; }
+              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+              .detail-row:last-child { border-bottom: none; }
+              .detail-label { color: #6b7280; }
+              .detail-value { font-weight: 500; color: #111827; }
+              .payment-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 12px; padding: 20px; margin: 30px 0; }
+              .payment-box h4 { margin: 0 0 15px 0; font-size: 18px; font-weight: 600; color: #92400e; display: flex; align-items: center; gap: 8px; }
+              .payment-warning { font-size: 14px; color: #78350f; margin-bottom: 15px; }
+              .payment-amounts { background: white; border-radius: 8px; padding: 15px; margin: 15px 0; }
+              .payment-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+              .payment-row.total { font-size: 18px; font-weight: bold; }
+              .bank-details { background: white; border-radius: 8px; padding: 15px; margin: 15px 0; }
+              .bank-details h5 { margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #92400e; }
+              .bank-detail-row { margin: 8px 0; font-size: 14px; }
+              .bank-detail-label { font-weight: 600; color: #111827; }
+              .bank-detail-value { color: #111827; }
+              .reference-code { font-family: monospace; font-size: 18px; font-weight: bold; color: #3b82f6; margin-top: 10px; }
+              .important-note { font-size: 12px; margin-top: 15px; color: #92400e; }
+              .important-note strong { color: #78350f; }
+              .next-steps { background: #eff6ff; border: 1px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 30px 0; }
+              .next-steps h4 { margin: 0 0 15px 0; font-size: 18px; font-weight: 600; color: #1e40af; }
+              .next-steps ol { margin: 10px 0; padding-left: 20px; }
+              .next-steps li { margin: 8px 0; font-size: 14px; color: #1e40af; }
+              .footer { text-align: center; padding: 30px 20px; color: #6b7280; font-size: 14px; background: #f9fafb; }
             </style>
           </head>
           <body>
             <div class="container">
               <div class="header">
-                <h1>✅ Booking Created Successfully!</h1>
+                <h1>Booking Confirmed!</h1>
+                <p>Your reservation has been created successfully</p>
               </div>
               <div class="content">
-                <p>Hi ${data.userName},</p>
-                <p>Your booking request has been received. To complete your reservation, please make the payment using the details below:</p>
-                
-                <div class="transfer-code">
-                  ${data.transferCode}
+                <!-- Booking Number -->
+                <div class="booking-number-box">
+                  <div class="booking-number-label">Booking Number</div>
+                  <div class="booking-number-value">${data.bookingNumber}</div>
                 </div>
-                <p style="text-align: center; color: #666; font-size: 14px;"><strong>Important:</strong> Use this code as your payment reference</p>
-                
+
+                <!-- Transfer Reference Code -->
+                <div class="transfer-code-box">
+                  <div class="transfer-code-label">Transfer Reference Code</div>
+                  <div class="transfer-code-value">${data.transferCode}</div>
+                  <div class="transfer-code-hint">Use this code as reference when making payment</div>
+                </div>
+
+                <!-- Booking Details -->
+                <div class="booking-details">
+                  <h3>Booking Details</h3>
+                  <div class="detail-row">
+                    <span class="detail-label">Car:</span>
+                    <span class="detail-value">${data.carName}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Pick-up:</span>
+                    <span class="detail-value">${data.pickupDate}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Drop-off:</span>
+                    <span class="detail-value">${data.dropoffDate}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Location:</span>
+                    <span class="detail-value">${data.location}</span>
+                  </div>
+                </div>
+
+                <!-- Payment Required -->
                 <div class="payment-box">
-                  <h3 style="margin-top: 0; color: #B37400;">⚠️ Payment Required</h3>
-                  <p style="margin-bottom: 15px;">Please complete payment via bank transfer to confirm your booking:</p>
+                  <h4>⚠️ Payment Required</h4>
+                  <p style="margin-bottom: 8px;">Please complete payment via bank transfer:</p>
+                  <p class="payment-warning">
+                    <strong>Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.</strong>
+                  </p>
                   
-                  <div style="background: white; padding: 15px; border-radius: 4px; margin: 15px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                      <span>Deposit (20%):</span>
+                  <div class="payment-amounts">
+                    <div class="payment-row">
+                      <span>Deposit (${depositPercent}%):</span>
                       <strong>${formatCents(data.depositAmount)}</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 18px;">
-                      <span><strong>Total Amount:</strong></span>
-                      <strong style="color: #0066FF;">${formatCents(data.totalPrice)}</strong>
+                    <div class="payment-row total">
+                      <span>Total Amount:</span>
+                      <strong style="color: #3b82f6;">${formatCents(data.totalPrice)}</strong>
                     </div>
                   </div>
 
                   <div class="bank-details">
-                    <h4 style="margin-top: 0;">Bank Transfer Details:</h4>
-                    <p style="margin: 5px 0;"><strong>Bank Name:</strong> Your Bank Name</p>
-                    <p style="margin: 5px 0;"><strong>Account Name:</strong> Car Rental Company</p>
-                    <p style="margin: 5px 0;"><strong>Account Number:</strong> 1234567890</p>
-                    <p style="margin: 5px 0;"><strong>Swift Code:</strong> YOURSWIFT</p>
-                    <p style="margin: 15px 0 5px 0; padding-top: 10px; border-top: 1px solid #eee;"><strong>Payment Reference:</strong></p>
-                    <p style="font-size: 20px; font-weight: bold; color: #0066FF; margin: 5px 0; letter-spacing: 1px;">${data.transferCode}</p>
+                    <h5>Bank Details</h5>
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">Bank Name:</span>
+                      <span class="bank-detail-value">${paymentDetails.bankName}</span>
+                    </div>
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">Account Name:</span>
+                      <span class="bank-detail-value">${paymentDetails.accountName}</span>
+                    </div>
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">Account Number:</span>
+                      <span class="bank-detail-value">${paymentDetails.accountNumber}</span>
+                    </div>
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">Swift Code:</span>
+                      <span class="bank-detail-value">${paymentDetails.swiftCode}</span>
+                    </div>
+                    ${paymentDetails.iban ? `
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">IBAN:</span>
+                      <span class="bank-detail-value">${paymentDetails.iban}</span>
+                    </div>
+                    ` : ''}
+                    <div class="bank-detail-row">
+                      <span class="bank-detail-label">Reference:</span>
+                      <span class="reference-code">${data.transferCode}</span>
+                    </div>
                   </div>
 
-                  <p style="font-size: 14px; color: #666; margin-top: 15px;">
-                    <strong>Important:</strong> Please include the reference code <strong style="color: #0066FF;">${data.transferCode}</strong> when making your payment so we can process your booking quickly.
+                  <p class="important-note">
+                    <strong>Important:</strong> Include the transfer code <strong>${data.transferCode}</strong> in your payment reference so we can process your booking.
                   </p>
                 </div>
-                
-                <div class="details">
-                  <h3 style="margin-top: 0;">Booking Details</h3>
-                  <div class="detail-row">
-                    <span><strong>Booking Number:</strong></span>
-                    <span>${data.bookingNumber}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span><strong>Vehicle:</strong></span>
-                    <span>${data.carName}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span><strong>Pick-up:</strong></span>
-                    <span>${data.pickupDate}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span><strong>Drop-off:</strong></span>
-                    <span>${data.dropoffDate}</span>
-                  </div>
-                  <div class="detail-row" style="border-bottom: none;">
-                    <span><strong>Location:</strong></span>
-                    <span>${data.location}</span>
-                  </div>
-                </div>
-                
-                <div style="background: #E8F4FF; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
-                  <ol style="margin: 10px 0; padding-left: 20px;">
-                    <li>Complete the bank transfer using the details above</li>
-                    <li>Make sure to include <strong>${data.transferCode}</strong> as your payment reference</li>
-                    <li>Once we receive your payment, we'll confirm your booking</li>
-                    <li>You'll receive a confirmation email with pickup details</li>
+
+                <!-- Next Steps -->
+                <div class="next-steps">
+                  <h4>📋 Next Steps</h4>
+                  <ol>
+                    <li>Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours</li>
+                    <li>You will receive a confirmation email with payment instructions</li>
+                    <li>Once payment is verified, your booking will be confirmed</li>
+                    <li>You'll receive a final confirmation email with pickup details</li>
                   </ol>
                 </div>
-
-                <p style="font-size: 14px; color: #666;">If you have any questions or need assistance, please don't hesitate to contact us.</p>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at support@rentcar.com</p>
-                <p>&copy; ${new Date().getFullYear()} RentCar. All rights reserved.</p>
+                <p>Questions? Contact us at ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
               </div>
             </div>
           </body>
@@ -289,8 +417,17 @@ export async function sendManualPaymentEmail(data: {
       `,
     })
 
-    console.log("[EMAIL] Manual payment instructions sent to:", data.to)
-    return { success: true }
+    if (error) {
+      console.error("[EMAIL_ERROR]", error)
+      return { error }
+    }
+
+    console.log(
+      "[EMAIL] Manual payment instructions sent to:",
+      data.to,
+      id ? `(id: ${id})` : "",
+    )
+    return { success: true, id }
   } catch (error) {
     console.error("[EMAIL_ERROR]", error)
     return { error: "Failed to send email" }
@@ -299,7 +436,8 @@ export async function sendManualPaymentEmail(data: {
 
 // Admin Notification Email for New Bookings
 export async function sendAdminBookingNotification(data: {
-  adminEmail: string
+  adminEmail?: string
+  adminEmails?: string[]
   userName: string
   userEmail: string
   carName: string
@@ -313,9 +451,26 @@ export async function sendAdminBookingNotification(data: {
   bookingId: string
 }) {
   try {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "RentCar <noreply@rentcar.com>",
-      to: data.adminEmail,
+    // Get company settings for dynamic values
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+    })
+    const companyName = companySettings?.companyName || "Car Rental Company"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const recipients = Array.from(
+      new Set(
+        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter(
+          (email): email is string => Boolean(email),
+        ),
+      ),
+    )
+
+    if (recipients.length === 0) {
+      return { error: "No admin email configured" }
+    }
+
+    const { id, error } = await sendEmail({
+      to: recipients,
       subject: `🔔 New Booking - ${data.carName} (${data.bookingNumber})`,
       html: `
         <!DOCTYPE html>
@@ -415,14 +570,14 @@ export async function sendAdminBookingNotification(data: {
                 </div>
 
                 <div style="text-align: center; margin: 25px 0;">
-                  <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/admin" class="action-button">
+                  <a href="${appUrl}/admin" class="action-button">
                     Go to Admin Dashboard →
                   </a>
                 </div>
               </div>
               <div class="footer">
                 <p>This is an automated notification from your car rental system</p>
-                <p>&copy; ${new Date().getFullYear()} RentCar Admin</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName} Admin</p>
               </div>
             </div>
           </body>
@@ -430,10 +585,181 @@ export async function sendAdminBookingNotification(data: {
       `,
     })
 
-    console.log("[EMAIL] Admin notification sent to:", data.adminEmail)
-    return { success: true }
+    if (error) {
+      console.error("[EMAIL_ERROR]", error)
+      return { error }
+    }
+
+    console.log(
+      "[EMAIL] Admin notification sent to:",
+      recipients.join(", "),
+      id ? `(id: ${id})` : "",
+    )
+    return { success: true, id }
   } catch (error) {
     console.error("[EMAIL_ERROR]", error)
     return { error: "Failed to send admin notification" }
+  }
+}
+
+// Admin Notification Email for Booking Confirmation
+export async function sendAdminBookingConfirmationNotification(data: {
+  adminEmail?: string
+  adminEmails?: string[]
+  userName: string
+  userEmail: string
+  carName: string
+  pickupDate: string
+  dropoffDate: string
+  location: string
+  totalPrice: number
+  transferCode: string
+  bookingNumber: string
+  bookingId: string
+}) {
+  try {
+    // Get company settings for dynamic values
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+    })
+    const companyName = companySettings?.companyName || "Car Rental Company"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const recipients = Array.from(
+      new Set(
+        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter(
+          (email): email is string => Boolean(email),
+        ),
+      ),
+    )
+
+    if (recipients.length === 0) {
+      return { error: "No admin email configured" }
+    }
+
+    const { id, error } = await sendEmail({
+      to: recipients,
+      subject: `✅ Booking Confirmed - ${data.carName} (${data.bookingNumber})`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: #10B981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+              .success-box { background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .details { background: white; padding: 20px; border-radius: 4px; margin: 20px 0; }
+              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+              .transfer-code { background: #E8F4FF; border: 2px dashed #0066FF; padding: 10px; text-align: center; font-size: 20px; font-weight: bold; margin: 15px 0; border-radius: 4px; letter-spacing: 2px; color: #0066FF; }
+              .action-button { display: inline-block; background: #0066FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 10px 0; }
+              .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✅ Booking Confirmed</h1>
+              </div>
+              <div class="content">
+                <p><strong>A booking has been confirmed and is ready for pickup.</strong></p>
+                
+                <div class="success-box">
+                  <p style="margin: 0;"><strong>✅ Confirmed:</strong> Payment received and booking is confirmed. Customer has been notified.</p>
+                </div>
+
+                <div class="details">
+                  <h3 style="margin-top: 0;">Booking Information</h3>
+                  <div class="detail-row">
+                    <span><strong>Booking Number:</strong></span>
+                    <span>${data.bookingNumber}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Status:</strong></span>
+                    <span style="background: #D1FAE5; color: #065F46; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">CONFIRMED</span>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Vehicle:</strong></span>
+                    <span>${data.carName}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Pick-up:</strong></span>
+                    <span>${data.pickupDate}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Drop-off:</strong></span>
+                    <span>${data.dropoffDate}</span>
+                  </div>
+                  <div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Location:</strong></span>
+                    <span>${data.location}</span>
+                  </div>
+                </div>
+
+                <div class="details">
+                  <h3 style="margin-top: 0;">Customer Information</h3>
+                  <div class="detail-row">
+                    <span><strong>Name:</strong></span>
+                    <span>${data.userName}</span>
+                  </div>
+                  <div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Email:</strong></span>
+                    <span>${data.userEmail}</span>
+                  </div>
+                </div>
+
+                <div class="details">
+                  <h3 style="margin-top: 0;">Payment Details</h3>
+                  <div style="margin-bottom: 10px;">
+                    <strong>Transfer Reference Code:</strong>
+                    <div class="transfer-code">${data.transferCode}</div>
+                  </div>
+                  <div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Total Amount:</strong></span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                  </div>
+                </div>
+
+                <div style="background: #E8F4FF; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                  <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
+                  <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Prepare the vehicle for pickup</li>
+                    <li>Verify customer's transfer code: <strong>${data.transferCode}</strong></li>
+                    <li>Ensure all documentation is ready</li>
+                    <li>Customer will arrive on: <strong>${data.pickupDate}</strong></li>
+                  </ol>
+                </div>
+
+                <div style="text-align: center; margin: 25px 0;">
+                  <a href="${appUrl}/admin" class="action-button">
+                    View Booking Details →
+                  </a>
+                </div>
+              </div>
+              <div class="footer">
+                <p>This is an automated notification from your car rental system</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName} Admin</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    })
+
+    if (error) {
+      console.error("[EMAIL_ERROR]", error)
+      return { error }
+    }
+
+    console.log(
+      "[EMAIL] Admin confirmation notification sent to:",
+      recipients.join(", "),
+      id ? `(id: ${id})` : "",
+    )
+    return { success: true, id }
+  } catch (error) {
+    console.error("[EMAIL_ERROR]", error)
+    return { error: "Failed to send admin confirmation notification" }
   }
 }

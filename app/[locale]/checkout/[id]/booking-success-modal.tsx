@@ -2,6 +2,7 @@
 
 import { formatCents } from "@/lib/money"
 import { Button } from "@/components/ui/button"
+import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
 
 interface BookingSuccessModalProps {
   bookingNumber: string
@@ -12,6 +13,18 @@ interface BookingSuccessModalProps {
   pickupDate: Date
   dropoffDate: Date
   location: string
+  paymentDetails: {
+    bankName: string
+    accountName: string
+    accountNumber: string
+    swiftCode: string
+    iban?: string | null
+  }
+  companySettings: {
+    companyName: string
+    supportEmail: string
+    depositPercentage: number
+  }
   onClose: () => void
 }
 
@@ -24,8 +37,11 @@ export function BookingSuccessModal({
   pickupDate,
   dropoffDate,
   location,
+  paymentDetails,
+  companySettings,
   onClose,
 }: BookingSuccessModalProps) {
+  const depositPercent = Math.round(companySettings.depositPercentage * 100)
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString("en-US", {
       weekday: "short",
@@ -142,9 +158,12 @@ export function BookingSuccessModal({
                 <h4 className="font-semibold text-amber-900 mb-2">Payment Required</h4>
                 <div className="space-y-2 text-sm text-amber-800">
                   <p>Please complete payment via bank transfer:</p>
+                  <p className="text-xs text-amber-800">
+                    Pay within {BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.
+                  </p>
                   <div className="bg-white rounded-lg p-3 space-y-1 font-mono text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Deposit (20%):</span>
+                      <span className="text-muted-foreground">Deposit ({depositPercent}%):</span>
                       <span className="font-bold">{formatCents(depositAmount)}</span>
                     </div>
                     <div className="flex justify-between">
@@ -154,9 +173,13 @@ export function BookingSuccessModal({
                   </div>
                   <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                     <p className="font-semibold text-amber-900">Bank Details:</p>
-                    <p>Bank Name: <span className="font-medium">Your Bank Name</span></p>
-                    <p>Account Name: <span className="font-medium">Car Rental Company</span></p>
-                    <p>Account Number: <span className="font-medium">1234567890</span></p>
+                    <p>Bank Name: <span className="font-medium">{paymentDetails.bankName}</span></p>
+                    <p>Account Name: <span className="font-medium">{paymentDetails.accountName}</span></p>
+                    <p>Account Number: <span className="font-medium">{paymentDetails.accountNumber}</span></p>
+                    <p>Swift Code: <span className="font-medium">{paymentDetails.swiftCode}</span></p>
+                    {paymentDetails.iban && (
+                      <p>IBAN: <span className="font-medium">{paymentDetails.iban}</span></p>
+                    )}
                     <p>Reference: <span className="font-mono font-bold text-primary">{transferCode}</span></p>
                   </div>
                   <p className="text-xs mt-2">
@@ -181,7 +204,7 @@ export function BookingSuccessModal({
               Next Steps
             </h4>
             <ol className="text-sm text-blue-800 space-y-1 ml-7 list-decimal">
-              <li>Complete the bank transfer using the details above</li>
+              <li>Complete the bank transfer within {BOOKING_PAYMENT_WINDOW_HOURS} hours</li>
               <li>You will receive a confirmation email with payment instructions</li>
               <li>Once payment is verified, your booking will be confirmed</li>
               <li>You'll receive a final confirmation email with pickup details</li>
@@ -201,4 +224,3 @@ export function BookingSuccessModal({
     </div>
   )
 }
-

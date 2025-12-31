@@ -1,5 +1,11 @@
-import { headers } from "next/headers"
 import { NextResponse } from "next/server"
+
+export async function POST() {
+  return new NextResponse("Stripe webhook is temporarily disabled", { status: 410 })
+}
+
+/*
+import { headers } from "next/headers"
 import type Stripe from "stripe"
 import { stripe } from "@/lib/stripe"
 import { prisma } from "@/lib/db"
@@ -86,3 +92,4 @@ export async function POST(req: Request) {
 
   return new NextResponse("Success", { status: 200 })
 }
+*/

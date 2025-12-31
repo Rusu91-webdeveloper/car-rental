@@ -1,66 +1,54 @@
-"use client"
+"use client";
 
-import { useLocale } from "next-intl"
-import { usePathname, useRouter } from "@/navigation"
-import { locales } from "@/i18n"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-
-const localeNames: Record<string, string> = {
-  en: "English",
-  de: "Deutsch",
-}
+import { useLocale } from "next-intl";
+import { usePathname, useRouter } from "@/navigation";
+import { locales } from "@/i18n";
 
 export function LanguageSwitcher() {
-  const locale = useLocale()
-  const router = useRouter()
-  const pathname = usePathname()
+  const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const isEnglish = locale === "en";
 
   const switchLocale = (newLocale: string) => {
     if (newLocale === locale) {
-      return
+      return;
     }
-    router.push(pathname, { locale: newLocale })
-  }
+    router.push(pathname, { locale: newLocale });
+  };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-10 w-10">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-            />
-          </svg>
-          <span className="sr-only">Switch language</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {locales.map((loc) => (
-          <DropdownMenuItem
-            key={loc}
-            onClick={() => switchLocale(loc)}
-            className={locale === loc ? "bg-accent" : ""}
-          >
-            <span className="mr-2">{locale === loc ? "✓" : ""}</span>
-            {localeNames[loc] || loc}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
+    <button
+      onClick={() => switchLocale(isEnglish ? "de" : "en")}
+      className="relative inline-flex h-7 w-12 items-center rounded-full bg-muted/80 border border-border/50 transition-all duration-200 ease-in-out hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      aria-label="Switch language"
+      role="switch"
+      aria-checked={!isEnglish}>
+      {/* Sliding indicator */}
+      <span
+        className={`absolute h-6 w-6 rounded-full bg-background shadow-md border border-border/30 transition-all duration-200 ease-in-out ${
+          isEnglish ? "translate-x-0.5" : "translate-x-[calc(100%-0.125rem)]"
+        }`}
+      />
+      {/* Labels */}
+      <span
+        className={`absolute left-1/2 -translate-x-1/2 text-[10px] font-semibold transition-all duration-200 ${
+          isEnglish
+            ? "text-foreground opacity-100"
+            : "text-muted-foreground opacity-0"
+        }`}
+        style={{ left: "25%" }}>
+        EN
+      </span>
+      <span
+        className={`absolute left-1/2 -translate-x-1/2 text-[10px] font-semibold transition-all duration-200 ${
+          !isEnglish
+            ? "text-foreground opacity-100"
+            : "text-muted-foreground opacity-0"
+        }`}
+        style={{ left: "75%" }}>
+        DE
+      </span>
+    </button>
+  );
 }

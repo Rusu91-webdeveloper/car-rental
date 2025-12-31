@@ -246,4 +246,43 @@ enum AdminAction {
   USER_ROLE_CHANGED
   BLOCKED_DATE_ADDED
   BLOCKED_DATE_REMOVED
+  SETTINGS_UPDATED
+}
+
+// Company settings - single record to store all company configuration
+model CompanySettings {
+  id        String   @id @default("company-settings")
+  
+  // Company Information
+  companyName       String   @default("Car Rental Company")
+  companyEmail      String   @default("support@rentcar.com")
+  companyPhone      String?
+  companyAddress    String?
+  companyCity       String?
+  companyState      String?
+  companyZipCode    String?
+  companyCountry    String?
+  
+  // Bank/Payment Details
+  bankName          String   @default("Your Bank Name")
+  accountName       String   @default("Car Rental Company")
+  accountNumber     String   @default("1234567890")
+  swiftCode         String   @default("YOURSWIFT")
+  iban              String?
+  
+  // Tax Configuration
+  taxRate           Float    @default(0.0) // Tax rate as decimal (e.g., 0.19 for 19%)
+  taxIncluded       Boolean  @default(false) // Whether tax is included in displayed prices
+  depositPercentage Float    @default(0.2) // Deposit percentage as decimal (e.g., 0.2 for 20%)
+  
+  // Email Configuration
+  supportEmail      String   @default("support@rentcar.com")
+  adminEmail        String   @default("admin@rentcar.com")
+  
+  // Additional Settings
+  currency          String   @default("EUR")
+  currencySymbol    String   @default("€")
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

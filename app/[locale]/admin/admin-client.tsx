@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
+import { getCompanySettings, updateCompanySettings } from "@/app/actions/settings"
 import {
   LayoutDashboard,
   CarIcon,
@@ -99,6 +100,8 @@ export default function AdminDashboard({
   const [editCarId, setEditCarId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [settings, setSettings] = useState<any>(null)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const locale = useLocale()
   const t = useTranslations()
 
@@ -110,6 +113,43 @@ export default function AdminDashboard({
   const getCarSubtitle = (car: Pick<AdminCar, "subtitle" | "subtitleDe">) =>
     locale === "de" ? car.subtitleDe || car.subtitle : car.subtitle
   const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  // Helper function to get booking status badge styling
+  const getBookingStatusBadge = (status: AdminBooking["status"]) => {
+    switch (status) {
+      case "PENDING":
+        return {
+          className: "bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200",
+          variant: "outline" as const,
+        }
+      case "CONFIRMED":
+        return {
+          className: "bg-green-100 text-green-800 border-green-200 hover:bg-green-200",
+          variant: "outline" as const,
+        }
+      case "IN_PROGRESS":
+        return {
+          className: "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200",
+          variant: "outline" as const,
+        }
+      case "COMPLETED":
+        return {
+          className: "bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-200",
+          variant: "outline" as const,
+        }
+      case "CANCELLED":
+      case "REJECTED":
+        return {
+          className: "bg-red-100 text-red-800 border-red-200 hover:bg-red-200",
+          variant: "outline" as const,
+        }
+      default:
+        return {
+          className: "",
+          variant: "secondary" as const,
+        }
+    }
+  }
 
   const totalRevenueCents = bookingsState.reduce((sum, booking) => sum + booking.totalPrice, 0)
   const activeBookings = bookingsState.filter((b) => b.status === "CONFIRMED").length
@@ -123,6 +163,19 @@ export default function AdminDashboard({
       return bookingDate.getMonth() === now.getMonth() && bookingDate.getFullYear() === now.getFullYear()
     })
     .reduce((sum, booking) => sum + booking.totalPrice, 0)
+
+  // Load settings when settings tab is opened
+  useEffect(() => {
+    if (activeTab === "settings" && !settings && !isLoadingSettings) {
+      setIsLoadingSettings(true)
+      getCompanySettings().then((result) => {
+        if (result?.success && result.settings) {
+          setSettings(result.settings)
+        }
+        setIsLoadingSettings(false)
+      })
+    }
+  }, [activeTab, settings, isLoadingSettings])
 
   const filteredCars = carsState.filter((car) => {
     const matchesSearch =
@@ -171,6 +224,7 @@ export default function AdminDashboard({
     seats: number
     fuelType: string
     acceleration: string
+    year?: number | null
     rating: number
     reviewCount: number
     description?: string | null
@@ -192,6 +246,7 @@ export default function AdminDashboard({
       fuel: car.fuelType,
       acceleration: car.acceleration,
     },
+    year: car.year ?? null,
     rating: car.rating,
     reviews: car.reviewCount,
     description: car.description,
@@ -291,8 +346,8 @@ export default function AdminDashboard({
   return (
     <div className="min-h-screen bg-muted flex">
       {/* Sidebar Navigation */}
-      <aside className="hidden lg:flex lg:flex-col w-64 bg-background border-r border-border fixed h-full">
-        <div className="p-6 border-b border-border">
+      <aside className="hidden lg:flex lg:flex-col w-64 bg-background border-r border-border fixed h-full overflow-y-auto">
+        <div className="p-6 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <CarIcon className="w-5 h-5 text-primary-foreground" />
@@ -302,7 +357,7 @@ export default function AdminDashboard({
           <p className="text-xs text-muted-foreground mt-1">Administrator Panel</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 min-h-0">
           <button
             onClick={() => setActiveTab("overview")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -363,14 +418,19 @@ export default function AdminDashboard({
             <BarChart3 className="w-5 h-5" />
             <span className="font-medium">Analytics</span>
           </button>
-        </nav>
 
-        <div className="p-4 border-t border-border space-y-1">
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              activeTab === "settings" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+            }`}
+          >
             <Settings className="w-5 h-5" />
             <span className="font-medium">Settings</span>
           </button>
+        </nav>
 
+        <div className="p-4 border-t border-border flex-shrink-0 bg-background">
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
@@ -403,11 +463,15 @@ export default function AdminDashboard({
                 {activeTab === "bookings" && "Booking Management"}
                 {activeTab === "users" && "User Management"}
                 {activeTab === "analytics" && "Analytics & Reports"}
+                {activeTab === "settings" && "Company Settings"}
               </h1>
               <p className="text-sm text-muted-foreground">{t("admin.subtitle", { name: currentUser.name })}</p>
             </div>
 
             <div className="flex items-center gap-3">
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="mr-2" title="Logout">
+                <LogOut className="w-5 h-5" />
+              </Button>
               <div className="text-right">
                 <p className="text-sm font-medium">{currentUser.name}</p>
                 <p className="text-xs text-muted-foreground">Administrator</p>
@@ -573,16 +637,8 @@ export default function AdminDashboard({
                           <div className="text-right">
                             <div className="font-bold">{formatCents(booking.totalPrice)}</div>
                             <Badge
-                              variant={
-                                booking.status === "CONFIRMED"
-                                  ? "default"
-                                  : booking.status === "PENDING"
-                                    ? "secondary"
-                                    : booking.status === "COMPLETED"
-                                      ? "outline"
-                                      : "destructive"
-                              }
-                              className="mt-1"
+                              variant={getBookingStatusBadge(booking.status).variant}
+                              className={`mt-1 ${getBookingStatusBadge(booking.status).className}`}
                             >
                               {booking.status}
                             </Badge>
@@ -800,15 +856,22 @@ export default function AdminDashboard({
                                   {(bookingUser.name || bookingUser.email) + " • " + bookingUser.email}
                                 </p>
                               </div>
-                              <Select
-                                value={booking.status}
-                                onValueChange={(value) =>
-                                  handleUpdateBookingStatus(booking.id, value as AdminBooking["status"])
-                                }
-                              >
-                                <SelectTrigger className="w-36">
-                                  <SelectValue />
-                                </SelectTrigger>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={getBookingStatusBadge(booking.status).variant}
+                                  className={getBookingStatusBadge(booking.status).className}
+                                >
+                                  {booking.status}
+                                </Badge>
+                                <Select
+                                  value={booking.status}
+                                  onValueChange={(value) =>
+                                    handleUpdateBookingStatus(booking.id, value as AdminBooking["status"])
+                                  }
+                                >
+                                  <SelectTrigger className="w-36">
+                                    <SelectValue />
+                                  </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="PENDING">
                                     <div className="flex items-center gap-2">
@@ -848,6 +911,7 @@ export default function AdminDashboard({
                                   </SelectItem>
                                 </SelectContent>
                               </Select>
+                              </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1119,6 +1183,36 @@ export default function AdminDashboard({
                   </CardContent>
                 </Card>
               </div>
+            </div>
+          )}
+
+          {/* Settings Tab */}
+          {activeTab === "settings" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Company Settings</CardTitle>
+                  <CardDescription>Manage your company information, payment details, and configuration</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingSettings ? (
+                    <div className="text-center py-8">Loading settings...</div>
+                  ) : (
+                    <SettingsForm
+                      settings={settings}
+                      onSave={async (data) => {
+                        const result = await updateCompanySettings(data)
+                        if (result?.success) {
+                          setSettings(result.settings)
+                          alert("Settings saved successfully!")
+                        } else {
+                          alert(result?.error || "Failed to save settings")
+                        }
+                      }}
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>
@@ -1591,6 +1685,277 @@ function CarForm({
 
       <Button type="submit" className="w-full" disabled={isBusy}>
         {isUploading ? "Uploading..." : isSubmitting ? "Saving..." : initialCar ? "Update Car" : "Add Car"}
+      </Button>
+    </form>
+  )
+}
+
+// Settings Form Component
+function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any) => Promise<void> }) {
+  const [formData, setFormData] = useState({
+    // Company Information
+    companyName: settings?.companyName || "",
+    companyEmail: settings?.companyEmail || "",
+    companyPhone: settings?.companyPhone || "",
+    companyAddress: settings?.companyAddress || "",
+    companyCity: settings?.companyCity || "",
+    companyState: settings?.companyState || "",
+    companyZipCode: settings?.companyZipCode || "",
+    companyCountry: settings?.companyCountry || "",
+    
+    // Bank/Payment Details
+    bankName: settings?.bankName || "",
+    accountName: settings?.accountName || "",
+    accountNumber: settings?.accountNumber || "",
+    swiftCode: settings?.swiftCode || "",
+    iban: settings?.iban || "",
+    
+    // Tax Configuration
+    taxRate: settings?.taxRate ?? 0,
+    taxIncluded: settings?.taxIncluded ?? false,
+    depositPercentage: settings?.depositPercentage ?? 0.2,
+    
+    // Email Configuration
+    supportEmail: settings?.supportEmail || "",
+    adminEmail: settings?.adminEmail || "",
+    
+    // Additional Settings
+    currency: settings?.currency || "EUR",
+    currencySymbol: settings?.currencySymbol || "€",
+  })
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    try {
+      await onSave(formData)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Company Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold">Company Information</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="companyName">Company Name *</Label>
+            <Input
+              id="companyName"
+              value={formData.companyName}
+              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyEmail">Company Email *</Label>
+            <Input
+              id="companyEmail"
+              type="email"
+              value={formData.companyEmail}
+              onChange={(e) => setFormData({ ...formData, companyEmail: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyPhone">Phone Number</Label>
+            <Input
+              id="companyPhone"
+              value={formData.companyPhone}
+              onChange={(e) => setFormData({ ...formData, companyPhone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyAddress">Address</Label>
+            <Input
+              id="companyAddress"
+              value={formData.companyAddress}
+              onChange={(e) => setFormData({ ...formData, companyAddress: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyCity">City</Label>
+            <Input
+              id="companyCity"
+              value={formData.companyCity}
+              onChange={(e) => setFormData({ ...formData, companyCity: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyState">State/Province</Label>
+            <Input
+              id="companyState"
+              value={formData.companyState}
+              onChange={(e) => setFormData({ ...formData, companyState: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyZipCode">Zip/Postal Code</Label>
+            <Input
+              id="companyZipCode"
+              value={formData.companyZipCode}
+              onChange={(e) => setFormData({ ...formData, companyZipCode: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="companyCountry">Country</Label>
+            <Input
+              id="companyCountry"
+              value={formData.companyCountry}
+              onChange={(e) => setFormData({ ...formData, companyCountry: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Bank/Payment Details */}
+      <div className="space-y-4 border-t pt-6">
+        <h3 className="text-lg font-semibold">Bank & Payment Details</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="bankName">Bank Name *</Label>
+            <Input
+              id="bankName"
+              value={formData.bankName}
+              onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="accountName">Account Name *</Label>
+            <Input
+              id="accountName"
+              value={formData.accountName}
+              onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="accountNumber">Account Number *</Label>
+            <Input
+              id="accountNumber"
+              value={formData.accountNumber}
+              onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="swiftCode">SWIFT Code *</Label>
+            <Input
+              id="swiftCode"
+              value={formData.swiftCode}
+              onChange={(e) => setFormData({ ...formData, swiftCode: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="iban">IBAN</Label>
+            <Input
+              id="iban"
+              value={formData.iban}
+              onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tax & Payment Configuration */}
+      <div className="space-y-4 border-t pt-6">
+        <h3 className="text-lg font-semibold">Tax & Payment Configuration</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="taxRate">Tax Rate (0-1, e.g., 0.19 for 19%)</Label>
+            <Input
+              id="taxRate"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={formData.taxRate}
+              onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="depositPercentage">Deposit Percentage (0-1, e.g., 0.2 for 20%)</Label>
+            <Input
+              id="depositPercentage"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={formData.depositPercentage}
+              onChange={(e) => setFormData({ ...formData, depositPercentage: parseFloat(e.target.value) || 0.2 })}
+            />
+          </div>
+          <div className="space-y-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="taxIncluded"
+              checked={formData.taxIncluded}
+              onChange={(e) => setFormData({ ...formData, taxIncluded: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <Label htmlFor="taxIncluded" className="cursor-pointer">Tax included in displayed prices</Label>
+          </div>
+        </div>
+      </div>
+
+      {/* Email Configuration */}
+      <div className="space-y-4 border-t pt-6">
+        <h3 className="text-lg font-semibold">Email Configuration</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="supportEmail">Support Email *</Label>
+            <Input
+              id="supportEmail"
+              type="email"
+              value={formData.supportEmail}
+              onChange={(e) => setFormData({ ...formData, supportEmail: e.target.value })}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adminEmail">Admin Email *</Label>
+            <Input
+              id="adminEmail"
+              type="email"
+              value={formData.adminEmail}
+              onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Currency Settings */}
+      <div className="space-y-4 border-t pt-6">
+        <h3 className="text-lg font-semibold">Currency Settings</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="currency">Currency Code (e.g., EUR, USD)</Label>
+            <Input
+              id="currency"
+              value={formData.currency}
+              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="currencySymbol">Currency Symbol (e.g., €, $)</Label>
+            <Input
+              id="currencySymbol"
+              value={formData.currencySymbol}
+              onChange={(e) => setFormData({ ...formData, currencySymbol: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? "Saving..." : "Save Settings"}
       </Button>
     </form>
   )

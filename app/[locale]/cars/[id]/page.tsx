@@ -8,6 +8,8 @@ import { SaveCarButton } from "@/components/save-car-button"
 import { CarImageCarousel } from "@/components/car-image-carousel"
 import { ShareButton } from "@/components/share-button"
 import { getTranslations } from "next-intl/server"
+import { BookNowButton } from "./book-now-button"
+import { CarAvailabilityCalendar } from "./car-availability-calendar"
 
 export default async function CarDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { id, locale } = await params
@@ -189,6 +191,8 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
           </div>
         )}
 
+        {/* Availability Calendar */}
+        <CarAvailabilityCalendar carId={car.id} />
 
         {/* Reviews */}
         <div>
@@ -238,12 +242,12 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
               <span className="text-base text-muted-foreground font-normal"> / {t("car.pricePerDay")}</span>
             </div>
           </div>
-          <Link
-            href={user ? `/checkout/${car.id}` : signInUrl}
-            className="px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-          >
-            {t("common.bookNow")}
-          </Link>
+          <BookNowButton
+            carId={car.id}
+            signInUrl={signInUrl}
+            isSignedIn={Boolean(user)}
+            label={t("common.bookNow")}
+          />
         </div>
       </div>
     </div>

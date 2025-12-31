@@ -24,8 +24,27 @@
     "close": "Close"
   },
   "home": {
+    "kicker": "Premium car rental",
     "title": "Ready for your next trip?",
     "subtitle": "Find the perfect car nearby",
+    "ctaPrimary": "Explore the fleet",
+    "ctaSecondary": "How it works",
+    "searchTitle": "Plan your ride",
+    "searchSubtitle": "Choose dates, then filter by year",
+    "highlights": {
+      "insurance": "Full insurance included",
+      "support": "24/7 roadside support",
+      "cancel": "Free cancellation"
+    },
+    "stats": {
+      "cars": "Cars ready",
+      "categories": "Categories",
+      "rating": "Avg rating"
+    },
+    "featured": {
+      "title": "Featured today",
+      "badge": "Top pick"
+    },
     "popularCars": "Popular Cars",
     "noCarsFound": "No cars found",
     "tryDifferentSearch": "Try a different search or filter"
@@ -145,6 +164,9 @@
     "capacity": "Capacity",
     "accelerationLabel": "0-60 mph",
     "about": "About this car",
+    "availability": "Availability",
+    "available": "Available",
+    "unavailable": "Unavailable",
     "reviewsTitle": "Reviews",
     "basedOnReviews": "based on {count} {count, plural, one {review} other {reviews}}"
   },
@@ -219,7 +241,18 @@
     "pickup": "Pickup",
     "dropoff": "Drop-off",
     "total": "Total",
-    "bookingNumber": "Booking #"
+    "bookingNumber": "Booking #",
+    "referenceNumber": "Reference Number",
+    "paymentInfo": "Payment Information",
+    "paymentStatus": "Payment Status",
+    "paid": "Paid",
+    "pending": "Pending",
+    "failed": "Failed",
+    "refunded": "Refunded",
+    "partiallyRefunded": "Partially Refunded",
+    "bookedAt": "Booked At",
+    "cancellationDeadline": "Cancellation Deadline",
+    "willCancelAt": "Will be cancelled if not paid by"
   },
   "saved": {
     "title": "Saved Cars",
@@ -260,6 +293,7 @@
     "about": "About Us",
     "contact": "Contact",
     "help": "Help & Support",
+    "more": "More",
     "language": "Language"
   },
   "categories": {
@@ -277,7 +311,7 @@
     "maintenance": "Maintenance"
   },
   "filters": {
-    "year": "Year",
+    "year": "Model year",
     "allYears": "All Years",
     "category": "Category",
     "dateRange": "Date Range",

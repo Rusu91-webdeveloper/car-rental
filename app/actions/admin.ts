@@ -1,10 +1,12 @@
 "use server"
 import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
+import { cancelExpiredBookings } from "@/lib/booking-expiration"
 
 export async function getAdminStats() {
   try {
     await requireAdmin()
+    await cancelExpiredBookings()
 
     const [totalBookings, totalCars, totalUsers, totalRevenue, recentBookings] = await Promise.all([
       prisma.booking.count(),
@@ -48,6 +50,7 @@ export async function getAdminStats() {
 export async function getAllBookings() {
   try {
     await requireAdmin()
+    await cancelExpiredBookings()
 
     const bookings = await prisma.booking.findMany({
       include: {

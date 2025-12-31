@@ -7,17 +7,21 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { LogoutButton } from "./logout-button"
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   const user = await getCurrentUser()
   const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
 
   if (!user) {
-    redirect(signInUrl)
+    redirect({ href: signInUrl, locale })
   }
 
+  // TypeScript doesn't know redirect throws
+  const currentUser = user!
+
   const [totalBookings, completedBookings] = await Promise.all([
-    prisma.booking.count({ where: { userId: user.id } }),
-    prisma.booking.count({ where: { userId: user.id, status: "COMPLETED" } }),
+    prisma.booking.count({ where: { userId: currentUser.id } }),
+    prisma.booking.count({ where: { userId: currentUser.id, status: "COMPLETED" } }),
   ])
 
   return (
@@ -26,13 +30,13 @@ export default async function ProfilePage() {
       <header className="bg-background px-4 py-6 border-b border-border">
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-3xl font-bold">
-            {(user.name || user.email).charAt(0).toUpperCase()}
+            {(currentUser.name || currentUser.email).charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{user.name || user.email}</h1>
-            <p className="text-muted-foreground">{user.email}</p>
+            <h1 className="text-2xl font-bold">{currentUser.name || currentUser.email}</h1>
+            <p className="text-muted-foreground">{currentUser.email}</p>
             <span className="inline-block mt-1 px-2 py-1 bg-primary/10 text-primary text-xs font-semibold rounded">
-              {user.role.toUpperCase()}
+              {currentUser.role.toUpperCase()}
             </span>
           </div>
         </div>
@@ -75,7 +79,7 @@ export default async function ProfilePage() {
             </svg>
           </Link>
 
-          {user.role === "ADMIN" && (
+          {currentUser.role === "ADMIN" && (
             <Link
               href="/admin"
               className="w-full px-4 py-4 flex items-center justify-between hover:bg-muted transition-colors border-t border-border"

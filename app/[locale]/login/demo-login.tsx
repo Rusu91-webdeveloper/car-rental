@@ -5,10 +5,12 @@ import type React from "react"
 import { useState } from "react"
 import Link from "@/navigation"
 import { useRouter } from "@/navigation"
+import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 
 export function DemoLogin() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const t = useTranslations()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -22,6 +24,24 @@ export function DemoLogin() {
       const userData = JSON.parse(user)
       if (userData.email === email && userData.password === password) {
         localStorage.setItem("isLoggedIn", "true")
+        
+        // Check for redirect_url parameter
+        const redirectUrl = searchParams.get("redirect_url")
+        if (redirectUrl) {
+          try {
+            // Decode and validate the redirect URL
+            const decodedUrl = decodeURIComponent(redirectUrl)
+            // Ensure it's a relative path (starts with /)
+            if (decodedUrl.startsWith("/")) {
+              router.push(decodedUrl)
+              return
+            }
+          } catch (error) {
+            console.error("Failed to decode redirect_url:", error)
+          }
+        }
+        
+        // Default redirect to home
         router.push("/")
       } else {
         alert("Invalid credentials")

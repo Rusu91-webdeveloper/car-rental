@@ -1,9 +1,15 @@
 // Configuration and feature flags
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
-const adminEmailsFromEnv = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
+const adminEmailsFromEnv = (
+  process.env.ADMIN_EMAILS ||
+  process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+  process.env.ADMIN_EMAIL ||
+  ""
+)
   .split(",")
   .map((email) => email.trim())
   .filter(Boolean)
+const smtpEnabled = Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS)
 
 export const config = {
   // Demo mode - bypasses authentication and payment integrations
@@ -14,7 +20,7 @@ export const config = {
 
   // Features
   features: {
-    emailEnabled: !!process.env.RESEND_API_KEY,
+    emailEnabled: smtpEnabled || !!process.env.RESEND_API_KEY,
     paymentsEnabled: !!process.env.STRIPE_SECRET_KEY && !isDemoMode,
     authEnabled: !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !isDemoMode,
   },

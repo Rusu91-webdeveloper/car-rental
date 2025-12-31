@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/bottom-nav"
 import { FilterBar } from "@/components/filter-bar"
 import { CategoryFilter } from "@/components/category-filter"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { ClientOnly } from "@/components/client-only"
 import { filterCarsByAvailability } from "@/app/actions/cars"
 
 interface Car {
@@ -51,6 +52,13 @@ export function CarsClient({
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL")
   const [selectedYear, setSelectedYear] = useState<string>("ALL")
   const [filteredCars, setFilteredCars] = useState(cars)
+  const startYear =
+    cars.reduce<number | null>((minYear, car) => {
+      if (car.year === null) {
+        return minYear
+      }
+      return minYear === null ? car.year : Math.min(minYear, car.year)
+    }, null) ?? new Date().getFullYear()
 
   const pickupDateParam = searchParams.get("pickupDate")
   const dropoffDateParam = searchParams.get("dropoffDate")
@@ -109,10 +117,14 @@ export function CarsClient({
               <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: filteredCars.length })}</p>
             </div>
           </div>
-          <LanguageSwitcher />
+          <ClientOnly>
+            <LanguageSwitcher />
+          </ClientOnly>
         </div>
         
-        <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} />
+        <ClientOnly>
+          <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
+        </ClientOnly>
       </header>
 
       {/* Category Filter */}

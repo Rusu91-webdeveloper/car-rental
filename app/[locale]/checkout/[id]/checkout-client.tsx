@@ -1,7 +1,8 @@
 "use client"
 
-import { useRouter } from "@/navigation"
-import { useState, useTransition } from "react"
+import { useRouter, usePathname } from "@/navigation"
+import { useState, useTransition, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { createBooking } from "@/app/actions/bookings"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +12,9 @@ import { BookingSuccessModal } from "./booking-success-modal"
 
 export function CheckoutClient({
   car,
+  signInUrl,
+  paymentDetails,
+  companySettings,
 }: {
   car: {
     id: string
@@ -21,16 +25,23 @@ export function CheckoutClient({
     rating: number
     reviews: number
   }
+  signInUrl: string
+  paymentDetails: {
+    bankName: string
+    accountName: string
+    accountNumber: string
+    swiftCode: string
+    iban?: string | null
+  }
+  companySettings: {
+    companyName: string
+    supportEmail: string
+    depositPercentage: number
+  }
 }) {
   const router = useRouter()
-  
-  // Set default dates to tomorrow and 3 days later
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  tomorrow.setHours(10, 0, 0, 0)
-  
-  const threeDaysLater = new Date(tomorrow)
-  threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   
   // Format as datetime-local string (YYYY-MM-DDTHH:mm)
   const formatDatetimeLocal = (date: Date) => {
@@ -41,10 +52,67 @@ export function CheckoutClient({
     const minutes = String(date.getMinutes()).padStart(2, '0')
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
-  
-  const [pickupDate, setPickupDate] = useState(formatDatetimeLocal(tomorrow))
-  const [dropoffDate, setDropoffDate] = useState(formatDatetimeLocal(threeDaysLater))
-  const [location, setLocation] = useState("SFO International Airport")
+
+  // Convert YYYY-MM-DD format to datetime-local format (YYYY-MM-DDTHH:mm)
+  const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: number = 10) => {
+    const date = new Date(dateString)
+    date.setHours(defaultHour, 0, 0, 0)
+    return formatDatetimeLocal(date)
+  }
+
+  // Get dates from URL params or use defaults
+  const getInitialDates = () => {
+    const pickupDateParam = searchParams.get("pickupDate")
+    const dropoffDateParam = searchParams.get("dropoffDate")
+
+    if (pickupDateParam && dropoffDateParam) {
+      // Convert YYYY-MM-DD from URL to datetime-local format
+      const pickup = convertDateStringToDatetimeLocal(pickupDateParam, 10)
+      const dropoff = convertDateStringToDatetimeLocal(dropoffDateParam, 10)
+      return { pickup, dropoff }
+    }
+
+    // Default dates: tomorrow and 3 days later
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(10, 0, 0, 0)
+    
+    const threeDaysLater = new Date(tomorrow)
+    threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+    
+    return {
+      pickup: formatDatetimeLocal(tomorrow),
+      dropoff: formatDatetimeLocal(threeDaysLater),
+    }
+  }
+
+  const initialDates = getInitialDates()
+  const [pickupDate, setPickupDate] = useState(initialDates.pickup)
+  const [dropoffDate, setDropoffDate] = useState(initialDates.dropoff)
+
+  // Get location from URL params or use default
+  const getInitialLocation = () => {
+    const locationParam = searchParams.get("location")
+    return locationParam || "SFO International Airport"
+  }
+
+  const [location, setLocation] = useState(getInitialLocation())
+
+  // Update dates and location when URL params change
+  useEffect(() => {
+    const pickupDateParam = searchParams.get("pickupDate")
+    const dropoffDateParam = searchParams.get("dropoffDate")
+    const locationParam = searchParams.get("location")
+
+    if (pickupDateParam && dropoffDateParam) {
+      setPickupDate(convertDateStringToDatetimeLocal(pickupDateParam, 10))
+      setDropoffDate(convertDateStringToDatetimeLocal(dropoffDateParam, 10))
+    }
+
+    if (locationParam) {
+      setLocation(locationParam)
+    }
+  }, [searchParams])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [bookingSuccess, setBookingSuccess] = useState<{
@@ -86,15 +154,23 @@ export function CheckoutClient({
       })
 
       if (result?.error) {
+        if (result.error === "Unauthorized") {
+          const returnUrl = `${window.location.pathname}${window.location.search}`
+          router.push(`${signInUrl}?redirect_url=${encodeURIComponent(returnUrl)}`)
+          return
+        }
         setError(result.error)
         return
       }
 
-      // If Stripe checkout URL is provided, redirect to Stripe
+      // Stripe checkout redirect is temporarily disabled.
+      // Uncomment this block when you want to re-enable Stripe integration.
+      /*
       if (result?.checkoutUrl) {
         window.location.href = result.checkoutUrl
         return
       }
+      */
 
       // Manual payment flow - show success modal with payment instructions
       if (result?.manualPayment && result?.booking) {
@@ -119,6 +195,8 @@ export function CheckoutClient({
           pickupDate={bookingSuccess.pickupDate}
           dropoffDate={bookingSuccess.dropoffDate}
           location={bookingSuccess.location}
+          paymentDetails={paymentDetails}
+          companySettings={companySettings}
           onClose={() => router.push("/bookings")}
         />
       )}
@@ -165,7 +243,15 @@ export function CheckoutClient({
               id="pickup"
               type="datetime-local"
               value={pickupDate}
-              onChange={(e) => setPickupDate(e.target.value)}
+              onChange={(e) => {
+                setPickupDate(e.target.value)
+                // Update URL params when date changes
+                const params = new URLSearchParams(searchParams.toString())
+                const dateStr = e.target.value.split("T")[0] // Extract YYYY-MM-DD
+                params.set("pickupDate", dateStr)
+                const queryString = params.toString()
+                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+              }}
             />
           </div>
 
@@ -175,13 +261,32 @@ export function CheckoutClient({
               id="dropoff"
               type="datetime-local"
               value={dropoffDate}
-              onChange={(e) => setDropoffDate(e.target.value)}
+              onChange={(e) => {
+                setDropoffDate(e.target.value)
+                // Update URL params when date changes
+                const params = new URLSearchParams(searchParams.toString())
+                const dateStr = e.target.value.split("T")[0] // Extract YYYY-MM-DD
+                params.set("dropoffDate", dateStr)
+                const queryString = params.toString()
+                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+              }}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="location">Pick-up Location</Label>
-            <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+            <Input 
+              id="location" 
+              value={location} 
+              onChange={(e) => {
+                setLocation(e.target.value)
+                // Update URL params when location changes
+                const params = new URLSearchParams(searchParams.toString())
+                params.set("location", e.target.value)
+                const queryString = params.toString()
+                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+              }} 
+            />
           </div>
         </div>
 

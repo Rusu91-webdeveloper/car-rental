@@ -3,6 +3,7 @@
 import Link from "@/navigation"
 import { useState } from "react"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { ClientOnly } from "@/components/client-only"
 import { useTranslations } from "next-intl"
 
 export default function HelpPage() {
@@ -51,7 +52,9 @@ export default function HelpPage() {
             </Link>
             <h1 className="text-xl font-bold">{t("help.title")}</h1>
           </div>
-          <LanguageSwitcher />
+          <ClientOnly>
+            <LanguageSwitcher />
+          </ClientOnly>
         </div>
       </header>
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
 import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
+import { cancelExpiredBookings } from "@/lib/booking-expiration"
 
 export async function createCar(data: unknown) {
   try {
@@ -172,6 +173,7 @@ export async function getCarAvailability(carId: string) {
       return { error: "Car not found" }
     }
 
+    await cancelExpiredBookings()
     const unavailableDates = await getUnavailableDates(carId)
 
     return { unavailableDates }
@@ -183,6 +185,7 @@ export async function getCarAvailability(carId: string) {
 
 export async function filterCarsByAvailability(carIds: string[], pickupDate: string, dropoffDate: string) {
   try {
+    await cancelExpiredBookings()
     const pickup = new Date(pickupDate)
     const dropoff = new Date(dropoffDate)
 

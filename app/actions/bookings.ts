@@ -5,15 +5,23 @@ import { prisma } from "@/lib/db"
 import { requireAuth, requireAdmin } from "@/lib/auth"
 import { createBookingSchema, updateBookingStatusSchema } from "@/lib/validations"
 import { isCarAvailable, calculateTotalDays } from "@/lib/availability"
-import { stripe } from "@/lib/stripe"
+// import { stripe } from "@/lib/stripe"
 import { config } from "@/lib/config"
-import { sendManualPaymentEmail, sendAdminBookingNotification } from "@/lib/email"
+import {
+  sendManualPaymentEmail,
+  sendAdminBookingNotification,
+  sendBookingStatusEmail,
+  sendAdminBookingConfirmationNotification,
+  sendBookingConfirmationEmail,
+} from "@/lib/email"
+import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import crypto from "crypto"
 import { Prisma } from "@prisma/client"
 
 export async function createBooking(data: unknown) {
   try {
     const user = await requireAuth()
+    await cancelExpiredBookings()
 
     // Validate input
     const validated = createBookingSchema.parse(data)
@@ -89,7 +97,9 @@ export async function createBooking(data: unknown) {
       },
     )
 
-    // If Stripe is enabled, create checkout session
+    // Stripe checkout flow is temporarily disabled.
+    // Uncomment this block when you want to re-enable Stripe integration.
+    /*
     if (stripe && config.features.paymentsEnabled) {
       const stripeImages = car.image.startsWith("http") ? [car.image] : []
       const session = await stripe.checkout.sessions.create({
@@ -119,7 +129,6 @@ export async function createBooking(data: unknown) {
         customer_email: user.email,
       })
 
-      // Update booking with Stripe session ID
       await prisma.booking.update({
         where: { id: booking.id },
         data: { stripeSessionId: session.id },
@@ -135,6 +144,7 @@ export async function createBooking(data: unknown) {
         manualPayment: false,
       }
     }
+    */
 
     // Manual payment flow (no Stripe)
     // Send email notifications
@@ -166,7 +176,7 @@ export async function createBooking(data: unknown) {
 
       // Send notification to admin
       await sendAdminBookingNotification({
-        adminEmail: config.adminEmails[0], // Send to first admin email
+        adminEmails: config.adminEmails,
         userName: user.name || user.email,
         userEmail: user.email,
         carName: car.name,
@@ -261,7 +271,58 @@ export async function updateBookingStatus(data: unknown) {
       })
     })
 
-    // TODO: Send email notification to user
+    if (config.features.emailEnabled && booking.user?.email) {
+      // Send appropriate email based on status
+      if (validated.status === "CONFIRMED") {
+        // Send detailed confirmation email to user
+        const formatDateForEmail = (date: Date) => {
+          return new Date(date).toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        }
+
+        await sendBookingConfirmationEmail({
+          to: booking.user.email,
+          userName: booking.user.name || booking.user.email,
+          carName: booking.car.name,
+          pickupDate: formatDateForEmail(booking.pickupDate),
+          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          location: booking.location,
+          totalPrice: booking.totalPrice,
+          transferCode: booking.transferCode,
+          bookingNumber: booking.bookingNumber,
+        })
+
+        // Send confirmation notification to admin
+        await sendAdminBookingConfirmationNotification({
+          adminEmails: config.adminEmails,
+          userName: booking.user.name || booking.user.email,
+          userEmail: booking.user.email,
+          carName: booking.car.name,
+          pickupDate: formatDateForEmail(booking.pickupDate),
+          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          location: booking.location,
+          totalPrice: booking.totalPrice,
+          transferCode: booking.transferCode,
+          bookingNumber: booking.bookingNumber,
+          bookingId: booking.id,
+        })
+      } else {
+        // Send status update email for other statuses (CANCELLED, REJECTED)
+        await sendBookingStatusEmail(
+          booking.user.email,
+          booking.user.name || booking.user.email,
+          booking.car.name,
+          validated.status,
+          booking.bookingNumber,
+        )
+      }
+    }
 
     revalidatePath("/admin")
     revalidatePath("/bookings")
@@ -282,6 +343,7 @@ export async function updateBookingStatus(data: unknown) {
 export async function getUserBookings() {
   try {
     const user = await requireAuth()
+    await cancelExpiredBookings()
 
     const bookings = await prisma.booking.findMany({
       where: { userId: user.id },

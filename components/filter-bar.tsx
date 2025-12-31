@@ -6,11 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface FilterBarProps {
   selectedYear: string
   onYearChange: (year: string) => void
+  startYear?: number
 }
 
-export function FilterBar({ selectedYear, onYearChange }: FilterBarProps) {
+export function FilterBar({ selectedYear, onYearChange, startYear }: FilterBarProps) {
   const t = useTranslations()
-  const years = Array.from({ length: 26 }, (_, i) => 2000 + i)
+  const presentYear = new Date().getFullYear()
+  const fromYear = Math.min(startYear ?? presentYear, presentYear)
+  const years = Array.from({ length: presentYear - fromYear + 1 }, (_, i) => fromYear + i)
 
   return (
     <div className="space-y-2">
@@ -31,4 +34,3 @@ export function FilterBar({ selectedYear, onYearChange }: FilterBarProps) {
     </div>
   )
 }
-

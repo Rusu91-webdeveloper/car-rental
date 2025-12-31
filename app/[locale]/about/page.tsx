@@ -1,5 +1,6 @@
 import Link from "@/navigation"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { ClientOnly } from "@/components/client-only"
 import { getTranslations } from "next-intl/server"
 
 export default async function AboutPage() {
@@ -20,7 +21,9 @@ export default async function AboutPage() {
             </Link>
             <h1 className="text-xl font-bold">{t("about.title")}</h1>
           </div>
-          <LanguageSwitcher />
+          <ClientOnly>
+            <LanguageSwitcher />
+          </ClientOnly>
         </div>
       </header>
 

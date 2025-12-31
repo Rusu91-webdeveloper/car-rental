@@ -5,6 +5,7 @@ import type React from "react"
 import Link from "@/navigation"
 import { useState } from "react"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { ClientOnly } from "@/components/client-only"
 import { useTranslations } from "next-intl"
 
 export default function ContactPage() {
@@ -39,7 +40,9 @@ export default function ContactPage() {
             </Link>
             <h1 className="text-xl font-bold">{t("contact.title")}</h1>
           </div>
-          <LanguageSwitcher />
+          <ClientOnly>
+            <LanguageSwitcher />
+          </ClientOnly>
         </div>
       </header>
 

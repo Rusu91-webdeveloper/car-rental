@@ -6,6 +6,7 @@ import Link from "@/navigation"
 import { useRouter } from "@/navigation"
 import { useTransition } from "react"
 import { useLocale, useTranslations } from "next-intl"
+import { useSearchParams } from "next/navigation"
 import { toggleSavedCar } from "@/app/actions/saved"
 import { formatCents } from "@/lib/money"
 
@@ -41,10 +42,29 @@ export function CarCard({
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
   const categoryKey = car.category.toLowerCase()
   const categoryLabel = t(`categories.${categoryKey}` as any)
+
+  // Preserve date query params when linking to car detail page
+  const getCarDetailUrl = () => {
+    const pickupDate = searchParams.get("pickupDate")
+    const dropoffDate = searchParams.get("dropoffDate")
+    let url = `/cars/${car.id}`
+    const params = new URLSearchParams()
+    if (pickupDate) {
+      params.set("pickupDate", pickupDate)
+    }
+    if (dropoffDate) {
+      params.set("dropoffDate", dropoffDate)
+    }
+    if (params.toString()) {
+      url += `?${params.toString()}`
+    }
+    return url
+  }
 
   const handleSaveClick = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -90,7 +110,7 @@ export function CarCard({
   }
 
   return (
-    <Link href={`/cars/${car.id}`}>
+    <Link href={getCarDetailUrl()}>
       <div className="bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow">
         {/* Image */}
         <div className="relative h-48 bg-gradient-to-b from-gray-100 to-gray-200">

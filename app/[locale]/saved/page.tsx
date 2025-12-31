@@ -7,17 +7,21 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { getTranslations } from "next-intl/server"
 
-export default async function SavedPage() {
+export default async function SavedPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   const t = await getTranslations()
   const user = await getCurrentUser()
   const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
 
   if (!user) {
-    redirect(signInUrl)
+    redirect({ href: signInUrl, locale })
   }
 
+  // TypeScript doesn't know redirect throws
+  const currentUser = user!
+
   const savedCars = await prisma.savedCar.findMany({
-    where: { userId: user.id },
+    where: { userId: currentUser.id },
     include: { car: true },
     orderBy: { createdAt: "desc" },
   })

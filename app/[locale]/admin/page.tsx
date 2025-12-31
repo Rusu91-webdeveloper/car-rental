@@ -2,20 +2,27 @@ import { redirect } from "@/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
+import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import AdminDashboard from "./admin-client"
 
-export default async function AdminPage() {
+export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   const user = await getCurrentUser()
   const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
 
   if (!user) {
-    redirect(signInUrl)
+    redirect({ href: signInUrl, locale })
   }
 
-  if (user.role !== "ADMIN") {
-    redirect("/")
+  // TypeScript doesn't know redirect throws, use non-null assertion
+  if (user!.role !== "ADMIN") {
+    redirect({ href: "/", locale })
   }
 
+  // At this point, user is guaranteed to be non-null and ADMIN
+  const adminUser = user!
+
+  await cancelExpiredBookings()
   const [cars, bookings, users] = await Promise.all([
     prisma.car.findMany({
       where: { isDeleted: false },
@@ -31,7 +38,7 @@ export default async function AdminPage() {
 
   return (
     <AdminDashboard
-      currentUser={{ name: user.name || user.email, email: user.email }}
+      currentUser={{ name: adminUser.name || adminUser.email, email: adminUser.email }}
       isDemoMode={config.isDemoMode}
       cars={cars.map((car) => ({
         id: car.id,

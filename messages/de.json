@@ -24,8 +24,27 @@
     "close": "Schließen"
   },
   "home": {
+    "kicker": "Premium-Mietwagen",
     "title": "Bereit für Ihre nächste Reise?",
     "subtitle": "Finden Sie das perfekte Auto in Ihrer Nähe",
+    "ctaPrimary": "Flotte entdecken",
+    "ctaSecondary": "So funktioniert's",
+    "searchTitle": "Fahrt planen",
+    "searchSubtitle": "Daten wählen, dann nach Jahr filtern",
+    "highlights": {
+      "insurance": "Vollkasko inklusive",
+      "support": "24/7 Pannenhilfe",
+      "cancel": "Kostenlose Stornierung"
+    },
+    "stats": {
+      "cars": "Autos verfügbar",
+      "categories": "Kategorien",
+      "rating": "Ø Bewertung"
+    },
+    "featured": {
+      "title": "Heute empfohlen",
+      "badge": "Top-Tipp"
+    },
     "popularCars": "Beliebte Autos",
     "noCarsFound": "Keine Autos gefunden",
     "tryDifferentSearch": "Versuchen Sie eine andere Suche oder einen anderen Filter"
@@ -145,6 +164,9 @@
     "capacity": "Kapazität",
     "accelerationLabel": "0-60 mph",
     "about": "Über dieses Auto",
+    "availability": "Verfügbarkeit",
+    "available": "Verfügbar",
+    "unavailable": "Nicht verfügbar",
     "reviewsTitle": "Bewertungen",
     "basedOnReviews": "basierend auf {count} {count, plural, one {Bewertung} other {Bewertungen}}"
   },
@@ -219,7 +241,18 @@
     "pickup": "Abholung",
     "dropoff": "Rückgabe",
     "total": "Gesamt",
-    "bookingNumber": "Buchung #"
+    "bookingNumber": "Buchung #",
+    "referenceNumber": "Referenznummer",
+    "paymentInfo": "Zahlungsinformationen",
+    "paymentStatus": "Zahlungsstatus",
+    "paid": "Bezahlt",
+    "pending": "Ausstehend",
+    "failed": "Fehlgeschlagen",
+    "refunded": "Rückerstattet",
+    "partiallyRefunded": "Teilweise rückerstattet",
+    "bookedAt": "Gebucht am",
+    "cancellationDeadline": "Stornierungsfrist",
+    "willCancelAt": "Wird storniert, wenn nicht bezahlt bis"
   },
   "saved": {
     "title": "Gespeicherte Autos",
@@ -260,6 +293,7 @@
     "about": "Über uns",
     "contact": "Kontakt",
     "help": "Hilfe & Support",
+    "more": "Mehr",
     "language": "Sprache"
   },
   "categories": {
@@ -277,7 +311,7 @@
     "maintenance": "Wartung"
   },
   "filters": {
-    "year": "Jahr",
+    "year": "Modelljahr",
     "allYears": "Alle Jahre",
     "category": "Kategorie",
     "dateRange": "Datumsbereich",

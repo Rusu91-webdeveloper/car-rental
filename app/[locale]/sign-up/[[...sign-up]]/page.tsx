@@ -2,10 +2,11 @@ import { SignUp } from "@clerk/nextjs"
 import { config } from "@/lib/config"
 import { redirect } from "@/navigation"
 
-export default function SignUpPage() {
+export default async function SignUpPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   // In demo mode, redirect to custom signup
   if (config.isDemoMode) {
-    redirect("/signup")
+    redirect({ href: "/signup", locale })
   }
 
   return (
