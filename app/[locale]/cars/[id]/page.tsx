@@ -11,6 +11,8 @@ import { getTranslations } from "next-intl/server"
 import { BookNowButton } from "./book-now-button"
 import { CarAvailabilityCalendar } from "./car-availability-calendar"
 
+export const dynamic = "force-dynamic"
+
 export default async function CarDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { id, locale } = await params
   const t = await getTranslations({ locale })

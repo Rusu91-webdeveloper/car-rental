@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { LogoutButton } from "./logout-button"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProfilePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const user = await getCurrentUser()

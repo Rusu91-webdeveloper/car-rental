@@ -6,6 +6,8 @@ import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import AdminDashboard from "./admin-client"
 import type { Car, Booking, User } from "@prisma/client"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const user = await getCurrentUser()

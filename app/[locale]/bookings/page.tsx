@@ -10,6 +10,8 @@ import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 
+export const dynamic = "force-dynamic"
+
 export default async function BookingsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const t = await getTranslations()

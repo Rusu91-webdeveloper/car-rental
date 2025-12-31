@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { getTranslations } from "next-intl/server"
 
+export const dynamic = "force-dynamic"
+
 export default async function SavedPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const t = await getTranslations()

@@ -6,6 +6,8 @@ import { config } from "@/lib/config"
 import { getPaymentDetails } from "@/lib/payment-details"
 import { CheckoutClient } from "./checkout-client"
 
+export const dynamic = "force-dynamic"
+
 export default async function CheckoutPage({ 
   params,
   searchParams,

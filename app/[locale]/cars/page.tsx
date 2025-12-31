@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { CarsClient } from "./cars-client"
 
+export const dynamic = "force-dynamic"
+
 export default async function CarsPage() {
   const user = await getCurrentUser()
   const cars = await prisma.car.findMany({
