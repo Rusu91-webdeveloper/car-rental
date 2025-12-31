@@ -1,5 +1,7 @@
 // Configuration and feature flags
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+const clerkSecretKey = process.env.CLERK_SECRET_KEY
 const adminEmailsFromEnv = (
   process.env.ADMIN_EMAILS ||
   process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
@@ -22,7 +24,7 @@ export const config = {
   features: {
     emailEnabled: smtpEnabled || !!process.env.RESEND_API_KEY,
     paymentsEnabled: !!process.env.STRIPE_SECRET_KEY && !isDemoMode,
-    authEnabled: !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !isDemoMode,
+    authEnabled: !!clerkPublishableKey && !!clerkSecretKey && !isDemoMode,
   },
 
   // Admin emails (automatically get admin role)

@@ -43,8 +43,8 @@ export default function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Demo mode - just apply i18n
-  if (appConfig.isDemoMode) {
+  // Demo mode or auth disabled - just apply i18n
+  if (appConfig.isDemoMode || !appConfig.features.authEnabled) {
     return intlMiddleware(req)
   }
 

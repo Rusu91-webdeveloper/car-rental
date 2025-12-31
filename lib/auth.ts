@@ -20,6 +20,10 @@ export async function getCurrentUser() {
     })
   }
 
+  if (!config.features.authEnabled) {
+    return null
+  }
+
   const { userId } = await auth()
 
   if (!userId) {
@@ -58,6 +62,10 @@ export async function requireAdmin() {
 }
 
 export async function syncUser() {
+  if (!config.features.authEnabled) {
+    return null
+  }
+
   const clerkUser = await currentUser()
 
   if (!clerkUser) {
