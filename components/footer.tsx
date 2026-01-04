@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "@/navigation"
+import Link, { usePathname } from "@/navigation"
 import { useTranslations, useLocale } from "next-intl"
 import { Separator } from "@/components/ui/separator"
 
@@ -26,6 +26,12 @@ interface FooterProps {
 export function Footer({ businessInfo }: FooterProps = {}) {
   const t = useTranslations("footer")
   const locale = useLocale()
+  const pathname = usePathname()
+
+  // Hide footer on admin routes
+  if (pathname?.includes("/admin")) {
+    return null
+  }
 
   return (
     <footer className="border-t border-border bg-background">
