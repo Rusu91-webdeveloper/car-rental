@@ -147,7 +147,6 @@ export function Footer({ businessInfo }: FooterProps = {}) {
                   </a>
                 </li>
               )}
-              </li>
             </ul>
           </div>
         </div>
