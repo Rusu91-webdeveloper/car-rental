@@ -30,34 +30,120 @@ type SendEmailInput = {
   html: string
 }
 
+/**
+ * Validates email configuration and returns status information
+ */
+export function getEmailConfigStatus() {
+  const hasSmtp = Boolean(smtpHost && smtpUser && smtpPass)
+  const hasResend = Boolean(process.env.RESEND_API_KEY)
+  const isEnabled = hasSmtp || hasResend
+
+  return {
+    enabled: isEnabled,
+    provider: hasSmtp ? "SMTP" : hasResend ? "Resend" : "None",
+    smtp: {
+      enabled: hasSmtp,
+      host: smtpHost || "Not configured",
+      port: smtpPort,
+      user: smtpUser ? `${smtpUser.substring(0, 3)}***` : "Not configured",
+    },
+    resend: {
+      enabled: hasResend,
+      apiKey: hasResend ? "Configured" : "Not configured",
+    },
+    from: emailFrom,
+  }
+}
+
+/**
+ * Validates if an email address is in a valid format
+ */
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
 async function sendEmail({ to, subject, html }: SendEmailInput) {
+  const configStatus = getEmailConfigStatus()
+
+  // Validate email configuration
+  if (!configStatus.enabled) {
+    const errorMsg = "Email provider not configured. Please set SMTP credentials (EMAIL_HOST, EMAIL_USER, EMAIL_PASS) or RESEND_API_KEY"
+    console.error("[EMAIL_ERROR] Configuration:", configStatus)
+    console.error("[EMAIL_ERROR]", errorMsg)
+    return { error: errorMsg }
+  }
+
+  // Validate recipient email addresses
+  const recipients = Array.isArray(to) ? to : [to]
+  const invalidEmails = recipients.filter((email) => !isValidEmail(email))
+  if (invalidEmails.length > 0) {
+    const errorMsg = `Invalid email address(es): ${invalidEmails.join(", ")}`
+    console.error("[EMAIL_ERROR]", errorMsg)
+    return { error: errorMsg }
+  }
+
+  // Log email configuration status
+  console.log(`[EMAIL] Sending via ${configStatus.provider} to:`, recipients.join(", "))
+
+  // Try SMTP first if configured
   if (smtpTransport) {
-    const info = await smtpTransport.sendMail({
+    try {
+      const info = await smtpTransport.sendMail({
+        from: emailFrom,
+        to,
+        subject,
+        html,
+      })
+
+      console.log(`[EMAIL] SMTP email sent successfully (messageId: ${info.messageId})`)
+      return { id: info.messageId }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown SMTP error"
+      console.error("[EMAIL_ERROR] SMTP send failed:", {
+        error: errorMessage,
+        host: smtpHost,
+        port: smtpPort,
+        user: smtpUser,
+        to: recipients,
+      })
+      return { error: `SMTP error: ${errorMessage}` }
+    }
+  }
+
+  // Fallback to Resend
+  if (!process.env.RESEND_API_KEY) {
+    const errorMsg = "Email provider not configured. SMTP failed and Resend API key is missing"
+    console.error("[EMAIL_ERROR]", errorMsg)
+    return { error: errorMsg }
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
       from: emailFrom,
       to,
       subject,
       html,
     })
 
-    return { id: info.messageId }
+    if (error) {
+      console.error("[EMAIL_ERROR] Resend send failed:", {
+        error: error.message || "Unknown Resend error",
+        to: recipients,
+      })
+      return { error: error.message || "Failed to send email via Resend" }
+    }
+
+    console.log(`[EMAIL] Resend email sent successfully (id: ${data?.id})`)
+    return { id: data?.id }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown Resend error"
+    console.error("[EMAIL_ERROR] Resend exception:", {
+      error: errorMessage,
+      to: recipients,
+    })
+    return { error: `Resend error: ${errorMessage}` }
   }
-
-  if (!process.env.RESEND_API_KEY) {
-    return { error: "Email provider not configured" }
-  }
-
-  const { data, error } = await resend.emails.send({
-    from: emailFrom,
-    to,
-    subject,
-    html,
-  })
-
-  if (error) {
-    return { error: error.message || "Failed to send email" }
-  }
-
-  return { id: data?.id }
 }
 
 interface BookingEmailData {
@@ -74,6 +160,25 @@ interface BookingEmailData {
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send booking confirmation email:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping booking confirmation email.")
+      return { error: "Email is not configured" }
+    }
+
+    if (!isValidEmail(data.to)) {
+      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      return { error: `Invalid email address: ${data.to}` }
+    }
+
     const { id, error } = await sendEmail({
       to: data.to,
       subject: `Booking Confirmed - ${data.carName}`,
@@ -152,15 +257,28 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR]", error)
+      console.error("[EMAIL_ERROR] Booking confirmation failed:", {
+        error,
+        to: data.to,
+        bookingNumber: data.bookingNumber,
+        carName: data.carName,
+      })
       return { error }
     }
 
-    console.log("[EMAIL] Booking confirmation sent to:", data.to, id ? `(id: ${id})` : "")
+    console.log("[EMAIL] ✅ Booking confirmation sent successfully:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR]", error)
-    return { error: "Failed to send email" }
+    console.error("[EMAIL_ERROR] Booking confirmation exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send booking confirmation email" }
   }
 }
 
@@ -172,6 +290,26 @@ export async function sendBookingStatusEmail(
   bookingNumber: string,
 ) {
   try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send booking status email:", {
+      to,
+      status,
+      bookingNumber,
+      carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping booking status email.")
+      return { error: "Email is not configured" }
+    }
+
+    if (!isValidEmail(to)) {
+      console.error("[EMAIL_ERROR] Invalid recipient email:", to)
+      return { error: `Invalid email address: ${to}` }
+    }
+
     let subject = ""
     let message = ""
 
@@ -190,6 +328,7 @@ export async function sendBookingStatusEmail(
           "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
         break
       default:
+        console.log("[EMAIL] Status email skipped for status:", status)
         return { success: true }
     }
 
@@ -215,15 +354,30 @@ export async function sendBookingStatusEmail(
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR]", error)
+      console.error("[EMAIL_ERROR] Booking status email failed:", {
+        error,
+        to,
+        status,
+        bookingNumber,
+      })
       return { error }
     }
 
-    console.log("[EMAIL] Status update sent to:", to, id ? `(id: ${id})` : "")
+    console.log("[EMAIL] ✅ Booking status email sent successfully:", {
+      to,
+      status,
+      bookingNumber,
+      id: id || "unknown",
+    })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR]", error)
-    return { error: "Failed to send email" }
+    console.error("[EMAIL_ERROR] Booking status email exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      to,
+      status,
+      bookingNumber,
+    })
+    return { error: "Failed to send booking status email" }
   }
 }
 
@@ -241,6 +395,25 @@ export async function sendManualPaymentEmail(data: {
   bookingNumber: string
 }) {
   try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send manual payment email:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping manual payment email.")
+      return { error: "Email is not configured" }
+    }
+
+    if (!isValidEmail(data.to)) {
+      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      return { error: `Invalid email address: ${data.to}` }
+    }
+
     // Get payment details and company settings from database
     const paymentDetails = await getPaymentDetails()
     const companySettings = await prisma.companySettings.findUnique({
@@ -418,19 +591,28 @@ export async function sendManualPaymentEmail(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR]", error)
+      console.error("[EMAIL_ERROR] Manual payment email failed:", {
+        error,
+        to: data.to,
+        bookingNumber: data.bookingNumber,
+        carName: data.carName,
+      })
       return { error }
     }
 
-    console.log(
-      "[EMAIL] Manual payment instructions sent to:",
-      data.to,
-      id ? `(id: ${id})` : "",
-    )
+    console.log("[EMAIL] ✅ Manual payment email sent successfully:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR]", error)
-    return { error: "Failed to send email" }
+    console.error("[EMAIL_ERROR] Manual payment email exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send manual payment email" }
   }
 }
 
@@ -451,6 +633,19 @@ export async function sendAdminBookingNotification(data: {
   bookingId: string
 }) {
   try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send admin booking notification:", {
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping admin booking notification.")
+      return { error: "Email is not configured" }
+    }
+
     // Get company settings for dynamic values
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
@@ -466,8 +661,22 @@ export async function sendAdminBookingNotification(data: {
     )
 
     if (recipients.length === 0) {
+      console.error("[EMAIL_ERROR] No admin email configured:", {
+        adminEmail: data.adminEmail,
+        adminEmails: data.adminEmails,
+        companyAdminEmail: companySettings?.adminEmail,
+      })
       return { error: "No admin email configured" }
     }
+
+    // Validate admin email addresses
+    const invalidEmails = recipients.filter((email) => !isValidEmail(email))
+    if (invalidEmails.length > 0) {
+      console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
+      return { error: `Invalid admin email address(es): ${invalidEmails.join(", ")}` }
+    }
+
+    console.log("[EMAIL] Sending admin notification to:", recipients.join(", "))
 
     const { id, error } = await sendEmail({
       to: recipients,
@@ -586,19 +795,26 @@ export async function sendAdminBookingNotification(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR]", error)
+      console.error("[EMAIL_ERROR] Admin booking notification failed:", {
+        error,
+        recipients: recipients.join(", "),
+        bookingNumber: data.bookingNumber,
+      })
       return { error }
     }
 
-    console.log(
-      "[EMAIL] Admin notification sent to:",
-      recipients.join(", "),
-      id ? `(id: ${id})` : "",
-    )
+    console.log("[EMAIL] ✅ Admin booking notification sent successfully:", {
+      recipients: recipients.join(", "),
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR]", error)
-    return { error: "Failed to send admin notification" }
+    console.error("[EMAIL_ERROR] Admin booking notification exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send admin booking notification" }
   }
 }
 
@@ -618,6 +834,19 @@ export async function sendAdminBookingConfirmationNotification(data: {
   bookingId: string
 }) {
   try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send admin booking confirmation notification:", {
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping admin booking confirmation notification.")
+      return { error: "Email is not configured" }
+    }
+
     // Get company settings for dynamic values
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
@@ -633,8 +862,22 @@ export async function sendAdminBookingConfirmationNotification(data: {
     )
 
     if (recipients.length === 0) {
+      console.error("[EMAIL_ERROR] No admin email configured:", {
+        adminEmail: data.adminEmail,
+        adminEmails: data.adminEmails,
+        companyAdminEmail: companySettings?.adminEmail,
+      })
       return { error: "No admin email configured" }
     }
+
+    // Validate admin email addresses
+    const invalidEmails = recipients.filter((email) => !isValidEmail(email))
+    if (invalidEmails.length > 0) {
+      console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
+      return { error: `Invalid admin email address(es): ${invalidEmails.join(", ")}` }
+    }
+
+    console.log("[EMAIL] Sending admin confirmation notification to:", recipients.join(", "))
 
     const { id, error } = await sendEmail({
       to: recipients,
@@ -748,18 +991,25 @@ export async function sendAdminBookingConfirmationNotification(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR]", error)
+      console.error("[EMAIL_ERROR] Admin booking confirmation notification failed:", {
+        error,
+        recipients: recipients.join(", "),
+        bookingNumber: data.bookingNumber,
+      })
       return { error }
     }
 
-    console.log(
-      "[EMAIL] Admin confirmation notification sent to:",
-      recipients.join(", "),
-      id ? `(id: ${id})` : "",
-    )
+    console.log("[EMAIL] ✅ Admin booking confirmation notification sent successfully:", {
+      recipients: recipients.join(", "),
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR]", error)
-    return { error: "Failed to send admin confirmation notification" }
+    console.error("[EMAIL_ERROR] Admin booking confirmation notification exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send admin booking confirmation notification" }
   }
 }

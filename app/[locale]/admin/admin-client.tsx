@@ -1703,6 +1703,13 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
     companyZipCode: settings?.companyZipCode || "",
     companyCountry: settings?.companyCountry || "",
     
+    // Legal Information (for Impressum/Imprint)
+    managingDirector: settings?.managingDirector || "",
+    commercialRegister: settings?.commercialRegister || "",
+    registerCourt: settings?.registerCourt || "",
+    vatId: settings?.vatId || "",
+    responsiblePerson: settings?.responsiblePerson || "",
+    
     // Bank/Payment Details
     bankName: settings?.bankName || "",
     accountName: settings?.accountName || "",
@@ -1807,6 +1814,61 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               id="companyCountry"
               value={formData.companyCountry}
               onChange={(e) => setFormData({ ...formData, companyCountry: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Legal Information (for Impressum) */}
+      <div className="space-y-4 border-t pt-6">
+        <h3 className="text-lg font-semibold">Legal Information (Impressum)</h3>
+        <p className="text-sm text-muted-foreground">
+          This information will be displayed on the Impressum page and footer.
+        </p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="managingDirector">Managing Director</Label>
+            <Input
+              id="managingDirector"
+              value={formData.managingDirector}
+              onChange={(e) => setFormData({ ...formData, managingDirector: e.target.value })}
+              placeholder="Max Mustermann"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="vatId">VAT ID</Label>
+            <Input
+              id="vatId"
+              value={formData.vatId}
+              onChange={(e) => setFormData({ ...formData, vatId: e.target.value })}
+              placeholder="DE123456789"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="commercialRegister">Commercial Register (HRB)</Label>
+            <Input
+              id="commercialRegister"
+              value={formData.commercialRegister}
+              onChange={(e) => setFormData({ ...formData, commercialRegister: e.target.value })}
+              placeholder="HRB 123456 B"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="registerCourt">Register Court</Label>
+            <Input
+              id="registerCourt"
+              value={formData.registerCourt}
+              onChange={(e) => setFormData({ ...formData, registerCourt: e.target.value })}
+              placeholder="Amtsgericht Berlin-Charlottenburg"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="responsiblePerson">Responsible Person (for Content)</Label>
+            <Input
+              id="responsiblePerson"
+              value={formData.responsiblePerson}
+              onChange={(e) => setFormData({ ...formData, responsiblePerson: e.target.value })}
+              placeholder="Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland"
             />
           </div>
         </div>

@@ -159,9 +159,23 @@ export async function createBooking(data: unknown) {
       })
     }
 
-    // Send payment instructions to user
+    // Send email notifications
+    console.log("[BOOKING] Email configuration check:", {
+      emailEnabled: config.features.emailEnabled,
+      adminEmails: config.adminEmails,
+      userEmail: user.email,
+      bookingNumber: booking.bookingNumber,
+    })
+
     if (config.features.emailEnabled) {
-      await sendManualPaymentEmail({
+      console.log("[BOOKING] Sending emails for new booking:", {
+        bookingNumber: booking.bookingNumber,
+        userEmail: user.email,
+        adminEmails: config.adminEmails,
+      })
+
+      // Send payment instructions to user
+      const userEmailResult = await sendManualPaymentEmail({
         to: user.email,
         userName: user.name || user.email,
         carName: car.name,
@@ -174,8 +188,20 @@ export async function createBooking(data: unknown) {
         bookingNumber: booking.bookingNumber,
       })
 
+      if (userEmailResult.error) {
+        console.error("[BOOKING] Failed to send user email:", {
+          bookingNumber: booking.bookingNumber,
+          error: userEmailResult.error,
+        })
+      } else {
+        console.log("[BOOKING] ✅ User email sent successfully:", {
+          bookingNumber: booking.bookingNumber,
+          userEmail: user.email,
+        })
+      }
+
       // Send notification to admin
-      await sendAdminBookingNotification({
+      const adminEmailResult = await sendAdminBookingNotification({
         adminEmails: config.adminEmails,
         userName: user.name || user.email,
         userEmail: user.email,
@@ -188,6 +214,25 @@ export async function createBooking(data: unknown) {
         transferCode: booking.transferCode,
         bookingNumber: booking.bookingNumber,
         bookingId: booking.id,
+      })
+
+      if (adminEmailResult.error) {
+        console.error("[BOOKING] Failed to send admin email:", {
+          bookingNumber: booking.bookingNumber,
+          adminEmails: config.adminEmails,
+          error: adminEmailResult.error,
+        })
+      } else {
+        console.log("[BOOKING] ✅ Admin email sent successfully:", {
+          bookingNumber: booking.bookingNumber,
+          adminEmails: config.adminEmails,
+        })
+      }
+    } else {
+      console.warn("[BOOKING] Email is disabled. Skipping email notifications:", {
+        bookingNumber: booking.bookingNumber,
+        userEmail: user.email,
+        adminEmails: config.adminEmails,
       })
     }
 
@@ -271,9 +316,25 @@ export async function updateBookingStatus(data: unknown) {
       })
     })
 
+    // Send email notifications based on status change
+    console.log("[BOOKING] Status update email configuration check:", {
+      emailEnabled: config.features.emailEnabled,
+      userEmail: booking.user?.email,
+      adminEmails: config.adminEmails,
+      bookingNumber: booking.bookingNumber,
+      oldStatus: booking.status,
+      newStatus: validated.status,
+    })
+
     if (config.features.emailEnabled && booking.user?.email) {
       // Send appropriate email based on status
       if (validated.status === "CONFIRMED") {
+        console.log("[BOOKING] Sending CONFIRMED status emails:", {
+          bookingNumber: booking.bookingNumber,
+          userEmail: booking.user.email,
+          adminEmails: config.adminEmails,
+        })
+
         // Send detailed confirmation email to user
         const formatDateForEmail = (date: Date) => {
           return new Date(date).toLocaleDateString("en-US", {
@@ -286,7 +347,7 @@ export async function updateBookingStatus(data: unknown) {
           })
         }
 
-        await sendBookingConfirmationEmail({
+        const userConfirmationResult = await sendBookingConfirmationEmail({
           to: booking.user.email,
           userName: booking.user.name || booking.user.email,
           carName: booking.car.name,
@@ -298,8 +359,21 @@ export async function updateBookingStatus(data: unknown) {
           bookingNumber: booking.bookingNumber,
         })
 
+        if (userConfirmationResult.error) {
+          console.error("[BOOKING] Failed to send user confirmation email:", {
+            bookingNumber: booking.bookingNumber,
+            userEmail: booking.user.email,
+            error: userConfirmationResult.error,
+          })
+        } else {
+          console.log("[BOOKING] ✅ User confirmation email sent successfully:", {
+            bookingNumber: booking.bookingNumber,
+            userEmail: booking.user.email,
+          })
+        }
+
         // Send confirmation notification to admin
-        await sendAdminBookingConfirmationNotification({
+        const adminConfirmationResult = await sendAdminBookingConfirmationNotification({
           adminEmails: config.adminEmails,
           userName: booking.user.name || booking.user.email,
           userEmail: booking.user.email,
@@ -312,15 +386,62 @@ export async function updateBookingStatus(data: unknown) {
           bookingNumber: booking.bookingNumber,
           bookingId: booking.id,
         })
+
+        if (adminConfirmationResult.error) {
+          console.error("[BOOKING] Failed to send admin confirmation email:", {
+            bookingNumber: booking.bookingNumber,
+            adminEmails: config.adminEmails,
+            error: adminConfirmationResult.error,
+          })
+        } else {
+          console.log("[BOOKING] ✅ Admin confirmation email sent successfully:", {
+            bookingNumber: booking.bookingNumber,
+            adminEmails: config.adminEmails,
+          })
+        }
       } else {
         // Send status update email for other statuses (CANCELLED, REJECTED)
-        await sendBookingStatusEmail(
+        console.log("[BOOKING] Sending status update email:", {
+          bookingNumber: booking.bookingNumber,
+          status: validated.status,
+          userEmail: booking.user.email,
+        })
+
+        const statusEmailResult = await sendBookingStatusEmail(
           booking.user.email,
           booking.user.name || booking.user.email,
           booking.car.name,
           validated.status,
           booking.bookingNumber,
         )
+
+        if (statusEmailResult.error) {
+          console.error("[BOOKING] Failed to send status update email:", {
+            bookingNumber: booking.bookingNumber,
+            status: validated.status,
+            userEmail: booking.user.email,
+            error: statusEmailResult.error,
+          })
+        } else {
+          console.log("[BOOKING] ✅ Status update email sent successfully:", {
+            bookingNumber: booking.bookingNumber,
+            status: validated.status,
+            userEmail: booking.user.email,
+          })
+        }
+      }
+    } else {
+      if (!config.features.emailEnabled) {
+        console.warn("[BOOKING] Email is disabled. Skipping status update emails:", {
+          bookingNumber: booking.bookingNumber,
+          status: validated.status,
+        })
+      } else if (!booking.user?.email) {
+        console.warn("[BOOKING] User email not found. Skipping status update emails:", {
+          bookingNumber: booking.bookingNumber,
+          status: validated.status,
+          userId: booking.userId,
+        })
       }
     }
 

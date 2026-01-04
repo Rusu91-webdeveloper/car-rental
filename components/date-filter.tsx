@@ -60,7 +60,7 @@ export function DateFilter({
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold">{t("filters.dateRange")}</Label>
+          <Label className="text-sm font-semibold text-foreground">{t("filters.dateRange")}</Label>
           {(pickupDate || dropoffDate) && (
             <Button
               type="button"
@@ -73,17 +73,19 @@ export function DateFilter({
             </Button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-3">
           <Popover open={pickupOpen} onOpenChange={setPickupOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal h-9",
-                  !pickupDateObj && "text-muted-foreground"
+                  "w-full justify-start text-left font-medium h-11 border-2 transition-all duration-200",
+                  pickupDateObj
+                    ? "border-primary bg-primary/5 text-foreground shadow-sm shadow-primary/10 hover:bg-primary/10 hover:border-primary/80"
+                    : "border-primary/30 bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
                 )}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className={cn("mr-2 h-4 w-4", pickupDateObj && "text-primary")} />
                 {pickupDateObj ? format(pickupDateObj, "MMM dd, yyyy") : t("filters.pickupDate")}
               </Button>
             </PopoverTrigger>
@@ -103,12 +105,15 @@ export function DateFilter({
               <Button
                 variant="outline"
                 className={cn(
-                  "w-full justify-start text-left font-normal h-9",
-                  !dropoffDateObj && "text-muted-foreground"
+                  "w-full justify-start text-left font-medium h-11 border-2 transition-all duration-200",
+                  dropoffDateObj
+                    ? "border-primary bg-primary/5 text-foreground shadow-sm shadow-primary/10 hover:bg-primary/10 hover:border-primary/80"
+                    : "border-primary/30 bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
+                  !pickupDate && "opacity-60 cursor-not-allowed"
                 )}
                 disabled={!pickupDate}
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
+                <CalendarIcon className={cn("mr-2 h-4 w-4", dropoffDateObj && "text-primary")} />
                 {dropoffDateObj ? format(dropoffDateObj, "MMM dd, yyyy") : t("filters.dropoffDate")}
               </Button>
             </PopoverTrigger>
@@ -127,9 +132,12 @@ export function DateFilter({
           </Popover>
         </div>
         {(pickupDate || dropoffDate) && (
-          <p className="text-xs text-muted-foreground">
-            {t("filters.showingAvailableCars")}
-          </p>
+          <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 border border-primary/20">
+            <CalendarIcon className="h-4 w-4 text-primary" />
+            <p className="text-xs font-medium text-primary">
+              {t("filters.showingAvailableCars")}
+            </p>
+          </div>
         )}
       </div>
     )

@@ -17,6 +17,13 @@ const companySettingsSchema = z.object({
   companyZipCode: z.string().optional(),
   companyCountry: z.string().optional(),
   
+  // Legal Information (for Impressum/Imprint)
+  managingDirector: z.string().optional(),
+  commercialRegister: z.string().optional(),
+  registerCourt: z.string().optional(),
+  vatId: z.string().optional(),
+  responsiblePerson: z.string().optional(),
+  
   // Bank/Payment Details
   bankName: z.string().min(1, "Bank name is required"),
   accountName: z.string().min(1, "Account name is required"),
@@ -94,8 +101,15 @@ export async function updateCompanySettings(data: unknown) {
       },
     })
 
+    // Revalidate all pages that use business information
     revalidatePath("/admin")
     revalidatePath("/")
+    revalidatePath("/impressum")
+    revalidatePath("/datenschutz")
+    revalidatePath("/agb")
+    revalidatePath("/widerruf")
+    revalidatePath("/about")
+    revalidatePath("/contact")
 
     return { success: true, settings }
   } catch (error) {

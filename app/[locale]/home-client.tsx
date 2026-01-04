@@ -102,7 +102,7 @@ export function HomeClient({
     const filterCars = async () => {
       let filtered = cars.filter((car) => {
         const matchesCategory = selectedCategory === "ALL" || car.category === selectedCategory
-        const matchesYear = selectedYear === "ALL" || (car.year !== null && car.year.toString() === selectedYear)
+        const matchesYear = selectedYear === "ALL" || (car.year !== null && car.year >= parseInt(selectedYear))
         return matchesCategory && matchesYear
       })
 
@@ -321,10 +321,16 @@ export function HomeClient({
               </div>
 
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: "120ms" }}>
-                <div className="rounded-3xl border border-border/70 bg-background/80 p-6 shadow-xl shadow-black/5 backdrop-blur">
-                  <div className="mb-4 space-y-1">
-                    <p className="text-sm font-semibold">{t("home.searchTitle")}</p>
-                    <p className="text-xs text-muted-foreground">{t("home.searchSubtitle")}</p>
+                <div className="relative rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-background via-background to-primary/5 p-6 shadow-2xl shadow-primary/10 backdrop-blur-sm transition-all duration-300 hover:shadow-primary/20 hover:border-primary/30">
+                  {/* Subtle glow effect */}
+                  <div className="pointer-events-none absolute -inset-0.5 rounded-3xl bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-50 blur-xl" aria-hidden="true" />
+                  
+                  <div className="relative mb-5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+                      <p className="text-base font-bold text-foreground">{t("home.searchTitle")}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-3.5">{t("home.searchSubtitle")}</p>
                   </div>
                   <ClientOnly>
                     <DateFilter

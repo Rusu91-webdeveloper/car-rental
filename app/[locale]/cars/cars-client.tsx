@@ -67,7 +67,7 @@ export function CarsClient({
     const filterCars = async () => {
       let filtered = cars.filter((car) => {
         const matchesCategory = selectedCategory === "ALL" || car.category === selectedCategory
-        const matchesYear = selectedYear === "ALL" || (car.year !== null && car.year.toString() === selectedYear)
+        const matchesYear = selectedYear === "ALL" || (car.year !== null && car.year >= parseInt(selectedYear))
         return matchesCategory && matchesYear
       })
 

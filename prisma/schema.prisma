@@ -254,14 +254,21 @@ model CompanySettings {
   id        String   @id @default("company-settings")
   
   // Company Information
-  companyName       String   @default("Car Rental Company")
-  companyEmail      String   @default("support@rentcar.com")
-  companyPhone      String?
-  companyAddress    String?
-  companyCity       String?
+  companyName       String   @default("RentCar GmbH")
+  companyEmail      String   @default("info@rentcar.de")
+  companyPhone      String?  @default("+49 (0) 30 12345678")
+  companyAddress    String?  @default("Musterstraße 123")
+  companyCity       String?  @default("10115 Berlin")
   companyState      String?
   companyZipCode    String?
-  companyCountry    String?
+  companyCountry    String?  @default("Deutschland")
+  
+  // Legal Information (for Impressum/Imprint)
+  managingDirector  String?  @default("Max Mustermann")
+  commercialRegister String? @default("HRB 123456 B")
+  registerCourt     String?  @default("Amtsgericht Berlin-Charlottenburg")
+  vatId             String?  @default("DE123456789")
+  responsiblePerson String?  @default("Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland")
   
   // Bank/Payment Details
   bankName          String   @default("Your Bank Name")
