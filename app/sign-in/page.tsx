@@ -4,13 +4,13 @@ import { defaultLocale, locales } from "@/i18n"
 
 type SearchParams = Record<string, string | string[] | undefined>
 
-const resolveLocale = () => {
-  const cookieLocale = cookies().get("NEXT_LOCALE")?.value
+const resolveLocale = async () => {
+  const cookieLocale = (await cookies()).get("NEXT_LOCALE")?.value
   if (cookieLocale && locales.includes(cookieLocale as (typeof locales)[number])) {
     return cookieLocale
   }
 
-  const acceptLanguage = headers().get("accept-language") || ""
+  const acceptLanguage = (await headers()).get("accept-language") || ""
   const preferred = acceptLanguage
     .split(",")
     .map((part) => part.split(";")[0]?.trim())
@@ -26,8 +26,8 @@ const resolveLocale = () => {
   return defaultLocale
 }
 
-export default function SignInRedirect({ searchParams }: { searchParams?: SearchParams }) {
-  const locale = resolveLocale()
+export default async function SignInRedirect({ searchParams }: { searchParams?: SearchParams }) {
+  const locale = await resolveLocale()
   const params = new URLSearchParams()
 
   if (searchParams) {
