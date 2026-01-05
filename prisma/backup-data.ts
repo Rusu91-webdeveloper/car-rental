@@ -16,7 +16,7 @@ async function backupData() {
     const users = await prisma.user.findMany({
       select: {
         id: true,
-        clerkId: true,
+        providerId: true,
         email: true,
         name: true,
         role: true,
@@ -122,4 +122,3 @@ backupData()
   .finally(async () => {
     await prisma.$disconnect()
   })
-
