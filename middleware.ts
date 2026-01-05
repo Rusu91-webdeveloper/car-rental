@@ -1,5 +1,6 @@
 import createIntlMiddleware from "next-intl/middleware";
 import { NextResponse } from "next/server";
+import type { NextAuthRequest } from "next-auth";
 import { auth } from "@/lib/auth-edge";
 import { config as appConfig } from "@/lib/config";
 import { locales, defaultLocale } from "./i18n";
@@ -69,7 +70,7 @@ const isAdminRoute = (pathname: string) => {
   return false;
 };
 
-export default auth((req) => {
+export default auth((req: NextAuthRequest) => {
   // Skip auth middleware for API routes - they handle their own auth
   const pathname = req.nextUrl.pathname;
   if (pathname.startsWith("/api/")) {
