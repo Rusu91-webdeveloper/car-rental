@@ -205,7 +205,6 @@ export function HomeClient({
               user={user}
               isAdmin={user?.role === "ADMIN"}
               signInUrl={signInUrl}
-              isDemoMode={config.isDemoMode}
             />
             <Link href="/" className="flex items-center gap-2 text-primary font-semibold">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

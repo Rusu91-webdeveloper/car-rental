@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "@/navigation"
 import { useRouter, usePathname } from "@/navigation"
 import { locales } from "@/i18n"
-import { useClerk } from "@clerk/nextjs"
+import { signOut } from "next-auth/react"
 import { useTranslations, useLocale } from "next-intl"
 import {
   DropdownMenu,
@@ -18,26 +18,11 @@ interface NavigationMenuProps {
   user: { name: string; email: string } | null
   isAdmin: boolean
   signInUrl: string
-  isDemoMode?: boolean
 }
 
-// Demo version without Clerk
-function NavigationMenuDemo({ user, isAdmin, signInUrl }: Omit<NavigationMenuProps, "isDemoMode">) {
-  const router = useRouter()
-
-  const handleLogout = () => {
-    router.push("/")
-  }
-
-  return <NavigationMenuContent user={user} isAdmin={isAdmin} signInUrl={signInUrl} handleLogout={handleLogout} />
-}
-
-// Production version with Clerk
-function NavigationMenuProd({ user, isAdmin, signInUrl }: Omit<NavigationMenuProps, "isDemoMode">) {
-  const { signOut } = useClerk()
-
-  const handleLogout = () => {
-    signOut({ redirectUrl: "/" })
+function NavigationMenu({ user, isAdmin, signInUrl }: NavigationMenuProps) {
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" })
   }
 
   return <NavigationMenuContent user={user} isAdmin={isAdmin} signInUrl={signInUrl} handleLogout={handleLogout} />
@@ -372,11 +357,5 @@ function NavigationMenuContent({
   )
 }
 
-// Main export - switches between demo and prod versions
-export function NavigationMenu(props: NavigationMenuProps) {
-  if (props.isDemoMode) {
-    return <NavigationMenuDemo {...props} />
-  }
-  return <NavigationMenuProd {...props} />
-}
+export { NavigationMenu }
 

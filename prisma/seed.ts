@@ -14,7 +14,7 @@ async function main() {
     where: { email: "admin@rentcar.com" },
     update: {},
     create: {
-      clerkId: "seed_admin",
+      providerId: "seed_admin",
       email: "admin@rentcar.com",
       name: "Admin User",
       role: "ADMIN",
@@ -28,7 +28,7 @@ async function main() {
     where: { email: "test@example.com" },
     update: {},
     create: {
-      clerkId: "seed_user",
+      providerId: "seed_user",
       email: "test@example.com",
       name: "Test User",
       role: "USER",

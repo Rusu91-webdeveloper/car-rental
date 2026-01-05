@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic"
 export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const user = await getCurrentUser()
-  const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
+  const signInUrl = "/sign-in"
 
   if (!user) {
     redirect({ href: signInUrl, locale })
@@ -42,7 +42,6 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
   return (
     <AdminDashboard
       currentUser={{ name: adminUser.name || adminUser.email, email: adminUser.email }}
-      isDemoMode={config.isDemoMode}
       cars={cars.map((car: Car) => ({
         id: car.id,
         name: car.name,

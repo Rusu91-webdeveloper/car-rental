@@ -22,24 +22,25 @@ DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
 
 ---
 
-### 2. **Missing Clerk Keys (If Not in Demo Mode)**
+### 2. **Missing NextAuth Configuration**
 
-**Problem**: If `NEXT_PUBLIC_DEMO_MODE` is not set to `true`, the app requires Clerk authentication keys.
+**Problem**: The app requires NextAuth authentication configuration.
 
 **Check:**
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (starts with `pk_test_` or `pk_live_`)
-- `CLERK_SECRET_KEY` (starts with `sk_test_` or `sk_live_`)
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `NEXTAUTH_SECRET` - Random secret for NextAuth (generate with `openssl rand -base64 32`)
+- `NEXTAUTH_URL` - Your app URL
 
-**Fix Option 1 - Enable Demo Mode:**
+**Fix:**
 ```env
-NEXT_PUBLIC_DEMO_MODE=true
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+NEXTAUTH_SECRET=your-random-secret
+NEXTAUTH_URL=http://localhost:3000  # or https://yourdomain.com for production
 ```
 
-**Fix Option 2 - Set Clerk Keys:**
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
-```
+See SETUP.md for detailed Google OAuth setup instructions.
 
 ---
 
@@ -81,13 +82,14 @@ Look for errors like:
 ### 5. **Middleware Errors**
 
 **Problem**: The middleware might fail if:
-- Clerk keys are invalid
+- NextAuth configuration is invalid
 - i18n configuration is incorrect
 - Route matching fails
 
 **Check:**
 - Middleware logs in Vercel function logs
 - Verify `i18n.ts` and `middleware.ts` are correct
+- Check NextAuth environment variables are set correctly
 
 ---
 
@@ -101,18 +103,13 @@ Look for errors like:
 
 ### Step 2: Verify Environment Variables
 
-**Required for Demo Mode:**
-```env
-NEXT_PUBLIC_DEMO_MODE=true
-DATABASE_URL=your_postgresql_connection_string
-```
-
 **Required for Production:**
 ```env
 DATABASE_URL=your_postgresql_connection_string
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_... or pk_live_...
-CLERK_SECRET_KEY=sk_test_... or sk_live_...
-NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+NEXTAUTH_SECRET=your-random-secret
+NEXTAUTH_URL=https://your-domain.vercel.app
 ```
 
 ### Step 3: Test Database Connection
@@ -158,7 +155,7 @@ Check if errors are being logged in:
 - [ ] Database connection string includes `?sslmode=require` (if required)
 - [ ] Database exists and is accessible
 - [ ] Prisma migrations have been run (`db:deploy` or `db:push`)
-- [ ] Either `NEXT_PUBLIC_DEMO_MODE=true` OR Clerk keys are set
+- [ ] NextAuth environment variables are set (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET, NEXTAUTH_URL)
 - [ ] `NEXT_PUBLIC_APP_URL` is set to your Vercel domain
 - [ ] Build completes successfully (check build logs)
 - [ ] No TypeScript errors in build

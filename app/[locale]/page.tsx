@@ -53,7 +53,7 @@ export default async function HomePage() {
           : null
       }
       savedCarIds={savedCarIds.map((item) => item.carId)}
-      signInUrl={config.isDemoMode ? "/login" : "/sign-in"}
+      signInUrl="/sign-in"
     />
   )
 }

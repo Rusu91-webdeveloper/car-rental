@@ -4,6 +4,7 @@ import type React from "react"
 import { useState, useTransition, useEffect } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "@/navigation"
+import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -82,13 +83,11 @@ export default function AdminDashboard({
   cars,
   bookings,
   users,
-  isDemoMode = false,
 }: {
   currentUser: { name: string; email: string }
   cars: AdminCar[]
   bookings: AdminBooking[]
   users: AdminUser[]
-  isDemoMode?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -199,14 +198,8 @@ export default function AdminDashboard({
     return matchesSearch && matchesFilter
   })
 
-  const handleLogout = () => {
-    if (isDemoMode) {
-      router.push("/")
-    } else {
-      // In production, we'd use Clerk's signOut
-      // This requires importing useClerk conditionally
-      router.push("/")
-    }
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" })
   }
 
   const mapCar = (car: {

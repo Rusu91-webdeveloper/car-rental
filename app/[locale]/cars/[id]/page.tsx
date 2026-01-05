@@ -36,7 +36,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
       })
     : null
 
-  const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
+  const signInUrl = "/sign-in"
   const galleryImages = [car.image, ...(car.images || [])].filter(Boolean)
   const shareUrl = `${config.appUrl.replace(/\/$/, "")}/${locale}/cars/${car.id}`
   const displayName = locale === "de" ? car.nameDe || car.name : car.name

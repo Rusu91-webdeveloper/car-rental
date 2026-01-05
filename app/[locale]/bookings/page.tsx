@@ -16,7 +16,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   const { locale } = await params
   const t = await getTranslations()
   const user = await getCurrentUser()
-  const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
+  const signInUrl = "/sign-in"
 
   if (!user) {
     redirect({ href: signInUrl, locale })

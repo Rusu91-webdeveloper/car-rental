@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "@/navigation"
 import { useRouter, usePathname } from "@/navigation"
-import { useClerk } from "@clerk/nextjs"
+import { signOut } from "next-auth/react"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { useTranslations } from "next-intl"
 
@@ -11,30 +11,14 @@ interface MobileMenuProps {
   user: { name: string; email: string } | null
   isAdmin: boolean
   signInUrl: string
-  isDemoMode?: boolean
 }
 
-// Demo version without Clerk
-function MobileMenuDemo({ user, isAdmin, signInUrl }: Omit<MobileMenuProps, "isDemoMode">) {
+function MobileMenu({ user, isAdmin, signInUrl }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const router = useRouter()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsOpen(false)
-    router.push("/")
-  }
-
-  return <MobileMenuContent user={user} isAdmin={isAdmin} signInUrl={signInUrl} isOpen={isOpen} setIsOpen={setIsOpen} handleLogout={handleLogout} />
-}
-
-// Production version with Clerk
-function MobileMenuProd({ user, isAdmin, signInUrl }: Omit<MobileMenuProps, "isDemoMode">) {
-  const [isOpen, setIsOpen] = useState(false)
-  const { signOut } = useClerk()
-
-  const handleLogout = () => {
-    setIsOpen(false)
-    signOut({ redirectUrl: "/" })
+    await signOut({ callbackUrl: "/" })
   }
 
   return <MobileMenuContent user={user} isAdmin={isAdmin} signInUrl={signInUrl} isOpen={isOpen} setIsOpen={setIsOpen} handleLogout={handleLogout} />
@@ -389,10 +373,4 @@ function MobileMenuContent({
   )
 }
 
-// Main export - switches between demo and prod versions
-export function MobileMenu(props: MobileMenuProps) {
-  if (props.isDemoMode) {
-    return <MobileMenuDemo {...props} />
-  }
-  return <MobileMenuProd {...props} />
-}
+export { MobileMenu }

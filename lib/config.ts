@@ -1,7 +1,7 @@
 // Configuration and feature flags
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
-const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-const clerkSecretKey = process.env.CLERK_SECRET_KEY
+const googleClientId = process.env.GOOGLE_CLIENT_ID
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET
+const nextAuthSecret = process.env.NEXTAUTH_SECRET
 const adminEmailsFromEnv = (
   process.env.ADMIN_EMAILS ||
   process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
@@ -14,25 +14,16 @@ const adminEmailsFromEnv = (
 const smtpEnabled = Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS)
 
 export const config = {
-  // Demo mode - bypasses authentication and payment integrations
-  isDemoMode,
-
   // App URL
-  appUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000",
 
   // Features
   features: {
     emailEnabled: smtpEnabled || !!process.env.RESEND_API_KEY,
-    paymentsEnabled: !!process.env.STRIPE_SECRET_KEY && !isDemoMode,
-    authEnabled: !!clerkPublishableKey && !!clerkSecretKey && !isDemoMode,
+    paymentsEnabled: !!process.env.STRIPE_SECRET_KEY,
+    authEnabled: !!googleClientId && !!googleClientSecret && !!nextAuthSecret,
   },
 
   // Admin emails (automatically get admin role)
   adminEmails: adminEmailsFromEnv.length > 0 ? adminEmailsFromEnv : ["admin@rentcar.com"],
 } as const
-
-export function requireProduction() {
-  if (config.isDemoMode) {
-    throw new Error("This feature requires production mode with proper integrations configured")
-  }
-}

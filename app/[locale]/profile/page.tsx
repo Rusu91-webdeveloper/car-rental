@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 export default async function ProfilePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const user = await getCurrentUser()
-  const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
+  const signInUrl = "/sign-in"
 
   if (!user) {
     redirect({ href: signInUrl, locale })
@@ -113,7 +113,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ locale
         </div>
 
         {/* Logout */}
-        <LogoutButton isDemoMode={config.isDemoMode} />
+        <LogoutButton />
       </div>
 
       <BottomNav active="profile" />

@@ -1,17 +1,24 @@
-import { SignUp } from "@clerk/nextjs"
-import { config } from "@/lib/config"
-import { redirect } from "@/navigation"
+"use client"
 
-export default async function SignUpPage({ params }: { params: Promise<{ locale: string }> }) {
-  const { locale } = await params
-  // In demo mode, redirect to custom signup
-  if (config.isDemoMode) {
-    redirect({ href: "/signup", locale })
-  }
+import { useEffect } from "react"
+import { signIn } from "next-auth/react"
+import { useSearchParams } from "next/navigation"
+
+export default function SignUpPage() {
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect_url") || "/"
+
+  useEffect(() => {
+    // Google OAuth handles both sign-in and sign-up
+    // Redirect to Google OAuth sign-in
+    signIn("google", { callbackUrl })
+  }, [callbackUrl])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-      <SignUp />
+      <div className="text-center">
+        <p className="text-muted-foreground">Redirecting to Google sign-up...</p>
+      </div>
     </div>
   )
 }

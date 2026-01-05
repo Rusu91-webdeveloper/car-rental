@@ -25,7 +25,7 @@ export default async function CheckoutPage({
   }
 
   const user = await getCurrentUser()
-  const signInUrl = config.isDemoMode ? "/login" : "/sign-in"
+  const signInUrl = "/sign-in"
 
   if (!user) {
     // Preserve query params when redirecting to sign-in

@@ -1,44 +1,81 @@
-import { auth, currentUser } from "@clerk/nextjs/server"
+import NextAuth from "next-auth"
+import GoogleProvider from "next-auth/providers/google"
+import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "./db"
 import { config } from "./config"
 
+export const { auth, signIn, signOut, handlers } = NextAuth({
+  adapter: PrismaAdapter(prisma) as any,
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
+  session: {
+    strategy: "jwt",
+  },
+  callbacks: {
+    async signIn({ user, account, profile }) {
+      // User is automatically created by the adapter
+      // After user is created, update role based on admin emails
+      if (user.email) {
+        const isAdmin = config.adminEmails.some(
+          (adminEmail) => adminEmail.toLowerCase() === user.email!.toLowerCase()
+        )
+
+        if (isAdmin) {
+          // Update user role to ADMIN
+          await prisma.user.updateMany({
+            where: { email: user.email },
+            data: { role: "ADMIN" },
+          })
+        }
+      }
+      return true
+    },
+    async jwt({ token, user }) {
+      if (user?.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { role: true },
+        })
+        ;(token as any).role = dbUser?.role ?? (user as any).role
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user && token.sub) {
+        session.user.id = token.sub
+        // Type assertion for role property
+        ;(session.user as any).role = (token as any).role
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: "/sign-in",
+    error: "/sign-in",
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+})
+
 export async function getCurrentUser() {
-  // In demo mode, return admin user without requiring Clerk
-  if (config.isDemoMode) {
-    const adminEmail = config.adminEmails[0] || "admin@rentcar.com"
-    const demoClerkId = `demo_${adminEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
-
-    return await prisma.user.upsert({
-      where: { email: adminEmail },
-      update: { role: "ADMIN" },
-      create: {
-        clerkId: demoClerkId,
-        email: adminEmail,
-        name: "Demo Admin",
-        role: "ADMIN",
-      },
-    })
-  }
-
   if (!config.features.authEnabled) {
     return null
   }
 
-  const { userId } = await auth()
+  const session = await auth()
 
-  if (!userId) {
+  if (!session?.user?.id) {
     return null
   }
 
   const user = await prisma.user.findUnique({
-    where: { clerkId: userId },
+    where: { id: session.user.id },
   })
 
-  if (user) {
-    return user
-  }
-
-  return syncUser()
+  return user
 }
 
 export async function requireAuth() {
@@ -57,43 +94,6 @@ export async function requireAdmin() {
   if (user.role !== "ADMIN") {
     throw new Error("Forbidden: Admin access required")
   }
-
-  return user
-}
-
-export async function syncUser() {
-  if (!config.features.authEnabled) {
-    return null
-  }
-
-  const clerkUser = await currentUser()
-
-  if (!clerkUser) {
-    return null
-  }
-
-  const email = clerkUser.emailAddresses[0]?.emailAddress
-
-  if (!email) {
-    return null
-  }
-
-  // Upsert user from Clerk to database
-  const user = await prisma.user.upsert({
-    where: { clerkId: clerkUser.id },
-    update: {
-      email,
-      name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || null,
-    },
-    create: {
-      clerkId: clerkUser.id,
-      email,
-      name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || null,
-      role: config.adminEmails.some((adminEmail) => adminEmail.toLowerCase() === email.toLowerCase())
-        ? "ADMIN"
-        : "USER",
-    },
-  })
 
   return user
 }
