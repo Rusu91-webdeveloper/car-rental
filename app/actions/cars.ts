@@ -86,39 +86,51 @@ export async function createCar(data: unknown) {
         const fieldName = fieldNames[err.path[0] as string] || err.path[0]
         let message = err.message
 
-        // Improve common error messages
-        if (err.code === "too_small" && err.type === "string") {
-          if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
-            message = `must be at least ${err.minimum} characters long`
-          } else {
-            message = `is required`
-          }
-        } else if (err.code === "too_large") {
-          message = `must not exceed ${err.maximum} characters`
-        } else if (err.code === "invalid_type") {
-          message = `has an invalid value`
-        } else if (err.code === "invalid_string" && err.validation === "url") {
-          message = `must be a valid URL starting with http:// or https://`
-        } else if (err.code === "too_small" && err.type === "number") {
-          if (err.path[0] === "price") {
-            message = `must be greater than 0`
-          } else if (err.path[0] === "seats") {
-            message = `must be between 2 and 9`
-          } else if (err.path[0] === "year") {
-            message = `must be between 1900 and 2030`
-          } else {
-            message = `must be at least ${err.minimum}`
-          }
-        } else if (err.code === "too_big" && err.type === "number") {
-          if (err.path[0] === "seats") {
-            message = `must be between 2 and 9`
-          } else if (err.path[0] === "year") {
-            message = `must be between 1900 and 2030`
-          } else {
-            message = `must not exceed ${err.maximum}`
-          }
-        } else if (err.code === "invalid_enum_value") {
-          message = `has an invalid value. Please select from the available options.`
+        // Improve common error messages using switch to avoid type narrowing issues
+        switch (err.code) {
+          case "too_small":
+            if (err.type === "string") {
+              if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
+                message = `must be at least ${err.minimum} characters long`
+              } else {
+                message = `is required`
+              }
+            } else if (err.type === "number") {
+              if (err.path[0] === "price") {
+                message = `must be greater than 0`
+              } else if (err.path[0] === "seats") {
+                message = `must be between 2 and 9`
+              } else if (err.path[0] === "year") {
+                message = `must be between 1900 and 2030`
+              } else {
+                message = `must be at least ${err.minimum}`
+              }
+            }
+            break
+          case "too_big":
+            if (err.type === "number") {
+              if (err.path[0] === "seats") {
+                message = `must be between 2 and 9`
+              } else if (err.path[0] === "year") {
+                message = `must be between 1900 and 2030`
+              } else {
+                message = `must not exceed ${err.maximum}`
+              }
+            } else if (err.type === "string") {
+              message = `must not exceed ${err.maximum} characters`
+            }
+            break
+          case "invalid_type":
+            message = `has an invalid value`
+            break
+          case "invalid_string":
+            if (err.validation === "url") {
+              message = `must be a valid URL starting with http:// or https://`
+            }
+            break
+          case "invalid_enum_value":
+            message = `has an invalid value. Please select from the available options.`
+            break
         }
 
         return `${fieldName}: ${message}`
@@ -203,39 +215,51 @@ export async function updateCar(carId: string, data: unknown) {
         const fieldName = fieldNames[err.path[0] as string] || err.path[0]
         let message = err.message
 
-        // Improve common error messages
-        if (err.code === "too_small" && err.type === "string") {
-          if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
-            message = `must be at least ${err.minimum} characters long`
-          } else {
-            message = `is required`
-          }
-        } else if (err.code === "too_large") {
-          message = `must not exceed ${err.maximum} characters`
-        } else if (err.code === "invalid_type") {
-          message = `has an invalid value`
-        } else if (err.code === "invalid_string" && err.validation === "url") {
-          message = `must be a valid URL starting with http:// or https://`
-        } else if (err.code === "too_small" && err.type === "number") {
-          if (err.path[0] === "price") {
-            message = `must be greater than 0`
-          } else if (err.path[0] === "seats") {
-            message = `must be between 2 and 9`
-          } else if (err.path[0] === "year") {
-            message = `must be between 1900 and 2030`
-          } else {
-            message = `must be at least ${err.minimum}`
-          }
-        } else if (err.code === "too_big" && err.type === "number") {
-          if (err.path[0] === "seats") {
-            message = `must be between 2 and 9`
-          } else if (err.path[0] === "year") {
-            message = `must be between 1900 and 2030`
-          } else {
-            message = `must not exceed ${err.maximum}`
-          }
-        } else if (err.code === "invalid_enum_value") {
-          message = `has an invalid value. Please select from the available options.`
+        // Improve common error messages using switch to avoid type narrowing issues
+        switch (err.code) {
+          case "too_small":
+            if (err.type === "string") {
+              if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
+                message = `must be at least ${err.minimum} characters long`
+              } else {
+                message = `is required`
+              }
+            } else if (err.type === "number") {
+              if (err.path[0] === "price") {
+                message = `must be greater than 0`
+              } else if (err.path[0] === "seats") {
+                message = `must be between 2 and 9`
+              } else if (err.path[0] === "year") {
+                message = `must be between 1900 and 2030`
+              } else {
+                message = `must be at least ${err.minimum}`
+              }
+            }
+            break
+          case "too_big":
+            if (err.type === "number") {
+              if (err.path[0] === "seats") {
+                message = `must be between 2 and 9`
+              } else if (err.path[0] === "year") {
+                message = `must be between 1900 and 2030`
+              } else {
+                message = `must not exceed ${err.maximum}`
+              }
+            } else if (err.type === "string") {
+              message = `must not exceed ${err.maximum} characters`
+            }
+            break
+          case "invalid_type":
+            message = `has an invalid value`
+            break
+          case "invalid_string":
+            if (err.validation === "url") {
+              message = `must be a valid URL starting with http:// or https://`
+            }
+            break
+          case "invalid_enum_value":
+            message = `has an invalid value. Please select from the available options.`
+            break
         }
 
         return `${fieldName}: ${message}`
