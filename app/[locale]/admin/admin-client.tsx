@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
@@ -265,6 +266,7 @@ export default function AdminDashboard({
           seats: car.seats,
           fuelType: car.fuelType,
           acceleration: car.acceleration,
+          year: car.year,
         })
 
         if (result?.car) {
@@ -299,6 +301,7 @@ export default function AdminDashboard({
           seats: updates.seats,
           fuelType: updates.fuelType,
           acceleration: updates.acceleration,
+          year: updates.year,
         })
 
         if (result?.car) {
@@ -1329,8 +1332,30 @@ function CarForm({
         },
   )
   const [isUploading, setIsUploading] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const maxGalleryImages = 10
   const maxUploadBytes = 4 * 1024 * 1024
+
+  const validateForm = (data: CarFormValues) => {
+    const errors: string[] = []
+
+    if (!data.name.trim()) errors.push("Car name (EN) is required.")
+    if (!data.nameDe.trim()) errors.push("Car name (DE) is required.")
+    if (!data.category) errors.push("Category is required.")
+    if (!Number.isFinite(data.price) || data.price <= 0) errors.push("Price per day must be greater than 0.")
+    if (!data.image.trim()) errors.push("Main image URL is required.")
+    if (!data.gearbox.trim()) errors.push("Gearbox is required.")
+    if (!Number.isFinite(data.seats) || data.seats < 2 || data.seats > 9) errors.push("Seats must be between 2 and 9.")
+    if (!data.fuelType.trim()) errors.push("Fuel type is required.")
+    if (!data.acceleration.trim()) errors.push("Acceleration is required.")
+    if (!Number.isFinite(data.year) || data.year < 1900 || data.year > 2030)
+      errors.push("Year must be between 1900 and 2030.")
+    if (!data.status) errors.push("Status is required.")
+    if (!data.description.trim()) errors.push("Description (EN) is required.")
+    if (!data.descriptionDe.trim()) errors.push("Description (DE) is required.")
+
+    return errors
+  }
 
   const validateImageFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -1438,13 +1463,33 @@ function CarForm({
       alert("Please wait for uploads to finish.")
       return
     }
+    const errors = validateForm(formData)
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+    setValidationErrors([])
     onSubmit(formData)
   }
 
   const isBusy = isSubmitting || isUploading
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {validationErrors.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Missing information</AlertTitle>
+          <AlertDescription>
+            <p>Please complete the following before saving:</p>
+            <ul className="list-disc pl-4">
+              {validationErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="name">Car Name (EN)</Label>
