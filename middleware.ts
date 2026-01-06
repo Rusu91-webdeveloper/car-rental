@@ -39,6 +39,10 @@ const isPublicRoute = (pathname: string) => {
         pathWithoutLocale === "/about" ||
         pathWithoutLocale === "/contact" ||
         pathWithoutLocale === "/help" ||
+        pathWithoutLocale === "/impressum" ||
+        pathWithoutLocale === "/datenschutz" ||
+        pathWithoutLocale === "/agb" ||
+        pathWithoutLocale === "/widerruf" ||
         pathWithoutLocale.startsWith("/login") ||
         pathWithoutLocale.startsWith("/signup") ||
         pathWithoutLocale.startsWith("/sign-in") ||
