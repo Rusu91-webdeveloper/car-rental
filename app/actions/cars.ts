@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
 import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { z } from "zod"
 
 export async function createCar(data: unknown) {
   try {
@@ -60,11 +61,80 @@ export async function createCar(data: unknown) {
   } catch (error) {
     console.error("[CREATE_CAR_ERROR]", error)
 
+    // Handle Zod validation errors with detailed, user-friendly messages
+    if (error instanceof z.ZodError) {
+      const fieldNames: Record<string, string> = {
+        name: "Car Name (English)",
+        nameDe: "Car Name (German)",
+        subtitle: "Subtitle (English)",
+        subtitleDe: "Subtitle (German)",
+        description: "Description (English)",
+        descriptionDe: "Description (German)",
+        category: "Category",
+        price: "Price per Day",
+        image: "Main Image URL",
+        images: "Gallery Images",
+        status: "Status",
+        gearbox: "Gearbox",
+        seats: "Seats",
+        fuelType: "Fuel Type",
+        acceleration: "Acceleration (0-60 mph)",
+        year: "Year",
+      }
+
+      const formattedErrors = error.errors.map((err) => {
+        const fieldName = fieldNames[err.path[0] as string] || err.path[0]
+        let message = err.message
+
+        // Improve common error messages
+        if (err.code === "too_small" && err.type === "string") {
+          if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
+            message = `must be at least ${err.minimum} characters long`
+          } else {
+            message = `is required`
+          }
+        } else if (err.code === "too_large") {
+          message = `must not exceed ${err.maximum} characters`
+        } else if (err.code === "invalid_type") {
+          message = `has an invalid value`
+        } else if (err.code === "invalid_string" && err.validation === "url") {
+          message = `must be a valid URL starting with http:// or https://`
+        } else if (err.code === "too_small" && err.type === "number") {
+          if (err.path[0] === "price") {
+            message = `must be greater than 0`
+          } else if (err.path[0] === "seats") {
+            message = `must be between 2 and 9`
+          } else if (err.path[0] === "year") {
+            message = `must be between 1900 and 2030`
+          } else {
+            message = `must be at least ${err.minimum}`
+          }
+        } else if (err.code === "too_big" && err.type === "number") {
+          if (err.path[0] === "seats") {
+            message = `must be between 2 and 9`
+          } else if (err.path[0] === "year") {
+            message = `must be between 1900 and 2030`
+          } else {
+            message = `must not exceed ${err.maximum}`
+          }
+        } else if (err.code === "invalid_enum_value") {
+          message = `has an invalid value. Please select from the available options.`
+        }
+
+        return `${fieldName}: ${message}`
+      })
+
+      return {
+        error: "Validation failed",
+        validationErrors: formattedErrors,
+      }
+    }
+
     if (error instanceof Error) {
       return { error: error.message }
     }
 
-    return { error: "Failed to create car" }
+    return { error: "Failed to create car. Please try again." }
   }
 }
 
@@ -108,11 +178,80 @@ export async function updateCar(carId: string, data: unknown) {
   } catch (error) {
     console.error("[UPDATE_CAR_ERROR]", error)
 
+    // Handle Zod validation errors with detailed, user-friendly messages
+    if (error instanceof z.ZodError) {
+      const fieldNames: Record<string, string> = {
+        name: "Car Name (English)",
+        nameDe: "Car Name (German)",
+        subtitle: "Subtitle (English)",
+        subtitleDe: "Subtitle (German)",
+        description: "Description (English)",
+        descriptionDe: "Description (German)",
+        category: "Category",
+        price: "Price per Day",
+        image: "Main Image URL",
+        images: "Gallery Images",
+        status: "Status",
+        gearbox: "Gearbox",
+        seats: "Seats",
+        fuelType: "Fuel Type",
+        acceleration: "Acceleration (0-60 mph)",
+        year: "Year",
+      }
+
+      const formattedErrors = error.errors.map((err) => {
+        const fieldName = fieldNames[err.path[0] as string] || err.path[0]
+        let message = err.message
+
+        // Improve common error messages
+        if (err.code === "too_small" && err.type === "string") {
+          if (err.path[0] === "description" || err.path[0] === "descriptionDe") {
+            message = `must be at least ${err.minimum} characters long`
+          } else {
+            message = `is required`
+          }
+        } else if (err.code === "too_large") {
+          message = `must not exceed ${err.maximum} characters`
+        } else if (err.code === "invalid_type") {
+          message = `has an invalid value`
+        } else if (err.code === "invalid_string" && err.validation === "url") {
+          message = `must be a valid URL starting with http:// or https://`
+        } else if (err.code === "too_small" && err.type === "number") {
+          if (err.path[0] === "price") {
+            message = `must be greater than 0`
+          } else if (err.path[0] === "seats") {
+            message = `must be between 2 and 9`
+          } else if (err.path[0] === "year") {
+            message = `must be between 1900 and 2030`
+          } else {
+            message = `must be at least ${err.minimum}`
+          }
+        } else if (err.code === "too_big" && err.type === "number") {
+          if (err.path[0] === "seats") {
+            message = `must be between 2 and 9`
+          } else if (err.path[0] === "year") {
+            message = `must be between 1900 and 2030`
+          } else {
+            message = `must not exceed ${err.maximum}`
+          }
+        } else if (err.code === "invalid_enum_value") {
+          message = `has an invalid value. Please select from the available options.`
+        }
+
+        return `${fieldName}: ${message}`
+      })
+
+      return {
+        error: "Validation failed",
+        validationErrors: formattedErrors,
+      }
+    }
+
     if (error instanceof Error) {
       return { error: error.message }
     }
 
-    return { error: "Failed to update car" }
+    return { error: "Failed to update car. Please try again." }
   }
 }
 

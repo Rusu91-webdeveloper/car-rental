@@ -16,6 +16,7 @@ import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/settings"
+import { useToast } from "@/hooks/use-toast"
 import {
   LayoutDashboard,
   CarIcon,
@@ -104,6 +105,7 @@ export default function AdminDashboard({
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const locale = useLocale()
   const t = useTranslations()
+  const { toast } = useToast()
 
   const getLocalizedText = (valueEn: string, valueDe?: string | null) => {
     return locale === "de" ? valueDe || valueEn : valueEn
@@ -272,12 +274,43 @@ export default function AdminDashboard({
         if (result?.car) {
           setCarsState((prev) => [mapCar(result.car), ...prev])
           setIsAddDialogOpen(false)
+          toast({
+            title: "Success",
+            description: "Car created successfully!",
+            variant: "default",
+          })
         } else if (result?.error) {
-          alert(result.error)
+          // Handle validation errors with detailed messages
+          if (result.validationErrors && Array.isArray(result.validationErrors)) {
+            toast({
+              title: "Validation Failed",
+              description: (
+                <div className="space-y-1">
+                  <p className="font-medium">Please fix the following errors:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-sm">
+                    {result.validationErrors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+              variant: "destructive",
+            })
+          } else {
+            toast({
+              title: "Error",
+              description: result.error,
+              variant: "destructive",
+            })
+          }
         }
       } catch (error) {
         console.error(error)
-        alert("Failed to create car. Please try again.")
+        toast({
+          title: "Error",
+          description: "Failed to create car. Please try again.",
+          variant: "destructive",
+        })
       }
     })
   }
@@ -307,12 +340,43 @@ export default function AdminDashboard({
         if (result?.car) {
           setCarsState((prev) => prev.map((car) => (car.id === carId ? mapCar(result.car) : car)))
           setEditCarId((current) => (current === carId ? null : current))
+          toast({
+            title: "Success",
+            description: "Car updated successfully!",
+            variant: "default",
+          })
         } else if (result?.error) {
-          alert(result.error)
+          // Handle validation errors with detailed messages
+          if (result.validationErrors && Array.isArray(result.validationErrors)) {
+            toast({
+              title: "Validation Failed",
+              description: (
+                <div className="space-y-1">
+                  <p className="font-medium">Please fix the following errors:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-sm">
+                    {result.validationErrors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+              variant: "destructive",
+            })
+          } else {
+            toast({
+              title: "Error",
+              description: result.error,
+              variant: "destructive",
+            })
+          }
         }
       } catch (error) {
         console.error(error)
-        alert("Failed to update car. Please try again.")
+        toast({
+          title: "Error",
+          description: "Failed to update car. Please try again.",
+          variant: "destructive",
+        })
       }
     })
   }
@@ -321,10 +385,19 @@ export default function AdminDashboard({
     startTransition(async () => {
       const result = await deleteCarAction(carId)
       if (result?.error) {
-        alert(result.error)
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
         return
       }
       setCarsState((prev) => prev.filter((car) => car.id !== carId))
+      toast({
+        title: "Success",
+        description: "Car deleted successfully!",
+        variant: "default",
+      })
     })
   }
 
