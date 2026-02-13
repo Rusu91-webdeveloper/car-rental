@@ -91,6 +91,7 @@ interface AdminBooking {
   dropoffDate: string
   location: string
   totalPrice: number
+  guaranteeAmount: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   createdAt: string
@@ -1395,6 +1396,12 @@ export default function AdminDashboard({
                                   {new Date(booking.dropoffDate).toLocaleDateString()}
                                 </span>
                               </div>
+                              {booking.guaranteeAmount > 0 && (
+                                <div>
+                                  <span className="text-muted-foreground">Guarantee hold:</span>
+                                  <span className="ml-2 font-medium">{formatCents(booking.guaranteeAmount)}</span>
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -2683,6 +2690,7 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
     taxRate: settings?.taxRate ?? 0,
     taxIncluded: settings?.taxIncluded ?? false,
     depositPercentage: settings?.depositPercentage ?? 0.2,
+    guaranteePercentage: settings?.guaranteePercentage ?? 0,
     
     // Email Configuration
     supportEmail: settings?.supportEmail || "",
@@ -2890,6 +2898,10 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
       {/* Tax & Payment Configuration */}
       <div className="space-y-4 border-t pt-6">
         <h3 className="text-lg font-semibold">Tax & Payment Configuration</h3>
+        <p className="text-sm text-muted-foreground">
+          Guarantee is a refundable security hold (not an extra rental fee). Example: <strong>0.3</strong> means{" "}
+          <strong>30%</strong> of the booking total is held as guarantee.
+        </p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="taxRate">Tax Rate (0-1, e.g., 0.19 for 19%)</Label>
@@ -2913,6 +2925,18 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               max="1"
               value={formData.depositPercentage}
               onChange={(e) => setFormData({ ...formData, depositPercentage: parseFloat(e.target.value) || 0.2 })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="guaranteePercentage">Guarantee Percentage (0-1, e.g., 0.3 for 30%)</Label>
+            <Input
+              id="guaranteePercentage"
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={formData.guaranteePercentage}
+              onChange={(e) => setFormData({ ...formData, guaranteePercentage: parseFloat(e.target.value) || 0 })}
             />
           </div>
           <div className="space-y-2 flex items-center gap-2">

@@ -10,6 +10,7 @@ interface BookingSuccessModalProps {
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   totalPrice: number
   depositAmount: number
+  guaranteeAmount: number
   carName: string
   pickupDate: Date
   dropoffDate: Date
@@ -25,6 +26,7 @@ interface BookingSuccessModalProps {
     companyName: string
     supportEmail: string
     depositPercentage: number
+    guaranteePercentage: number
   }
   onClose: () => void
 }
@@ -35,6 +37,7 @@ export function BookingSuccessModal({
   paymentMethod,
   totalPrice,
   depositAmount,
+  guaranteeAmount,
   carName,
   pickupDate,
   dropoffDate,
@@ -44,6 +47,8 @@ export function BookingSuccessModal({
   onClose,
 }: BookingSuccessModalProps) {
   const depositPercent = Math.round(companySettings.depositPercentage * 100)
+  const guaranteePercent = Math.round(companySettings.guaranteePercentage * 100)
+  const remainingAtPickup = Math.max(totalPrice - depositAmount, 0)
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString("en-US", {
       weekday: "short",
@@ -178,9 +183,19 @@ export function BookingSuccessModal({
                         <span className="font-bold">{formatCents(depositAmount)}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-muted-foreground">Remaining rental at pickup:</span>
+                        <span className="font-bold">{formatCents(remainingAtPickup)}</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">Total Amount:</span>
                         <span className="font-bold">{formatCents(totalPrice)}</span>
                       </div>
+                      {guaranteeAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
+                          <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                       <p className="font-semibold text-amber-900">Bank Details:</p>
@@ -196,6 +211,12 @@ export function BookingSuccessModal({
                     <p className="text-xs mt-2">
                       <strong>Important:</strong> Include the transfer code <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we can process your booking.
                     </p>
+                    {guaranteeAmount > 0 && (
+                      <p className="text-xs">
+                        The guarantee is a refundable security hold. It is not an extra rental fee and is released
+                        after return if there are no damages, fines, or policy violations.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -211,7 +232,18 @@ export function BookingSuccessModal({
                   <span className="text-muted-foreground">Amount Due at Pickup:</span>
                   <span className="font-bold">{formatCents(totalPrice)}</span>
                 </div>
+                {guaranteeAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
+                    <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                  </div>
+                )}
               </div>
+              {guaranteeAmount > 0 && (
+                <p className="text-xs text-amber-800">
+                  The guarantee is a temporary security hold and is released after return if no issues are found.
+                </p>
+              )}
             </div>
           )}
 

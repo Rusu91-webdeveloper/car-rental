@@ -35,6 +35,7 @@ const companySettingsSchema = z.object({
   taxRate: z.number().min(0).max(1, "Tax rate must be between 0 and 1"),
   taxIncluded: z.boolean(),
   depositPercentage: z.number().min(0).max(1, "Deposit percentage must be between 0 and 1"),
+  guaranteePercentage: z.number().min(0).max(1, "Guarantee percentage must be between 0 and 1"),
   
   // Email Configuration
   supportEmail: z.string().email("Invalid support email"),
@@ -126,4 +127,3 @@ export async function updateCompanySettings(data: unknown) {
     return { error: "Failed to update company settings" }
   }
 }
-

@@ -210,6 +210,12 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                           <span className="text-muted-foreground">Payment Method</span>
                           <span>{getPaymentMethodLabel(booking.paymentMethod)}</span>
                         </div>
+                        {booking.guaranteeAmount > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Refundable Guarantee Hold</span>
+                            <span>{formatCents(booking.guaranteeAmount)}</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">{t("bookings.bookedAt")}</span>
                           <span>{formatDateTime(booking.createdAt, locale)}</span>

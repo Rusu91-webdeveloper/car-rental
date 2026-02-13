@@ -41,6 +41,7 @@ export function CheckoutClient({
     companyName: string
     supportEmail: string
     depositPercentage: number
+    guaranteePercentage: number
     taxRate: number
     taxIncluded: boolean
   }
@@ -226,6 +227,7 @@ export function CheckoutClient({
     paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
     totalPrice: number
     depositAmount: number
+    guaranteeAmount: number
     pickupDate: Date
     dropoffDate: Date
     location: string
@@ -495,6 +497,10 @@ export function CheckoutClient({
   const effectiveTaxRate = companySettings.taxRate > 0 ? companySettings.taxRate : 0.1
   const taxCents = companySettings.taxIncluded ? 0 : Math.round(subtotalCents * effectiveTaxRate)
   const totalCents = subtotalCents + taxCents
+  const depositPercent = Math.round(companySettings.depositPercentage * 100)
+  const guaranteePercent = Math.round(companySettings.guaranteePercentage * 100)
+  const depositCents = paymentMethod === "TRANSFER" ? Math.round(totalCents * companySettings.depositPercentage) : 0
+  const guaranteeCents = Math.round(totalCents * companySettings.guaranteePercentage)
 
   const handleConfirmBooking = () => {
     setError(null)
@@ -574,6 +580,7 @@ export function CheckoutClient({
           paymentMethod={bookingSuccess.paymentMethod}
           totalPrice={bookingSuccess.totalPrice}
           depositAmount={bookingSuccess.depositAmount}
+          guaranteeAmount={bookingSuccess.guaranteeAmount}
           carName={bookingSuccess.carName}
           pickupDate={bookingSuccess.pickupDate}
           dropoffDate={bookingSuccess.dropoffDate}
@@ -803,7 +810,25 @@ export function CheckoutClient({
               <span className="font-semibold">Total</span>
               <span className="font-bold text-xl">{formatCents(totalCents)}</span>
             </div>
+            {paymentMethod === "TRANSFER" && (
+              <div className="flex justify-between text-sm pt-2 border-t border-border/70">
+                <span className="text-muted-foreground">Deposit due now ({depositPercent}%)</span>
+                <span className="font-medium">{formatCents(depositCents)}</span>
+              </div>
+            )}
+            {guaranteeCents > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Refundable guarantee hold ({guaranteePercent}%)</span>
+                <span className="font-medium">{formatCents(guaranteeCents)}</span>
+              </div>
+            )}
           </div>
+          {guaranteeCents > 0 && (
+            <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 p-2">
+              The guarantee is a temporary security hold, not an extra rental charge. It is released after return if
+              there are no damages, fines, or policy violations.
+            </p>
+          )}
         </div>
 
         {error && (

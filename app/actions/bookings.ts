@@ -61,6 +61,7 @@ export async function createBooking(data: unknown) {
         taxRate: true,
         taxIncluded: true,
         depositPercentage: true,
+        guaranteePercentage: true,
       },
     })
     const configuredTaxRate = companySettings?.taxRate ?? 0
@@ -68,7 +69,9 @@ export async function createBooking(data: unknown) {
     const taxAmount = companySettings?.taxIncluded ? 0 : Math.round(subtotalPrice * effectiveTaxRate)
     const totalPrice = subtotalPrice + taxAmount
     const depositPercentage = companySettings?.depositPercentage ?? 0.2
+    const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
     const depositAmount = validated.paymentMethod === "TRANSFER" ? Math.round(totalPrice * depositPercentage) : 0
+    const guaranteeAmount = Math.round(totalPrice * guaranteePercentage)
 
     // Generate unique booking number and transfer code
     const bookingNumber = `BK${Date.now().toString().slice(-8)}`
@@ -99,6 +102,7 @@ export async function createBooking(data: unknown) {
             totalDays,
             totalPrice,
             depositAmount,
+            guaranteeAmount,
             transferCode,
             bookingNumber,
             status: "PENDING",
@@ -202,6 +206,7 @@ export async function createBooking(data: unknown) {
               location: booking.location,
               totalPrice: booking.totalPrice,
               depositAmount: booking.depositAmount,
+              guaranteeAmount: booking.guaranteeAmount,
               transferCode: booking.transferCode,
               bookingNumber: booking.bookingNumber,
             })
@@ -213,6 +218,7 @@ export async function createBooking(data: unknown) {
               dropoffDate: formatDateForEmail(booking.dropoffDate),
               location: booking.location,
               totalPrice: booking.totalPrice,
+              guaranteeAmount: booking.guaranteeAmount,
               bookingNumber: booking.bookingNumber,
             })
 
@@ -239,6 +245,7 @@ export async function createBooking(data: unknown) {
         location: booking.location,
         totalPrice: booking.totalPrice,
         depositAmount: booking.depositAmount,
+        guaranteeAmount: booking.guaranteeAmount,
         transferCode: booking.transferCode,
         bookingNumber: booking.bookingNumber,
         bookingId: booking.id,
@@ -277,6 +284,7 @@ export async function createBooking(data: unknown) {
         transferCode: booking.transferCode,
         totalPrice: booking.totalPrice,
         depositAmount: booking.depositAmount,
+        guaranteeAmount: booking.guaranteeAmount,
         pickupDate: booking.pickupDate,
         dropoffDate: booking.dropoffDate,
         location: booking.location,
@@ -401,6 +409,7 @@ export async function updateBookingStatus(data: unknown) {
           dropoffDate: formatDateForEmail(booking.dropoffDate),
           location: booking.location,
           totalPrice: booking.totalPrice,
+          guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
           paymentMethod: booking.paymentMethod,
           bookingNumber: booking.bookingNumber,
@@ -429,6 +438,7 @@ export async function updateBookingStatus(data: unknown) {
           dropoffDate: formatDateForEmail(booking.dropoffDate),
           location: booking.location,
           totalPrice: booking.totalPrice,
+          guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.transferCode,
           bookingNumber: booking.bookingNumber,
           bookingId: booking.id,

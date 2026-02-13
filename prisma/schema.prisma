@@ -162,6 +162,7 @@ model Booking {
   totalDays       Int
   totalPrice      Int // in cents
   depositAmount   Int // in cents
+  guaranteeAmount Int @default(0) // in cents, refundable security hold
   
   // Status
   status          BookingStatus @default(PENDING)
@@ -356,6 +357,7 @@ model CompanySettings {
   taxRate           Float    @default(0.0) // Tax rate as decimal (e.g., 0.19 for 19%)
   taxIncluded       Boolean  @default(false) // Whether tax is included in displayed prices
   depositPercentage Float    @default(0.2) // Deposit percentage as decimal (e.g., 0.2 for 20%)
+  guaranteePercentage Float  @default(0.0) // Refundable security hold percentage (e.g., 0.3 for 30%)
   
   // Email Configuration
   supportEmail      String   @default("support@rentcar.com")

@@ -154,6 +154,7 @@ interface BookingEmailData {
   dropoffDate: string
   location: string
   totalPrice: number
+  guaranteeAmount?: number
   transferCode?: string
   paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
   bookingNumber: string
@@ -182,6 +183,16 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
 
     const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
     const paymentMethodLabel = isTransfer ? "Bank Transfer" : data.paymentMethod === "CARD" ? "Card" : "Pay at Pickup"
+    const guaranteeAmount = data.guaranteeAmount ?? 0
+    const guaranteeDetailsHtml =
+      guaranteeAmount > 0
+        ? `
+                  <div class="detail-row">
+                    <span><strong>Refundable Guarantee Hold:</strong></span>
+                    <span>${formatCents(guaranteeAmount)}</span>
+                  </div>
+        `
+        : ""
     const transferCodeHtml =
       isTransfer && data.transferCode
         ? `
@@ -257,11 +268,19 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                     <span><strong>Payment Method:</strong></span>
                     <span>${paymentMethodLabel}</span>
                   </div>
+                  ${guaranteeDetailsHtml}
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Price:</strong></span>
                     <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice)}</span>
                   </div>
                 </div>
+                ${
+                  guaranteeAmount > 0
+                    ? `<p style="font-size: 13px; color: #4b5563; margin-top: 10px;">
+                    The guarantee is a temporary security hold and not an extra rental fee. It is released after return if there are no damages, fines, or policy violations.
+                  </p>`
+                    : ""
+                }
                 
                 <p><strong>Next Steps:</strong></p>
                 <ul>
@@ -527,6 +546,7 @@ export async function sendManualPaymentEmail(data: {
   location: string
   totalPrice: number
   depositAmount: number
+  guaranteeAmount: number
   transferCode: string
   bookingNumber: string
 }) {
@@ -560,6 +580,9 @@ export async function sendManualPaymentEmail(data: {
     const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
     const depositPercentage = companySettings?.depositPercentage ?? 0.2
     const depositPercent = Math.round(depositPercentage * 100)
+    const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
+    const guaranteePercent = Math.round(guaranteePercentage * 100)
+    const remainingRentalAtPickup = Math.max(data.totalPrice - data.depositAmount, 0)
 
     const { id, error } = await sendEmail({
       to: data.to,
@@ -664,10 +687,22 @@ export async function sendManualPaymentEmail(data: {
                       <span>Deposit (${depositPercent}%):</span>
                       <strong>${formatCents(data.depositAmount)}</strong>
                     </div>
+                    <div class="payment-row">
+                      <span>Remaining rental at pickup:</span>
+                      <strong>${formatCents(remainingRentalAtPickup)}</strong>
+                    </div>
                     <div class="payment-row total">
                       <span>Total Amount:</span>
                       <strong style="color: #3b82f6;">${formatCents(data.totalPrice)}</strong>
                     </div>
+                    ${
+                      data.guaranteeAmount > 0
+                        ? `<div class="payment-row">
+                      <span>Refundable Guarantee (${guaranteePercent}%):</span>
+                      <strong>${formatCents(data.guaranteeAmount)}</strong>
+                    </div>`
+                        : ""
+                    }
                   </div>
 
                   <div class="bank-details">
@@ -703,6 +738,11 @@ export async function sendManualPaymentEmail(data: {
                   <p class="important-note">
                     <strong>Important:</strong> Include the transfer code <strong>${data.transferCode}</strong> in your payment reference so we can process your booking.
                   </p>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<p class="important-note"><strong>Guarantee:</strong> This is a temporary security hold and is released after vehicle return if no issues are found.</p>`
+                      : ""
+                  }
                 </div>
 
                 <!-- Next Steps -->
@@ -760,6 +800,7 @@ export async function sendPayAtPickupEmail(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  guaranteeAmount: number
   bookingNumber: string
 }) {
   try {
@@ -787,6 +828,7 @@ export async function sendPayAtPickupEmail(data: {
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
     const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+    const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
 
     const { id, error } = await sendEmail({
       to: data.to,
@@ -832,11 +874,21 @@ export async function sendPayAtPickupEmail(data: {
                   <div class="detail-row"><span>Drop-off:</span><strong>${data.dropoffDate}</strong></div>
                   <div class="detail-row"><span>Location:</span><strong>${data.location}</strong></div>
                   <div class="detail-row"><span>Total Amount:</span><strong>${formatCents(data.totalPrice)}</strong></div>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<div class="detail-row"><span>Refundable Guarantee (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount)}</strong></div>`
+                      : ""
+                  }
                 </div>
 
                 <div class="box pickup-payment-box">
                   <h3 style="margin: 0 0 8px 0;">Payment at Pickup</h3>
                   <p style="margin: 0;">Please complete payment at pickup when collecting your vehicle.</p>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<p style="margin-top: 8px;">The guarantee is a temporary security hold and will be released after return if no issues are found.</p>`
+                      : ""
+                  }
                 </div>
 
                 <p><strong>Next steps:</strong></p>
@@ -893,6 +945,7 @@ export async function sendAdminBookingNotification(data: {
   location: string
   totalPrice: number
   depositAmount: number
+  guaranteeAmount: number
   transferCode: string
   bookingNumber: string
   bookingId: string
@@ -918,6 +971,7 @@ export async function sendAdminBookingNotification(data: {
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
     const depositPercent = Math.round((companySettings?.depositPercentage ?? 0.2) * 100)
+    const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
       new Set(
@@ -968,6 +1022,14 @@ export async function sendAdminBookingNotification(data: {
                     <span><strong>Total Amount:</strong></span>
                     <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
                   </div>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
+                    <span>${formatCents(data.guaranteeAmount)}</span>
+                  </div>`
+                      : ""
+                  }
       `
       : `
                   <div class="detail-row">
@@ -978,6 +1040,14 @@ export async function sendAdminBookingNotification(data: {
                     <span><strong>Amount Due at Pickup:</strong></span>
                     <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
                   </div>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
+                    <span>${formatCents(data.guaranteeAmount)}</span>
+                  </div>`
+                      : ""
+                  }
       `
     const nextStepsHtml = isTransfer
       ? `
@@ -1133,6 +1203,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  guaranteeAmount: number
   transferCode: string
   bookingNumber: string
   bookingId: string
@@ -1156,6 +1227,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
       where: { id: "company-settings" },
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
+    const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
       new Set(
@@ -1266,6 +1338,14 @@ export async function sendAdminBookingConfirmationNotification(data: {
                     <span><strong>Total Amount:</strong></span>
                     <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
                   </div>
+                  ${
+                    data.guaranteeAmount > 0
+                      ? `<div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
+                    <span>${formatCents(data.guaranteeAmount)}</span>
+                  </div>`
+                      : ""
+                  }
                 </div>
 
                 <div style="background: #E8F4FF; padding: 15px; border-radius: 4px; margin: 20px 0;">

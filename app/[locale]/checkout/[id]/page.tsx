@@ -73,6 +73,7 @@ export default async function CheckoutPage({
         companyName: companySettings?.companyName || "Car Rental Company",
         supportEmail: companySettings?.supportEmail || "support@rentcar.com",
         depositPercentage: companySettings?.depositPercentage ?? 0.2,
+        guaranteePercentage: companySettings?.guaranteePercentage ?? 0,
         taxRate: companySettings?.taxRate ?? 0,
         taxIncluded: companySettings?.taxIncluded ?? false,
       }}

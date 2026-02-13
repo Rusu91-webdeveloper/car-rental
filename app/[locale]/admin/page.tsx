@@ -152,6 +152,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         dropoffDate: booking.dropoffDate.toISOString(),
         location: booking.location,
         totalPrice: booking.totalPrice,
+        guaranteeAmount: booking.guaranteeAmount,
         status: booking.status,
         paymentMethod: booking.paymentMethod,
         createdAt: booking.createdAt.toISOString(),
