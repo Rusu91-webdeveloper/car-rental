@@ -705,177 +705,176 @@ export default function AdminDashboard({
     })
   }
 
+  const adminTabs = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "cars", label: "Cars", icon: CarIcon },
+    { id: "bookings", label: "Bookings", icon: Calendar },
+    { id: "users", label: "Users", icon: Users },
+    { id: "reviews", label: "Reviews", icon: MessageSquare },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    { id: "settings", label: "Settings", icon: Settings },
+  ] as const
+
+  const activeTabTitleMap: Record<string, string> = {
+    overview: "Dashboard Overview",
+    cars: "Car Management",
+    bookings: "Booking Management",
+    users: "User Management",
+    reviews: "Review Management",
+    analytics: "Analytics & Reports",
+    settings: "Company Settings",
+  }
+
+  const activeTabTitle = activeTabTitleMap[activeTab] || "Admin Dashboard"
+
+  const getTabBadgeValue = (tabId: string) => {
+    if (tabId === "cars") return carsState.length
+    if (tabId === "bookings" && pendingBookings > 0) return pendingBookings
+    if (tabId === "users") return usersState.length
+    if (tabId === "reviews") return reviewsState.length
+    return null
+  }
+
   return (
-    <div className="min-h-screen bg-muted flex">
+    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_45%),linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.95)_100%)]">
       {/* Sidebar Navigation */}
-      <aside className="hidden lg:flex lg:flex-col w-64 bg-background border-r border-border fixed h-full overflow-y-auto">
-        <div className="p-6 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <CarIcon className="w-5 h-5 text-primary-foreground" />
+      <aside className="fixed hidden h-full w-72 overflow-y-auto border-r border-border/70 bg-background/95 backdrop-blur lg:flex lg:flex-col">
+        <div className="flex-shrink-0 border-b border-border/70 px-6 py-6">
+          <div className="mb-1 flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm shadow-primary/30">
+              <CarIcon className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg">RentCar Admin</span>
+            <span className="text-lg font-bold">RentCar Admin</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Administrator Panel</p>
+          <p className="mt-1 text-xs text-muted-foreground">Administrator Panel</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 min-h-0">
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "overview" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="font-medium">Overview</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("cars")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "cars" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <CarIcon className="w-5 h-5" />
-            <span className="font-medium">Cars</span>
-            <Badge variant="secondary" className="ml-auto">
-              {carsState.length}
-            </Badge>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("bookings")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "bookings" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <Calendar className="w-5 h-5" />
-            <span className="font-medium">Bookings</span>
-            {pendingBookings > 0 && (
-              <Badge variant="destructive" className="ml-auto">
-                {pendingBookings}
-              </Badge>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("users")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "users" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            <span className="font-medium">Users</span>
-            <Badge variant="secondary" className="ml-auto">
-              {usersState.length}
-            </Badge>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("reviews")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "reviews" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span className="font-medium">Reviews</span>
-            <Badge variant="secondary" className="ml-auto">
-              {reviewsState.length}
-            </Badge>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "analytics" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <BarChart3 className="w-5 h-5" />
-            <span className="font-medium">Analytics</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeTab === "settings" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            <Settings className="w-5 h-5" />
-            <span className="font-medium">Settings</span>
-          </button>
+        <nav className="min-h-0 flex-1 space-y-1 p-4">
+          {adminTabs.map((tab) => {
+            const TabIcon = tab.icon
+            const badgeValue = getTabBadgeValue(tab.id)
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <TabIcon className="h-5 w-5" />
+                <span>{tab.label}</span>
+                {badgeValue !== null && (
+                  <Badge
+                    variant={tab.id === "bookings" ? "destructive" : "secondary"}
+                    className={`ml-auto ${activeTab === tab.id ? "bg-white/20 text-primary-foreground" : ""}`}
+                  >
+                    {badgeValue}
+                  </Badge>
+                )}
+              </button>
+            )
+          })}
         </nav>
 
-        <div className="p-4 border-t border-border flex-shrink-0 bg-background">
+        <div className="flex-shrink-0 border-t border-border/70 bg-background p-4">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-destructive transition-colors hover:bg-destructive/10"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="h-5 w-5" />
             <span className="font-medium">Logout</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64">
+      <main className="flex-1 lg:ml-72">
         {/* Mobile Header */}
-        <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10 lg:hidden">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">Admin Dashboard</h1>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={handleGoHome} title="Home">
-                <Home className="w-5 h-5" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
-                <LogOut className="w-5 h-5" />
-              </Button>
+        <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur lg:hidden">
+          <div className="px-4 pb-3 pt-3">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h1 className="text-lg font-bold">Admin Dashboard</h1>
+                <p className="text-xs text-muted-foreground">{activeTabTitle}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={handleGoHome} title="Home">
+                  <Home className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+                  <LogOut className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {adminTabs.map((tab) => {
+                const TabIcon = tab.icon
+                const badgeValue = getTabBadgeValue(tab.id)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
+                      activeTab === tab.id
+                        ? "border-primary/40 bg-primary text-primary-foreground shadow-sm shadow-primary/35"
+                        : "border-border/70 bg-background text-muted-foreground"
+                    }`}
+                  >
+                    <TabIcon className="h-4 w-4" />
+                    <span>{tab.label}</span>
+                    {badgeValue !== null && (
+                      <Badge
+                        variant={tab.id === "bookings" ? "destructive" : "secondary"}
+                        className={`h-5 min-w-5 px-1.5 text-[10px] ${activeTab === tab.id ? "bg-white/20 text-white" : ""}`}
+                      >
+                        {badgeValue}
+                      </Badge>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </header>
 
         {/* Desktop Header */}
-        <header className="hidden lg:block bg-background px-8 py-6 border-b border-border sticky top-0 z-10">
+        <header className="sticky top-0 z-20 hidden border-b border-border/70 bg-background/95 px-8 py-5 backdrop-blur lg:block">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold mb-1">
-                {activeTab === "overview" && "Dashboard Overview"}
-                {activeTab === "cars" && "Car Management"}
-                {activeTab === "bookings" && "Booking Management"}
-                {activeTab === "users" && "User Management"}
-                {activeTab === "reviews" && "Review Management"}
-                {activeTab === "analytics" && "Analytics & Reports"}
-                {activeTab === "settings" && "Company Settings"}
-              </h1>
+              <h1 className="mb-1 text-2xl font-bold">{activeTabTitle}</h1>
               <p className="text-sm text-muted-foreground">{t("admin.subtitle", { name: currentUser.name })}</p>
             </div>
 
             <div className="flex items-center gap-3">
               <Button variant="outline" onClick={handleGoHome}>
-                <Home className="w-4 h-4 mr-2" />
+                <Home className="mr-2 h-4 w-4" />
                 Home
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleLogout} className="mr-2" title="Logout">
-                <LogOut className="w-5 h-5" />
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="mr-1" title="Logout">
+                <LogOut className="h-5 w-5" />
               </Button>
               <div className="text-right">
                 <p className="text-sm font-medium">{currentUser.name}</p>
                 <p className="text-xs text-muted-foreground">Administrator</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white font-bold">
                 {currentUser.name.charAt(0).toUpperCase()}
               </div>
             </div>
           </div>
         </header>
 
-        <div className="p-4 lg:p-8">
+        <div className="mx-auto w-full max-w-7xl p-4 sm:p-5 lg:p-8">
           {/* Overview Tab */}
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-2">
                       <DollarSign className="w-8 h-8 text-green-500" />
                       <TrendingUp className="w-4 h-4 text-green-500" />
@@ -887,7 +886,7 @@ export default function AdminDashboard({
                 </Card>
 
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-2">
                       <Calendar className="w-8 h-8 text-blue-500" />
                       <Badge variant="secondary">{activeBookings}</Badge>
@@ -899,7 +898,7 @@ export default function AdminDashboard({
                 </Card>
 
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-2">
                       <CarIcon className="w-8 h-8 text-purple-500" />
                       <Badge variant="secondary">{availableCars}</Badge>
@@ -911,7 +910,7 @@ export default function AdminDashboard({
                 </Card>
 
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between mb-2">
                       <Users className="w-8 h-8 text-orange-500" />
                     </div>
@@ -931,7 +930,7 @@ export default function AdminDashboard({
                   <CardDescription>Common administrative tasks</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                       <DialogTrigger asChild>
                         <Button className="h-auto py-4 flex-col gap-2">
@@ -954,7 +953,7 @@ export default function AdminDashboard({
 
                     <Button
                       variant="outline"
-                      className="h-auto py-4 flex-col gap-2 bg-transparent"
+                      className="relative h-auto py-4 flex-col gap-2 bg-transparent"
                       onClick={() => setActiveTab("bookings")}
                     >
                       <AlertCircle className="w-6 h-6" />
@@ -1012,12 +1011,12 @@ export default function AdminDashboard({
                       return (
                         <div
                           key={booking.id}
-                          className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                          className="flex flex-col gap-3 rounded-xl border border-border/70 p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:gap-4"
                         >
                           <img
                             src={car.image || "/placeholder.svg"}
                             alt={getCarName(car)}
-                            className="w-16 h-16 rounded-lg object-cover"
+                            className="h-40 w-full rounded-lg object-cover sm:h-16 sm:w-16"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="font-semibold truncate">{getCarName(car)}</div>
@@ -1028,11 +1027,11 @@ export default function AdminDashboard({
                               {new Date(booking.createdAt).toLocaleDateString()}
                             </div>
                           </div>
-                          <div className="text-right">
+                          <div className="flex items-center justify-between sm:block sm:text-right">
                             <div className="font-bold">{formatCents(booking.totalPrice)}</div>
                             <Badge
                               variant={getBookingStatusBadge(booking.status).variant}
-                              className={`mt-1 ${getBookingStatusBadge(booking.status).className}`}
+                              className={`${getBookingStatusBadge(booking.status).className} sm:mt-1`}
                             >
                               {booking.status}
                             </Badge>
@@ -1102,14 +1101,14 @@ export default function AdminDashboard({
                 {filteredCars.map((car) => (
                   <Card key={car.id}>
                     <CardContent className="p-4">
-                      <div className="flex gap-4">
+                      <div className="flex flex-col gap-4 md:flex-row">
                         <img
                           src={car.image || "/placeholder.svg"}
                           alt={getCarName(car)}
-                          className="w-32 h-32 rounded-lg object-cover"
+                          className="h-44 w-full rounded-lg object-cover sm:h-40 md:h-32 md:w-40"
                         />
                         <div className="flex-1">
-                          <div className="flex items-start justify-between mb-2">
+                          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <h3 className="font-bold text-lg">{getCarName(car)}</h3>
                               <p className="text-sm text-muted-foreground">{getCarSubtitle(car)}</p>
@@ -1127,7 +1126,7 @@ export default function AdminDashboard({
                             </Badge>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                          <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                             <div className="flex items-center gap-2">
                               <span className="text-muted-foreground">Category:</span>
                               <span className="font-medium">{car.category}</span>
@@ -1146,7 +1145,7 @@ export default function AdminDashboard({
                             </div>
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <Dialog open={editCarId === car.id} onOpenChange={(open) => setEditCarId(open ? car.id : null)}>
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
@@ -1304,14 +1303,14 @@ export default function AdminDashboard({
                             className="w-full sm:w-32 h-32 rounded-lg object-cover"
                           />
                           <div className="flex-1 space-y-3">
-                            <div className="flex items-start justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <div>
                                 <h3 className="font-bold text-lg">{getCarName(car)}</h3>
                                 <p className="text-sm text-muted-foreground">
                                   {(bookingUser.name || bookingUser.email) + " • " + bookingUser.email}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Badge
                                   variant={getBookingStatusBadge(booking.status).variant}
                                   className={getBookingStatusBadge(booking.status).className}
@@ -1324,7 +1323,7 @@ export default function AdminDashboard({
                                     handleUpdateBookingStatus(booking.id, value as AdminBooking["status"])
                                   }
                                 >
-                                  <SelectTrigger className="w-36">
+                                  <SelectTrigger className="w-full min-w-[10rem] sm:w-36">
                                     <SelectValue />
                                   </SelectTrigger>
                                 <SelectContent>
@@ -1369,7 +1368,7 @@ export default function AdminDashboard({
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                               <div>
                                 <span className="text-muted-foreground">Location:</span>
                                 <span className="ml-2 font-medium">{booking.location}</span>
@@ -1494,13 +1493,14 @@ export default function AdminDashboard({
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 md:flex-col md:items-end">
+                            <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end">
                               <Button
                                 size="sm"
                                 variant={user.isActive ? "outline" : "default"}
                                 onClick={() => handleToggleUserActive(user)}
                                 disabled={isPending || isCurrentAdmin}
                                 title={isCurrentAdmin ? "You cannot change your own active status" : undefined}
+                                className="w-full sm:w-auto"
                               >
                                 {user.isActive ? (
                                   <>
@@ -1520,6 +1520,7 @@ export default function AdminDashboard({
                                 onClick={() => handleDeleteUser(user)}
                                 disabled={isPending || isCurrentAdmin}
                                 title={isCurrentAdmin ? "You cannot delete your own account" : undefined}
+                                className="w-full sm:w-auto"
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Delete
