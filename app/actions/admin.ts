@@ -2,6 +2,9 @@
 import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { revalidatePath } from "next/cache"
+import { createAdminUserSchema, setUserActiveStatusSchema } from "@/lib/validations"
+import { z } from "zod"
 
 export async function getAdminStats() {
   try {
@@ -100,6 +103,245 @@ export async function getAllUsers() {
   } catch (error) {
     console.error("[GET_ALL_USERS_ERROR]", error)
     return { error: "Failed to fetch users" }
+  }
+}
+
+export async function createAdminUser(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const validated = createAdminUserSchema.parse(data)
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: validated.email,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
+    })
+
+    if (existingUser) {
+      return { error: "A user with this email already exists" }
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        name: validated.name,
+        email: validated.email,
+        role: validated.role,
+        isActive: true,
+      },
+    })
+
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: admin.id,
+        action: "USER_ROLE_CHANGED",
+        targetType: "user",
+        targetId: user.id,
+        reason: "user_created",
+        newValue: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        },
+      },
+    })
+
+    revalidatePath("/admin")
+
+    return { success: true, user }
+  } catch (error) {
+    console.error("[CREATE_ADMIN_USER_ERROR]", error)
+
+    if (error instanceof z.ZodError) {
+      return { error: error.errors[0]?.message || "Invalid user data" }
+    }
+
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+
+    return { error: "Failed to create user" }
+  }
+}
+
+export async function setUserActiveState(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const validated = setUserActiveStatusSchema.parse(data)
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: validated.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    })
+
+    if (!targetUser) {
+      return { error: "User not found" }
+    }
+
+    if (targetUser.id === admin.id) {
+      return { error: "You cannot deactivate your own account" }
+    }
+
+    if (targetUser.isActive === validated.isActive) {
+      return { success: true, user: targetUser }
+    }
+
+    if (!validated.isActive && targetUser.role === "ADMIN") {
+      const activeAdminCount = await prisma.user.count({
+        where: {
+          role: "ADMIN",
+          isActive: true,
+        },
+      })
+
+      if (activeAdminCount <= 1) {
+        return { error: "Cannot deactivate the last active admin" }
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: validated.userId },
+      data: {
+        isActive: validated.isActive,
+        deactivatedAt: validated.isActive ? null : new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    })
+
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: admin.id,
+        action: "USER_ROLE_CHANGED",
+        targetType: "user",
+        targetId: updatedUser.id,
+        reason: validated.isActive ? "user_reactivated" : "user_deactivated",
+        oldValue: { isActive: targetUser.isActive },
+        newValue: { isActive: updatedUser.isActive },
+      },
+    })
+
+    revalidatePath("/admin")
+
+    return { success: true, user: updatedUser }
+  } catch (error) {
+    console.error("[SET_USER_ACTIVE_STATE_ERROR]", error)
+
+    if (error instanceof z.ZodError) {
+      return { error: error.errors[0]?.message || "Invalid user state payload" }
+    }
+
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+
+    return { error: "Failed to update user status" }
+  }
+}
+
+export async function deleteAdminUser(userId: string) {
+  try {
+    const admin = await requireAdmin()
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        _count: {
+          select: {
+            bookings: true,
+          },
+        },
+      },
+    })
+
+    if (!targetUser) {
+      return { error: "User not found" }
+    }
+
+    if (targetUser.id === admin.id) {
+      return { error: "You cannot delete your own account" }
+    }
+
+    if (targetUser.role === "ADMIN" && targetUser.isActive) {
+      const activeAdminCount = await prisma.user.count({
+        where: {
+          role: "ADMIN",
+          isActive: true,
+        },
+      })
+
+      if (activeAdminCount <= 1) {
+        return { error: "Cannot delete the last active admin" }
+      }
+    }
+
+    if (targetUser._count.bookings > 0) {
+      return { error: "Cannot delete users with bookings. Deactivate this user instead." }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.savedCar.deleteMany({
+        where: { userId },
+      })
+
+      await tx.adminAuditLog.deleteMany({
+        where: { adminId: userId },
+      })
+
+      await tx.user.delete({
+        where: { id: userId },
+      })
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "USER_ROLE_CHANGED",
+          targetType: "user",
+          targetId: userId,
+          reason: "user_deleted",
+          oldValue: {
+            name: targetUser.name,
+            email: targetUser.email,
+            role: targetUser.role,
+            isActive: targetUser.isActive,
+          },
+        },
+      })
+    })
+
+    revalidatePath("/admin")
+
+    return { success: true }
+  } catch (error) {
+    console.error("[DELETE_ADMIN_USER_ERROR]", error)
+
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+
+    return { error: "Failed to delete user" }
   }
 }
 

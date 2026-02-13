@@ -41,7 +41,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
 
   return (
     <AdminDashboard
-      currentUser={{ name: adminUser.name || adminUser.email, email: adminUser.email }}
+      currentUser={{ id: adminUser.id, name: adminUser.name || adminUser.email, email: adminUser.email }}
       cars={cars.map((car: Car) => ({
         id: car.id,
         name: car.name,
@@ -74,6 +74,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         location: booking.location,
         totalPrice: booking.totalPrice,
         status: booking.status,
+        paymentMethod: booking.paymentMethod,
         createdAt: booking.createdAt.toISOString(),
       }))}
       users={users.map((item: User) => ({
@@ -81,6 +82,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         name: item.name,
         email: item.email,
         role: item.role,
+        isActive: item.isActive,
         createdAt: item.createdAt.toISOString(),
       }))}
     />

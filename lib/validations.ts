@@ -12,6 +12,7 @@ export const createBookingSchema = z
     pickupDate: z.string().datetime(),
     dropoffDate: z.string().datetime(),
     location: z.string().min(1),
+    paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
   })
   .refine(
     (data) => {
@@ -66,3 +67,15 @@ export const updateCarSchema = createCarSchema.partial()
 
 // Auth validations
 export const roleSchema = z.enum(["USER", "ADMIN"])
+
+// Admin user management validations
+export const createAdminUserSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  role: roleSchema.default("USER"),
+})
+
+export const setUserActiveStatusSchema = z.object({
+  userId: z.string().min(1),
+  isActive: z.boolean(),
+})

@@ -81,6 +81,17 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     }
   }
 
+  const getPaymentMethodLabel = (paymentMethod: string) => {
+    switch (paymentMethod) {
+      case "TRANSFER":
+        return "Bank Transfer"
+      case "PAY_AT_PICKUP":
+        return "Pay at Pickup"
+      default:
+        return paymentMethod
+    }
+  }
+
   const calculateCancellationDeadline = (createdAt: Date): Date => {
     return new Date(createdAt.getTime() + BOOKING_PAYMENT_WINDOW_MS)
   }
@@ -132,7 +143,9 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                 locale === "de" ? booking.car.subtitleDe || booking.car.subtitle : booking.car.subtitle
               const cancellationDeadline = calculateCancellationDeadline(booking.createdAt)
               const showCancellationDeadline =
-                booking.status === "PENDING" && booking.paymentStatus === "PENDING"
+                booking.status === "PENDING" &&
+                booking.paymentStatus === "PENDING" &&
+                booking.paymentMethod === "TRANSFER"
 
               return (
                 <div key={booking.id} className="bg-background rounded-xl p-4 border border-border">
@@ -167,6 +180,10 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                           <Badge className={getPaymentStatusColor(booking.paymentStatus)} variant="outline">
                             {getPaymentStatusLabel(booking.paymentStatus)}
                           </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Payment Method</span>
+                          <span>{getPaymentMethodLabel(booking.paymentMethod)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">{t("bookings.bookedAt")}</span>

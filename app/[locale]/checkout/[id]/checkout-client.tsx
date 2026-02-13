@@ -114,10 +114,12 @@ export function CheckoutClient({
     }
   }, [searchParams])
   const [error, setError] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
   const [isPending, startTransition] = useTransition()
   const [bookingSuccess, setBookingSuccess] = useState<{
     bookingNumber: string
     transferCode: string
+    paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
     totalPrice: number
     depositAmount: number
     pickupDate: Date
@@ -151,6 +153,7 @@ export function CheckoutClient({
         pickupDate: pickupISO,
         dropoffDate: dropoffISO,
         location,
+        paymentMethod,
       })
 
       if (result?.error) {
@@ -189,6 +192,7 @@ export function CheckoutClient({
         <BookingSuccessModal
           bookingNumber={bookingSuccess.bookingNumber}
           transferCode={bookingSuccess.transferCode}
+          paymentMethod={bookingSuccess.paymentMethod}
           totalPrice={bookingSuccess.totalPrice}
           depositAmount={bookingSuccess.depositAmount}
           carName={bookingSuccess.carName}
@@ -288,6 +292,59 @@ export function CheckoutClient({
               }} 
             />
           </div>
+        </div>
+
+        {/* Payment Method */}
+        <div className="bg-background rounded-xl p-4 border border-border space-y-3">
+          <h3 className="font-semibold text-lg">Payment Method</h3>
+
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("TRANSFER")}
+            className={`w-full text-left rounded-lg border p-3 transition ${
+              paymentMethod === "TRANSFER"
+                ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">Bank Transfer</p>
+                <p className="text-sm text-muted-foreground">
+                  Pay deposit by transfer after booking confirmation.
+                </p>
+              </div>
+              <div
+                className={`mt-1 h-4 w-4 rounded-full border ${
+                  paymentMethod === "TRANSFER" ? "border-primary bg-primary" : "border-muted-foreground"
+                }`}
+              />
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("PAY_AT_PICKUP")}
+            className={`w-full text-left rounded-lg border p-3 transition ${
+              paymentMethod === "PAY_AT_PICKUP"
+                ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">Pay at Pickup</p>
+                <p className="text-sm text-muted-foreground">
+                  Complete payment in person when you collect the vehicle.
+                </p>
+              </div>
+              <div
+                className={`mt-1 h-4 w-4 rounded-full border ${
+                  paymentMethod === "PAY_AT_PICKUP" ? "border-primary bg-primary" : "border-muted-foreground"
+                }`}
+              />
+            </div>
+          </button>
         </div>
 
         {/* Price Summary */}

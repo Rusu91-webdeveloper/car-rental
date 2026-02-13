@@ -20,6 +20,20 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       // User is automatically created by the adapter
       // After user is created, update role based on admin emails
       if (user.email) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: {
+              equals: user.email,
+              mode: "insensitive",
+            },
+          },
+          select: { isActive: true },
+        })
+
+        if (existingUser && !existingUser.isActive) {
+          return false
+        }
+
         const isAdmin = config.adminEmails.some(
           (adminEmail) => adminEmail.toLowerCase() === user.email!.toLowerCase()
         )
@@ -27,7 +41,12 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         if (isAdmin) {
           // Update user role to ADMIN
           await prisma.user.updateMany({
-            where: { email: user.email },
+            where: {
+              email: {
+                equals: user.email,
+                mode: "insensitive",
+              },
+            },
             data: { role: "ADMIN" },
           })
         }
@@ -38,9 +57,10 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       if (user?.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { role: true },
+          select: { role: true, isActive: true },
         })
         ;(token as any).role = dbUser?.role ?? (user as any).role
+        ;(token as any).isActive = dbUser?.isActive ?? true
       }
       return token
     },
@@ -49,6 +69,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         session.user.id = token.sub
         // Type assertion for role property
         ;(session.user as any).role = (token as any).role
+        ;(session.user as any).isActive = (token as any).isActive
       }
       return session
     },
@@ -71,8 +92,8 @@ export async function getCurrentUser() {
     return null
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+  const user = await prisma.user.findFirst({
+    where: { id: session.user.id, isActive: true },
   })
 
   return user

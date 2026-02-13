@@ -63,46 +63,50 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-muted/20 via-background to-background pb-28 sm:pb-32">
       {/* Image Gallery */}
-      <CarImageCarousel images={galleryImages} alt={displayName}>
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center shadow-lg"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <div className="flex gap-2">
-              <ShareButton
-                url={shareUrl}
-                title={displayName}
-                className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center shadow-lg"
-              />
-            <SaveCarButton
-              carId={car.id}
-              isSaved={Boolean(savedCar)}
-              isSignedIn={Boolean(user)}
-              signInUrl={signInUrl}
-              className="w-10 h-10 rounded-full bg-background/90 backdrop-blur-sm flex items-center justify-center shadow-lg disabled:opacity-60"
-              iconClassName={`w-6 h-6 ${savedCar ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-600"}`}
-            />
+      <div className="mx-auto w-full max-w-7xl px-3 pt-3 sm:px-4 sm:pt-5 lg:px-8">
+        <CarImageCarousel images={galleryImages} alt={displayName}>
+          <div className="absolute inset-x-0 top-0 z-30 p-3 sm:p-4">
+            <div className="flex items-center justify-between">
+              <Link
+                href="/"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90 backdrop-blur-sm shadow-lg"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </Link>
+              <div className="flex gap-2">
+                <ShareButton
+                  url={shareUrl}
+                  title={displayName}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90 backdrop-blur-sm shadow-lg"
+                />
+                <SaveCarButton
+                  carId={car.id}
+                  isSaved={Boolean(savedCar)}
+                  isSignedIn={Boolean(user)}
+                  signInUrl={signInUrl}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90 backdrop-blur-sm shadow-lg disabled:opacity-60"
+                  iconClassName={`w-6 h-6 ${savedCar ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-600"}`}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </CarImageCarousel>
+        </CarImageCarousel>
+      </div>
 
       {/* Content */}
-      <div className="px-4 py-6">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">{displayName}</h1>
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="mb-1 text-2xl font-bold sm:text-3xl">{displayName}</h1>
             <p className="text-muted-foreground text-sm">{displaySubtitle}</p>
           </div>
           <span
-            className={`px-3 py-1 text-xs font-semibold rounded-full ${
+            className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
               car.status === "AVAILABLE"
                 ? "bg-green-50 text-success"
                 : car.status === "LOW_STOCK"
@@ -130,7 +134,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
         {/* Car Specifications */}
         <div className="mb-6">
           <h2 className="font-semibold mb-3">{t("car.specifications")}</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="p-4 bg-muted rounded-xl">
               <div className="text-primary mb-2">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,12 +240,12 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
       </div>
 
       {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
-        <div className="flex items-center justify-between gap-4">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold sm:text-2xl">
               {formatCents(car.price)}
-              <span className="text-base text-muted-foreground font-normal"> / {t("car.pricePerDay")}</span>
+              <span className="text-sm font-normal text-muted-foreground sm:text-base"> / {t("car.pricePerDay")}</span>
             </div>
           </div>
           <BookNowButton

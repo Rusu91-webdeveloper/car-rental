@@ -11,6 +11,7 @@ export async function cancelExpiredBookings(db: DbClient = prisma, now = new Dat
     where: {
       status: "PENDING",
       paymentStatus: "PENDING",
+      paymentMethod: "TRANSFER",
       createdAt: { lt: cutoff },
     },
     data: {

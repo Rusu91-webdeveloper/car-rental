@@ -15,11 +15,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
+import { createAdminUser, setUserActiveState, deleteAdminUser } from "@/app/actions/admin"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/settings"
 import { useToast } from "@/hooks/use-toast"
 import {
   LayoutDashboard,
   CarIcon,
+  Home,
   Calendar,
   Users,
   DollarSign,
@@ -33,6 +35,10 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  UserPlus,
+  UserCheck,
+  UserX,
+  Trash2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -41,6 +47,7 @@ interface AdminUser {
   name: string | null
   email: string
   role: "ADMIN" | "USER"
+  isActive: boolean
   createdAt: string
 }
 
@@ -77,6 +84,7 @@ interface AdminBooking {
   location: string
   totalPrice: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
+  paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   createdAt: string
 }
 
@@ -86,7 +94,7 @@ export default function AdminDashboard({
   bookings,
   users,
 }: {
-  currentUser: { name: string; email: string }
+  currentUser: { id: string; name: string; email: string }
   cars: AdminCar[]
   bookings: AdminBooking[]
   users: AdminUser[]
@@ -95,9 +103,10 @@ export default function AdminDashboard({
   const [isPending, startTransition] = useTransition()
   const [carsState, setCarsState] = useState<AdminCar[]>(cars)
   const [bookingsState, setBookingsState] = useState<AdminBooking[]>(bookings)
-  const [usersState] = useState<AdminUser[]>(users)
+  const [usersState, setUsersState] = useState<AdminUser[]>(users)
   const [activeTab, setActiveTab] = useState("overview")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false)
   const [editCarId, setEditCarId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
@@ -201,8 +210,118 @@ export default function AdminDashboard({
     return matchesSearch && matchesFilter
   })
 
+  const filteredUsers = usersState.filter(
+    (u) =>
+      (u.name || "").toLowerCase().includes(normalizedSearch) || u.email.toLowerCase().includes(normalizedSearch),
+  )
+
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" })
+  }
+
+  const handleGoHome = () => {
+    router.push("/")
+  }
+
+  const normalizeAdminUser = (user: {
+    id: string
+    name: string | null
+    email: string
+    role: "ADMIN" | "USER"
+    isActive: boolean
+    createdAt: string | Date
+  }): AdminUser => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isActive: user.isActive,
+    createdAt: typeof user.createdAt === "string" ? user.createdAt : user.createdAt.toISOString(),
+  })
+
+  const handleCreateUser = (userData: UserFormValues) => {
+    startTransition(async () => {
+      const result = await createAdminUser(userData)
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (result?.user) {
+        setUsersState((prev) => [normalizeAdminUser(result.user), ...prev])
+        setIsAddUserDialogOpen(false)
+        toast({
+          title: "Success",
+          description: "User created successfully.",
+          variant: "default",
+        })
+      }
+    })
+  }
+
+  const handleToggleUserActive = (targetUser: AdminUser) => {
+    const nextState = !targetUser.isActive
+    const actionLabel = nextState ? "activate" : "deactivate"
+    const displayName = targetUser.name || targetUser.email
+
+    if (!confirm(`Are you sure you want to ${actionLabel} ${displayName}?`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await setUserActiveState({
+        userId: targetUser.id,
+        isActive: nextState,
+      })
+
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (result?.user) {
+        setUsersState((prev) => prev.map((user) => (user.id === targetUser.id ? normalizeAdminUser(result.user) : user)))
+        toast({
+          title: "Success",
+          description: `${displayName} has been ${nextState ? "activated" : "deactivated"}.`,
+          variant: "default",
+        })
+      }
+    })
+  }
+
+  const handleDeleteUser = (targetUser: AdminUser) => {
+    const displayName = targetUser.name || targetUser.email
+    if (!confirm(`Delete ${displayName}? This action cannot be undone.`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await deleteAdminUser(targetUser.id)
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      setUsersState((prev) => prev.filter((user) => user.id !== targetUser.id))
+      toast({
+        title: "Success",
+        description: "User deleted successfully.",
+        variant: "default",
+      })
+    })
   }
 
   const mapCar = (car: {
@@ -516,9 +635,14 @@ export default function AdminDashboard({
         <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10 lg:hidden">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold">Admin Dashboard</h1>
-            <Button variant="ghost" size="icon" onClick={handleLogout}>
-              <LogOut className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={handleGoHome} title="Home">
+                <Home className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+                <LogOut className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -538,6 +662,10 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={handleGoHome}>
+                <Home className="w-4 h-4 mr-2" />
+                Home
+              </Button>
               <Button variant="ghost" size="icon" onClick={handleLogout} className="mr-2" title="Logout">
                 <LogOut className="w-5 h-5" />
               </Button>
@@ -993,6 +1121,12 @@ export default function AdminDashboard({
                                 <span className="ml-2 font-medium">#{booking.id.slice(0, 8)}</span>
                               </div>
                               <div>
+                                <span className="text-muted-foreground">Payment:</span>
+                                <span className="ml-2 font-medium">
+                                  {booking.paymentMethod === "TRANSFER" ? "Bank Transfer" : "Pay at Pickup"}
+                                </span>
+                              </div>
+                              <div>
                                 <span className="text-muted-foreground">Pick-up:</span>
                                 <span className="ml-2 font-medium">
                                   {new Date(booking.pickupDate).toLocaleDateString()}
@@ -1031,41 +1165,55 @@ export default function AdminDashboard({
           {/* Users Tab */}
           {activeTab === "users" && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="sm:w-auto">
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Add User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add User</DialogTitle>
+                    </DialogHeader>
+                    <UserForm onSubmit={handleCreateUser} isSubmitting={isPending} />
+                  </DialogContent>
+                </Dialog>
               </div>
 
               <div className="grid gap-3">
-                {usersState
-                  .filter(
-                    (u) =>
-                      (u.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      u.email.toLowerCase().includes(searchTerm.toLowerCase()),
-                  )
-                  .map((user) => {
+                {filteredUsers.map((user) => {
                     const userBookings = bookingsState.filter((b) => b.userId === user.id)
                     const userRevenue = userBookings.reduce((sum, b) => sum + b.totalPrice, 0)
+                    const isCurrentAdmin = user.id === currentUser.id
 
                     return (
                       <Card key={user.id}>
                         <CardContent className="p-4">
-                          <div className="flex items-center gap-4">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-center">
                             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xl font-bold">
                               {(user.name || user.email).charAt(0).toUpperCase()}
                             </div>
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <h3 className="font-bold text-lg">{user.name || user.email}</h3>
                                 <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
+                                <Badge variant={user.isActive ? "outline" : "destructive"}>
+                                  {user.isActive ? "Active" : "Inactive"}
+                                </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground mb-2">{user.email}</p>
-                              <div className="flex gap-4 text-sm">
+                              <div className="flex flex-wrap gap-4 text-sm">
                                 <div>
                                   <span className="text-muted-foreground">Bookings:</span>
                                   <span className="ml-2 font-bold">{userBookings.length}</span>
@@ -1082,11 +1230,50 @@ export default function AdminDashboard({
                                 </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-2 md:flex-col md:items-end">
+                              <Button
+                                size="sm"
+                                variant={user.isActive ? "outline" : "default"}
+                                onClick={() => handleToggleUserActive(user)}
+                                disabled={isPending || isCurrentAdmin}
+                                title={isCurrentAdmin ? "You cannot change your own active status" : undefined}
+                              >
+                                {user.isActive ? (
+                                  <>
+                                    <UserX className="w-4 h-4 mr-2" />
+                                    Deactivate
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="w-4 h-4 mr-2" />
+                                    Activate
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={isPending || isCurrentAdmin}
+                                title={isCurrentAdmin ? "You cannot delete your own account" : undefined}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
                     )
                   })}
+                {filteredUsers.length === 0 && (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground">No users found</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           )}
@@ -1354,6 +1541,113 @@ interface CarFormValues {
   year: number
   description: string
   descriptionDe: string
+}
+
+interface UserFormValues {
+  name: string
+  email: string
+  role: "ADMIN" | "USER"
+}
+
+function UserForm({
+  onSubmit,
+  isSubmitting = false,
+}: {
+  onSubmit: (user: UserFormValues) => void
+  isSubmitting?: boolean
+}) {
+  const [formData, setFormData] = useState<UserFormValues>({
+    name: "",
+    email: "",
+    role: "USER",
+  })
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  const validateForm = () => {
+    const errors: string[] = []
+    if (!formData.name.trim()) errors.push("Name is required.")
+    if (!formData.email.trim()) errors.push("Email is required.")
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (formData.email.trim() && !emailPattern.test(formData.email.trim())) errors.push("Please enter a valid email.")
+    return errors
+  }
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const errors = validateForm()
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+    setValidationErrors([])
+    onSubmit({
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      role: formData.role,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {validationErrors.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Missing information</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {validationErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="space-y-2">
+        <Label htmlFor="newUserName">Full name</Label>
+        <Input
+          id="newUserName"
+          value={formData.name}
+          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+          placeholder="John Doe"
+          disabled={isSubmitting}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="newUserEmail">Email</Label>
+        <Input
+          id="newUserEmail"
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+          placeholder="user@example.com"
+          disabled={isSubmitting}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="newUserRole">Role</Label>
+        <Select
+          value={formData.role}
+          onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value as UserFormValues["role"] }))}
+          disabled={isSubmitting}
+        >
+          <SelectTrigger id="newUserRole">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="USER">User</SelectItem>
+            <SelectItem value="ADMIN">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? "Creating..." : "Create User"}
+      </Button>
+    </form>
+  )
 }
 
 function CarForm({

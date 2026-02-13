@@ -16,6 +16,8 @@ model User {
   name        String?
   image       String?
   role        Role     @default(USER)
+  isActive    Boolean  @default(true)
+  deactivatedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -28,6 +30,7 @@ model User {
 
   @@index([providerId])
   @@index([email])
+  @@index([isActive])
 }
 
 // NextAuth Account model
@@ -161,6 +164,7 @@ model Booking {
   // Status
   status          BookingStatus @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
+  paymentMethod   BookingPaymentMethod @default(TRANSFER)
   
   // Stripe
   stripeSessionId    String?   @unique
@@ -181,6 +185,7 @@ model Booking {
   @@index([userId])
   @@index([carId])
   @@index([status])
+  @@index([paymentMethod])
   @@index([pickupDate, dropoffDate])
   @@index([transferCode])
 }
@@ -200,6 +205,11 @@ enum PaymentStatus {
   FAILED
   REFUNDED
   PARTIALLY_REFUNDED
+}
+
+enum BookingPaymentMethod {
+  TRANSFER
+  PAY_AT_PICKUP
 }
 
 // Payment tracking

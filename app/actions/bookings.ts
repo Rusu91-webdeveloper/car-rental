@@ -9,6 +9,7 @@ import { isCarAvailable, calculateTotalDays } from "@/lib/availability"
 import { config } from "@/lib/config"
 import {
   sendManualPaymentEmail,
+  sendPayAtPickupEmail,
   sendAdminBookingNotification,
   sendBookingStatusEmail,
   sendAdminBookingConfirmationNotification,
@@ -87,6 +88,7 @@ export async function createBooking(data: unknown) {
             bookingNumber,
             status: "PENDING",
             paymentStatus: "PENDING",
+            paymentMethod: validated.paymentMethod,
           },
         })
 
@@ -174,19 +176,30 @@ export async function createBooking(data: unknown) {
         adminEmails: config.adminEmails,
       })
 
-      // Send payment instructions to user
-      const userEmailResult = await sendManualPaymentEmail({
-        to: user.email,
-        userName: user.name || user.email,
-        carName: car.name,
-        pickupDate: formatDateForEmail(booking.pickupDate),
-        dropoffDate: formatDateForEmail(booking.dropoffDate),
-        location: booking.location,
-        totalPrice: booking.totalPrice,
-        depositAmount: booking.depositAmount,
-        transferCode: booking.transferCode,
-        bookingNumber: booking.bookingNumber,
-      })
+      const userEmailResult =
+        validated.paymentMethod === "TRANSFER"
+          ? await sendManualPaymentEmail({
+              to: user.email,
+              userName: user.name || user.email,
+              carName: car.name,
+              pickupDate: formatDateForEmail(booking.pickupDate),
+              dropoffDate: formatDateForEmail(booking.dropoffDate),
+              location: booking.location,
+              totalPrice: booking.totalPrice,
+              depositAmount: booking.depositAmount,
+              transferCode: booking.transferCode,
+              bookingNumber: booking.bookingNumber,
+            })
+          : await sendPayAtPickupEmail({
+              to: user.email,
+              userName: user.name || user.email,
+              carName: car.name,
+              pickupDate: formatDateForEmail(booking.pickupDate),
+              dropoffDate: formatDateForEmail(booking.dropoffDate),
+              location: booking.location,
+              totalPrice: booking.totalPrice,
+              bookingNumber: booking.bookingNumber,
+            })
 
       if (userEmailResult.error) {
         console.error("[BOOKING] Failed to send user email:", {
@@ -214,6 +227,7 @@ export async function createBooking(data: unknown) {
         transferCode: booking.transferCode,
         bookingNumber: booking.bookingNumber,
         bookingId: booking.id,
+        paymentMethod: booking.paymentMethod,
       })
 
       if (adminEmailResult.error) {
@@ -252,6 +266,7 @@ export async function createBooking(data: unknown) {
         dropoffDate: booking.dropoffDate,
         location: booking.location,
         carName: car.name,
+        paymentMethod: booking.paymentMethod,
       },
       manualPayment: true,
     }

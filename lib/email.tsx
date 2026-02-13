@@ -616,6 +616,135 @@ export async function sendManualPaymentEmail(data: {
   }
 }
 
+export async function sendPayAtPickupEmail(data: {
+  to: string
+  userName: string
+  carName: string
+  pickupDate: string
+  dropoffDate: string
+  location: string
+  totalPrice: number
+  bookingNumber: string
+}) {
+  try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send pay-at-pickup email:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping pay-at-pickup email.")
+      return { error: "Email is not configured" }
+    }
+
+    if (!isValidEmail(data.to)) {
+      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      return { error: `Invalid email address: ${data.to}` }
+    }
+
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+    })
+    const companyName = companySettings?.companyName || "Car Rental Company"
+    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+
+    const { id, error } = await sendEmail({
+      to: data.to,
+      subject: `Booking Confirmed! - ${data.bookingNumber}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; background: #f5f5f5; }
+              .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 40px 20px; text-align: center; }
+              .content { background: white; padding: 30px; }
+              .box { border-radius: 12px; padding: 20px; margin: 20px 0; }
+              .booking-number-box { background: #f3f4f6; }
+              .pickup-payment-box { background: #eff6ff; border: 1px solid #3b82f6; }
+              .details h3 { font-size: 18px; margin-bottom: 12px; }
+              .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+              .detail-row:last-child { border-bottom: none; }
+              .footer { text-align: center; padding: 24px 20px; color: #6b7280; font-size: 14px; background: #f9fafb; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>Booking Confirmed!</h1>
+                <p>Your reservation has been created successfully</p>
+              </div>
+              <div class="content">
+                <p>Hi ${data.userName},</p>
+                <p>Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method.</p>
+
+                <div class="box booking-number-box">
+                  <div style="font-size: 14px; color: #6b7280;">Booking Number</div>
+                  <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${data.bookingNumber}</div>
+                </div>
+
+                <div class="details">
+                  <h3>Booking Details</h3>
+                  <div class="detail-row"><span>Car:</span><strong>${data.carName}</strong></div>
+                  <div class="detail-row"><span>Pick-up:</span><strong>${data.pickupDate}</strong></div>
+                  <div class="detail-row"><span>Drop-off:</span><strong>${data.dropoffDate}</strong></div>
+                  <div class="detail-row"><span>Location:</span><strong>${data.location}</strong></div>
+                  <div class="detail-row"><span>Total Amount:</span><strong>${formatCents(data.totalPrice)}</strong></div>
+                </div>
+
+                <div class="box pickup-payment-box">
+                  <h3 style="margin: 0 0 8px 0;">Payment at Pickup</h3>
+                  <p style="margin: 0;">Please complete payment at pickup when collecting your vehicle.</p>
+                </div>
+
+                <p><strong>Next steps:</strong></p>
+                <ol>
+                  <li>Arrive at the pickup location on time.</li>
+                  <li>Bring your booking number and a valid ID/driving license.</li>
+                  <li>Complete payment at pickup.</li>
+                </ol>
+              </div>
+              <div class="footer">
+                <p>Questions? Contact us at ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    })
+
+    if (error) {
+      console.error("[EMAIL_ERROR] Pay-at-pickup email failed:", {
+        error,
+        to: data.to,
+        bookingNumber: data.bookingNumber,
+      })
+      return { error }
+    }
+
+    console.log("[EMAIL] ✅ Pay-at-pickup email sent successfully:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
+    return { success: true, id }
+  } catch (error) {
+    console.error("[EMAIL_ERROR] Pay-at-pickup email exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send pay-at-pickup email" }
+  }
+}
+
 // Admin Notification Email for New Bookings
 export async function sendAdminBookingNotification(data: {
   adminEmail?: string
@@ -631,6 +760,7 @@ export async function sendAdminBookingNotification(data: {
   transferCode: string
   bookingNumber: string
   bookingId: string
+  paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP"
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -677,6 +807,54 @@ export async function sendAdminBookingNotification(data: {
     }
 
     console.log("[EMAIL] Sending admin notification to:", recipients.join(", "))
+    const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
+    const paymentMethodLabel = isTransfer ? "Bank Transfer" : "Pay at Pickup"
+    const statusBadge = isTransfer ? "PENDING PAYMENT" : "PAY AT PICKUP"
+    const summaryText = isTransfer
+      ? "A new booking has been created and is awaiting payment confirmation."
+      : "A new booking has been created with payment selected at pickup."
+    const actionRequiredText = isTransfer
+      ? "⚠️ Action Required: Customer needs to complete bank transfer payment. Confirm booking once payment is received."
+      : "ℹ️ Payment Method: Customer selected pay at pickup. Collect payment when handing over the vehicle."
+    const paymentDetailsHtml = isTransfer
+      ? `
+                  <div style="margin-bottom: 10px;">
+                    <strong>Transfer Reference Code:</strong>
+                    <div class="transfer-code">${data.transferCode}</div>
+                    <p style="font-size: 14px; color: #666; margin: 5px 0;">Customer should include this code in their bank transfer</p>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Deposit (20%):</strong></span>
+                    <span>${formatCents(data.depositAmount)}</span>
+                  </div>
+                  <div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Total Amount:</strong></span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                  </div>
+      `
+      : `
+                  <div class="detail-row">
+                    <span><strong>Payment Method:</strong></span>
+                    <span>${paymentMethodLabel}</span>
+                  </div>
+                  <div class="detail-row" style="border-bottom: none;">
+                    <span><strong>Amount Due at Pickup:</strong></span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                  </div>
+      `
+    const nextStepsHtml = isTransfer
+      ? `
+                    <li>Wait for customer to complete bank transfer</li>
+                    <li>Check bank account for payment with reference: <strong>${data.transferCode}</strong></li>
+                    <li>Once payment is confirmed, go to admin dashboard</li>
+                    <li>Update booking status to "CONFIRMED"</li>
+      `
+      : `
+                    <li>Prepare the vehicle for pickup</li>
+                    <li>Collect payment from the customer at pickup</li>
+                    <li>After handover, update booking status to "IN_PROGRESS"</li>
+                    <li>Complete booking when vehicle is returned</li>
+      `
 
     const { id, error } = await sendEmail({
       to: recipients,
@@ -705,10 +883,10 @@ export async function sendAdminBookingNotification(data: {
                 <h1>🔔 New Booking Received</h1>
               </div>
               <div class="content">
-                <p><strong>A new booking has been created and is awaiting payment confirmation.</strong></p>
+                <p><strong>${summaryText}</strong></p>
                 
                 <div class="alert-box">
-                  <p style="margin: 0;"><strong>⚠️ Action Required:</strong> Customer needs to complete bank transfer payment. Confirm booking once payment is received.</p>
+                  <p style="margin: 0;"><strong>${actionRequiredText}</strong></p>
                 </div>
 
                 <div class="details">
@@ -719,7 +897,11 @@ export async function sendAdminBookingNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Status:</strong></span>
-                    <span style="background: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">PENDING PAYMENT</span>
+                    <span style="background: #FEF3C7; color: #92400E; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">${statusBadge}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span><strong>Payment Method:</strong></span>
+                    <span>${paymentMethodLabel}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Vehicle:</strong></span>
@@ -753,28 +935,13 @@ export async function sendAdminBookingNotification(data: {
 
                 <div class="details">
                   <h3 style="margin-top: 0;">Payment Details</h3>
-                  <div style="margin-bottom: 10px;">
-                    <strong>Transfer Reference Code:</strong>
-                    <div class="transfer-code">${data.transferCode}</div>
-                    <p style="font-size: 14px; color: #666; margin: 5px 0;">Customer should include this code in their bank transfer</p>
-                  </div>
-                  <div class="detail-row">
-                    <span><strong>Deposit (20%):</strong></span>
-                    <span>${formatCents(data.depositAmount)}</span>
-                  </div>
-                  <div class="detail-row" style="border-bottom: none;">
-                    <span><strong>Total Amount:</strong></span>
-                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
-                  </div>
+                  ${paymentDetailsHtml}
                 </div>
 
                 <div style="background: #E8F4FF; padding: 15px; border-radius: 4px; margin: 20px 0;">
                   <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
                   <ol style="margin: 10px 0; padding-left: 20px;">
-                    <li>Wait for customer to complete bank transfer</li>
-                    <li>Check bank account for payment with reference: <strong>${data.transferCode}</strong></li>
-                    <li>Once payment is confirmed, go to admin dashboard</li>
-                    <li>Update booking status to "CONFIRMED"</li>
+                    ${nextStepsHtml}
                   </ol>
                 </div>
 
