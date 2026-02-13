@@ -403,6 +403,120 @@ export async function sendBookingStatusEmail(
   }
 }
 
+export async function sendBookingCompletionReviewEmail(data: {
+  to: string
+  userName: string
+  carName: string
+  bookingNumber: string
+  pickupDate: string
+  dropoffDate: string
+  reviewUrl: string
+}) {
+  try {
+    const configStatus = getEmailConfigStatus()
+    console.log("[EMAIL] Attempting to send booking completion review email:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      carName: data.carName,
+      emailEnabled: configStatus.enabled,
+      provider: configStatus.provider,
+    })
+
+    if (!configStatus.enabled) {
+      console.warn("[EMAIL] Email is disabled. Skipping booking completion review email.")
+      return { error: "Email is not configured" }
+    }
+
+    if (!isValidEmail(data.to)) {
+      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      return { error: `Invalid email address: ${data.to}` }
+    }
+
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+    })
+
+    const companyName = companySettings?.companyName || "Car Rental Company"
+    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+
+    const { id, error } = await sendEmail({
+      to: data.to,
+      subject: `Thank you for choosing us - ${data.carName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; background: #f3f4f6; }
+              .container { max-width: 600px; margin: 0 auto; background: #ffffff; }
+              .header { background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); color: white; padding: 30px 24px; text-align: center; }
+              .content { padding: 28px 24px; }
+              .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 18px 0; }
+              .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+              .row:last-child { border-bottom: none; }
+              .button-wrap { text-align: center; margin: 26px 0; }
+              .button { display: inline-block; background: #2563eb; color: white !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
+              .footer { text-align: center; padding: 22px 20px; color: #6b7280; font-size: 13px; background: #f9fafb; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1 style="margin:0 0 8px 0;">Thank you for your booking</h1>
+                <p style="margin:0; opacity:0.95;">We hope you enjoyed your rental experience.</p>
+              </div>
+              <div class="content">
+                <p>Hi ${data.userName},</p>
+                <p>Your booking has been completed successfully. We appreciate your trust.</p>
+
+                <div class="card">
+                  <div class="row"><span><strong>Booking Number</strong></span><span>${data.bookingNumber}</span></div>
+                  <div class="row"><span><strong>Vehicle</strong></span><span>${data.carName}</span></div>
+                  <div class="row"><span><strong>Pick-up</strong></span><span>${data.pickupDate}</span></div>
+                  <div class="row"><span><strong>Drop-off</strong></span><span>${data.dropoffDate}</span></div>
+                </div>
+
+                <p>Would you take a minute to rate your experience? Your feedback helps us improve.</p>
+                <div class="button-wrap">
+                  <a class="button" href="${data.reviewUrl}">Leave a Review</a>
+                </div>
+              </div>
+              <div class="footer">
+                <p>Questions? Contact us at ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `,
+    })
+
+    if (error) {
+      console.error("[EMAIL_ERROR] Booking completion review email failed:", {
+        error,
+        to: data.to,
+        bookingNumber: data.bookingNumber,
+      })
+      return { error }
+    }
+
+    console.log("[EMAIL] ✅ Booking completion review email sent successfully:", {
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+      id: id || "unknown",
+    })
+    return { success: true, id }
+  } catch (error) {
+    console.error("[EMAIL_ERROR] Booking completion review email exception:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      to: data.to,
+      bookingNumber: data.bookingNumber,
+    })
+    return { error: "Failed to send booking completion review email" }
+  }
+}
+
 // Manual Payment Email for Users
 export async function sendManualPaymentEmail(data: {
   to: string

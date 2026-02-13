@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { formatCents } from "@/lib/money"
-import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { BookingReviewSection } from "./booking-review-section"
@@ -26,7 +26,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   // TypeScript doesn't know redirect throws, use non-null assertion
   const currentUser = user!
 
-  await cancelExpiredBookings()
+  await runBookingLifecycleMaintenance()
   const userBookings = await prisma.booking.findMany({
     where: { userId: currentUser.id },
     include: {

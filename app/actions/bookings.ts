@@ -14,8 +14,9 @@ import {
   sendBookingStatusEmail,
   sendAdminBookingConfirmationNotification,
   sendBookingConfirmationEmail,
+  sendBookingCompletionReviewEmail,
 } from "@/lib/email"
-import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import crypto from "crypto"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
@@ -23,7 +24,7 @@ import { z } from "zod"
 export async function createBooking(data: unknown) {
   try {
     const user = await requireAuth()
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
 
     // Validate input
     const validated = createBookingSchema.parse(data)
@@ -373,6 +374,17 @@ export async function updateBookingStatus(data: unknown) {
     })
 
     if (config.features.emailEnabled && booking.user?.email) {
+      const formatDateForEmail = (date: Date) => {
+        return new Date(date).toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      }
+
       // Send appropriate email based on status
       if (validated.status === "CONFIRMED") {
         console.log("[BOOKING] Sending CONFIRMED status emails:", {
@@ -380,18 +392,6 @@ export async function updateBookingStatus(data: unknown) {
           userEmail: booking.user.email,
           adminEmails: config.adminEmails,
         })
-
-        // Send detailed confirmation email to user
-        const formatDateForEmail = (date: Date) => {
-          return new Date(date).toLocaleDateString("en-US", {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        }
 
         const userConfirmationResult = await sendBookingConfirmationEmail({
           to: booking.user.email,
@@ -444,6 +444,35 @@ export async function updateBookingStatus(data: unknown) {
           console.log("[BOOKING] ✅ Admin confirmation email sent successfully:", {
             bookingNumber: booking.bookingNumber,
             adminEmails: config.adminEmails,
+          })
+        }
+      } else if (validated.status === "COMPLETED") {
+        console.log("[BOOKING] Sending COMPLETED status email:", {
+          bookingNumber: booking.bookingNumber,
+          userEmail: booking.user.email,
+        })
+
+        const reviewUrl = `${config.appUrl.replace(/\/$/, "")}/bookings`
+        const completionEmailResult = await sendBookingCompletionReviewEmail({
+          to: booking.user.email,
+          userName: booking.user.name || booking.user.email,
+          carName: booking.car.name,
+          bookingNumber: booking.bookingNumber,
+          pickupDate: formatDateForEmail(booking.pickupDate),
+          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          reviewUrl,
+        })
+
+        if (completionEmailResult.error) {
+          console.error("[BOOKING] Failed to send booking completion email:", {
+            bookingNumber: booking.bookingNumber,
+            userEmail: booking.user.email,
+            error: completionEmailResult.error,
+          })
+        } else {
+          console.log("[BOOKING] ✅ Booking completion email sent successfully:", {
+            bookingNumber: booking.bookingNumber,
+            userEmail: booking.user.email,
           })
         }
       } else {
@@ -511,7 +540,7 @@ export async function updateBookingStatus(data: unknown) {
 export async function getUserBookings() {
   try {
     const user = await requireAuth()
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
 
     const bookings = await prisma.booking.findMany({
       where: { userId: user.id },

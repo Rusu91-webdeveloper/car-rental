@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
 import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
-import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { z } from "zod"
 
 export async function createCar(data: unknown) {
@@ -336,7 +336,7 @@ export async function getCarAvailability(carId: string) {
       return { error: "Car not found" }
     }
 
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
     const unavailableDates = await getUnavailableDates(carId)
 
     return { unavailableDates }
@@ -380,7 +380,7 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
 
     // Cancel expired bookings first
     try {
-      await cancelExpiredBookings()
+      await runBookingLifecycleMaintenance()
     } catch (cancelError) {
       console.error("[CANCEL_EXPIRED_BOOKINGS_ERROR]", cancelError)
       // Continue with filtering even if cancellation fails

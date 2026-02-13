@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET
@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     return new NextResponse("Unauthorized", { status: 401 })
   }
 
-  const cancelled = await cancelExpiredBookings()
-  return NextResponse.json({ cancelled })
+  const result = await runBookingLifecycleMaintenance()
+  return NextResponse.json(result)
 }
 
 export async function POST(request: Request) {

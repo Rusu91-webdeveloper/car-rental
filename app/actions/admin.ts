@@ -1,7 +1,7 @@
 "use server"
 import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
-import { cancelExpiredBookings } from "@/lib/booking-expiration"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { revalidatePath } from "next/cache"
 import { createAdminUserSchema, setUserActiveStatusSchema } from "@/lib/validations"
 import { isCarAvailable } from "@/lib/availability"
@@ -55,7 +55,7 @@ const isManualReservationReason = (reason: string | null): boolean =>
 export async function getAdminStats() {
   try {
     await requireAdmin()
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
 
     const [totalBookings, totalCars, totalUsers, totalRevenue, recentBookings] = await Promise.all([
       prisma.booking.count(),
@@ -99,7 +99,7 @@ export async function getAdminStats() {
 export async function getAllBookings() {
   try {
     await requireAdmin()
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
 
     const bookings = await prisma.booking.findMany({
       include: {
@@ -394,7 +394,7 @@ export async function deleteAdminUser(userId: string) {
 export async function createManualReservation(data: unknown) {
   try {
     const admin = await requireAdmin()
-    await cancelExpiredBookings()
+    await runBookingLifecycleMaintenance()
     const validated = createManualReservationSchema.parse(data)
 
     const pickupDate = new Date(validated.pickupDate)
