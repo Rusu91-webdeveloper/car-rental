@@ -736,7 +736,7 @@ export default function AdminDashboard({
   }
 
   return (
-    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_45%),linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.95)_100%)]">
+    <div className="flex min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_45%),linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.95)_100%)]">
       {/* Sidebar Navigation */}
       <aside className="fixed hidden h-full w-72 overflow-y-auto border-r border-border/70 bg-background/95 backdrop-blur lg:flex lg:flex-col">
         <div className="flex-shrink-0 border-b border-border/70 px-6 py-6">
@@ -790,7 +790,7 @@ export default function AdminDashboard({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-72">
+      <main className="flex-1 overflow-x-hidden lg:ml-72">
         {/* Mobile Header */}
         <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur lg:hidden">
           <div className="px-4 pb-3 pt-3">
@@ -867,7 +867,7 @@ export default function AdminDashboard({
           </div>
         </header>
 
-        <div className="mx-auto w-full max-w-7xl p-4 sm:p-5 lg:p-8">
+        <div className="mx-auto w-full max-w-7xl overflow-x-hidden p-4 sm:p-5 lg:p-8">
           {/* Overview Tab */}
           {activeTab === "overview" && (
             <div className="space-y-6">
@@ -1304,9 +1304,9 @@ export default function AdminDashboard({
                           />
                           <div className="flex-1 space-y-3">
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div>
+                              <div className="min-w-0">
                                 <h3 className="font-bold text-lg">{getCarName(car)}</h3>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="break-words text-sm text-muted-foreground">
                                   {(bookingUser.name || bookingUser.email) + " • " + bookingUser.email}
                                 </p>
                               </div>
@@ -1323,7 +1323,7 @@ export default function AdminDashboard({
                                     handleUpdateBookingStatus(booking.id, value as AdminBooking["status"])
                                   }
                                 >
-                                  <SelectTrigger className="w-full min-w-[10rem] sm:w-36">
+                                  <SelectTrigger className="w-full sm:w-36">
                                     <SelectValue />
                                   </SelectTrigger>
                                 <SelectContent>
@@ -1467,15 +1467,15 @@ export default function AdminDashboard({
                             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xl font-bold">
                               {(user.name || user.email).charAt(0).toUpperCase()}
                             </div>
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <h3 className="font-bold text-lg">{user.name || user.email}</h3>
+                                <h3 className="break-words font-bold text-lg">{user.name || user.email}</h3>
                                 <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
                                 <Badge variant={user.isActive ? "outline" : "destructive"}>
                                   {user.isActive ? "Active" : "Inactive"}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-muted-foreground mb-2">{user.email}</p>
+                              <p className="mb-2 break-all text-sm text-muted-foreground">{user.email}</p>
                               <div className="flex flex-wrap gap-4 text-sm">
                                 <div>
                                   <span className="text-muted-foreground">Bookings:</span>
@@ -1556,7 +1556,7 @@ export default function AdminDashboard({
                     className="pl-10"
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{reviewsState.length} total</Badge>
                   <Badge variant="secondary">{filteredReviews.length} shown</Badge>
                 </div>
@@ -1569,7 +1569,7 @@ export default function AdminDashboard({
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div className="space-y-2 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold">{getReviewCarName(review)}</p>
+                            <p className="break-words font-semibold">{getReviewCarName(review)}</p>
                             <Badge variant="outline">#{review.bookingNumber}</Badge>
                           </div>
 
@@ -1587,11 +1587,11 @@ export default function AdminDashboard({
                             <span className="text-sm text-muted-foreground ml-2">{review.rating}/5</span>
                           </div>
 
-                          <p className="text-sm text-foreground/90 rounded-md border border-border bg-muted/20 p-3">
+                          <p className="break-words rounded-md border border-border bg-muted/20 p-3 text-sm text-foreground/90">
                             {review.comment}
                           </p>
 
-                          <p className="text-xs text-muted-foreground">
+                          <p className="break-all text-xs text-muted-foreground">
                             By {review.userName || review.userEmail} ({review.userEmail}) •{" "}
                             {new Date(review.createdAt).toLocaleString()}
                           </p>
@@ -1638,21 +1638,21 @@ export default function AdminDashboard({
                       <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
                         <div>
                           <p className="text-sm text-muted-foreground">Total Revenue</p>
-                          <p className="text-2xl font-bold">{formatCents(totalRevenueCents)}</p>
+                          <p className="text-xl font-bold sm:text-2xl">{formatCents(totalRevenueCents)}</p>
                         </div>
                         <DollarSign className="w-8 h-8 text-green-500" />
                       </div>
                       <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
                         <div>
                           <p className="text-sm text-muted-foreground">This Month</p>
-                          <p className="text-2xl font-bold">{formatCents(revenueThisMonthCents)}</p>
+                          <p className="text-xl font-bold sm:text-2xl">{formatCents(revenueThisMonthCents)}</p>
                         </div>
                         <TrendingUp className="w-8 h-8 text-blue-500" />
                       </div>
                       <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
                         <div>
                           <p className="text-sm text-muted-foreground">Average Booking</p>
-                          <p className="text-2xl font-bold">
+                          <p className="text-xl font-bold sm:text-2xl">
                             {bookingsState.length > 0
                               ? formatCents(Math.round(totalRevenueCents / bookingsState.length))
                               : formatCents(0)}
@@ -1770,12 +1770,12 @@ export default function AdminDashboard({
                               alt={getCarName(car)}
                               className="w-12 h-12 rounded-lg object-cover"
                             />
-                            <div className="flex-1">
-                              <p className="font-medium">{getCarName(car)}</p>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{getCarName(car)}</p>
                               <p className="text-sm text-muted-foreground">{car.bookingCount} bookings</p>
                             </div>
                             <div className="text-right">
-                              <p className="font-bold">{formatCents(car.price)}</p>
+                              <p className="text-sm font-bold sm:text-base">{formatCents(car.price)}</p>
                               <p className="text-xs text-muted-foreground">per day</p>
                             </div>
                           </div>
@@ -1818,61 +1818,6 @@ export default function AdminDashboard({
           )}
         </div>
 
-        {/* Mobile Tab Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border px-4 py-3 z-20">
-          <div className="flex items-center justify-around">
-            <button
-              onClick={() => setActiveTab("overview")}
-              className={`flex flex-col items-center gap-1 ${
-                activeTab === "overview" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              <span className="text-xs">Overview</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("cars")}
-              className={`flex flex-col items-center gap-1 ${
-                activeTab === "cars" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <CarIcon className="w-5 h-5" />
-              <span className="text-xs">Cars</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("bookings")}
-              className={`flex flex-col items-center gap-1 relative ${
-                activeTab === "bookings" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {pendingBookings > 0 && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full text-[10px] text-white flex items-center justify-center">
-                  {pendingBookings}
-                </div>
-              )}
-              <Calendar className="w-5 h-5" />
-              <span className="text-xs">Bookings</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("users")}
-              className={`flex flex-col items-center gap-1 ${
-                activeTab === "users" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span className="text-xs">Users</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("reviews")}
-              className={`flex flex-col items-center gap-1 ${
-                activeTab === "reviews" ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span className="text-xs">Reviews</span>
-            </button>
-          </div>
-        </div>
       </main>
     </div>
   )
@@ -2547,7 +2492,7 @@ function CarForm({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="gearbox">Gearbox</Label>
           <Input
@@ -2569,7 +2514,7 @@ function CarForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="fuel">Fuel Type</Label>
           <Input
