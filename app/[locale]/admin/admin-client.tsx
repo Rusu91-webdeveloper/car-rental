@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
+import { deleteReviewAsAdmin } from "@/app/actions/reviews"
 import {
   createAdminUser,
   setUserActiveState,
@@ -45,6 +46,7 @@ import {
   UserCheck,
   UserX,
   Trash2,
+  MessageSquare,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -105,17 +107,32 @@ interface AdminManualReservation {
   createdAt: string
 }
 
+interface AdminReview {
+  id: string
+  rating: number
+  comment: string
+  createdAt: string
+  carId: string
+  carName: string
+  carNameDe?: string | null
+  bookingNumber: string
+  userName: string | null
+  userEmail: string
+}
+
 export default function AdminDashboard({
   currentUser,
   cars,
   bookings,
   users,
+  reviews,
   manualReservations,
 }: {
   currentUser: { id: string; name: string; email: string }
   cars: AdminCar[]
   bookings: AdminBooking[]
   users: AdminUser[]
+  reviews: AdminReview[]
   manualReservations: AdminManualReservation[]
 }) {
   const router = useRouter()
@@ -123,6 +140,7 @@ export default function AdminDashboard({
   const [carsState, setCarsState] = useState<AdminCar[]>(cars)
   const [bookingsState, setBookingsState] = useState<AdminBooking[]>(bookings)
   const [usersState, setUsersState] = useState<AdminUser[]>(users)
+  const [reviewsState, setReviewsState] = useState<AdminReview[]>(reviews)
   const [manualReservationsState, setManualReservationsState] = useState<AdminManualReservation[]>(manualReservations)
   const [activeTab, setActiveTab] = useState("overview")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -143,6 +161,8 @@ export default function AdminDashboard({
   const getCarName = (car: Pick<AdminCar, "name" | "nameDe">) => getLocalizedText(car.name, car.nameDe)
   const getCarSubtitle = (car: Pick<AdminCar, "subtitle" | "subtitleDe">) =>
     locale === "de" ? car.subtitleDe || car.subtitle : car.subtitle
+  const getReviewCarName = (review: Pick<AdminReview, "carName" | "carNameDe">) =>
+    getLocalizedText(review.carName, review.carNameDe)
   const normalizedSearch = searchTerm.trim().toLowerCase()
 
   // Helper function to get booking status badge styling
@@ -234,6 +254,18 @@ export default function AdminDashboard({
     (u) =>
       (u.name || "").toLowerCase().includes(normalizedSearch) || u.email.toLowerCase().includes(normalizedSearch),
   )
+
+  const filteredReviews = reviewsState.filter((review) => {
+    return (
+      normalizedSearch === "" ||
+      review.comment.toLowerCase().includes(normalizedSearch) ||
+      review.carName.toLowerCase().includes(normalizedSearch) ||
+      (review.carNameDe || "").toLowerCase().includes(normalizedSearch) ||
+      (review.userName || "").toLowerCase().includes(normalizedSearch) ||
+      review.userEmail.toLowerCase().includes(normalizedSearch) ||
+      review.bookingNumber.toLowerCase().includes(normalizedSearch)
+    )
+  })
 
   const filteredManualReservations = manualReservationsState
     .filter((reservation) => {
@@ -632,6 +664,46 @@ export default function AdminDashboard({
     })
   }
 
+  const handleDeleteReview = (review: AdminReview) => {
+    const displayCarName = getReviewCarName(review)
+    if (!confirm(`Delete this review for ${displayCarName}? This action cannot be undone.`)) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await deleteReviewAsAdmin(review.id)
+      if (!result.success) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      setReviewsState((prev) => prev.filter((item) => item.id !== review.id))
+      if (result.carId) {
+        setCarsState((prev) =>
+          prev.map((car) =>
+            car.id === result.carId
+              ? {
+                  ...car,
+                  rating: result.carRating ?? car.rating,
+                  reviews: result.carReviewCount ?? car.reviews,
+                }
+              : car,
+          ),
+        )
+      }
+
+      toast({
+        title: "Success",
+        description: "Review deleted successfully.",
+        variant: "default",
+      })
+    })
+  }
+
   return (
     <div className="min-h-screen bg-muted flex">
       {/* Sidebar Navigation */}
@@ -699,6 +771,19 @@ export default function AdminDashboard({
           </button>
 
           <button
+            onClick={() => setActiveTab("reviews")}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              activeTab === "reviews" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+            }`}
+          >
+            <MessageSquare className="w-5 h-5" />
+            <span className="font-medium">Reviews</span>
+            <Badge variant="secondary" className="ml-auto">
+              {reviewsState.length}
+            </Badge>
+          </button>
+
+          <button
             onClick={() => setActiveTab("analytics")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
               activeTab === "analytics" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
@@ -756,6 +841,7 @@ export default function AdminDashboard({
                 {activeTab === "cars" && "Car Management"}
                 {activeTab === "bookings" && "Booking Management"}
                 {activeTab === "users" && "User Management"}
+                {activeTab === "reviews" && "Review Management"}
                 {activeTab === "analytics" && "Analytics & Reports"}
                 {activeTab === "settings" && "Company Settings"}
               </h1>
@@ -844,7 +930,7 @@ export default function AdminDashboard({
                   <CardDescription>Common administrative tasks</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                       <DialogTrigger asChild>
                         <Button className="h-auto py-4 flex-col gap-2">
@@ -895,6 +981,15 @@ export default function AdminDashboard({
                     >
                       <Users className="w-6 h-6" />
                       <span>Manage Users</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="h-auto py-4 flex-col gap-2 bg-transparent"
+                      onClick={() => setActiveTab("reviews")}
+                    >
+                      <MessageSquare className="w-6 h-6" />
+                      <span>Manage Reviews</span>
                     </Button>
                   </div>
                 </CardContent>
@@ -1440,6 +1535,86 @@ export default function AdminDashboard({
             </div>
           )}
 
+          {/* Reviews Tab */}
+          {activeTab === "reviews" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search reviews, users, cars, booking number..."
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{reviewsState.length} total</Badge>
+                  <Badge variant="secondary">{filteredReviews.length} shown</Badge>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {filteredReviews.map((review) => (
+                  <Card key={review.id}>
+                    <CardContent className="p-4">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold">{getReviewCarName(review)}</p>
+                            <Badge variant="outline">#{review.bookingNumber}</Badge>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <svg
+                                key={star}
+                                className={`w-4 h-4 ${star <= review.rating ? "text-warning" : "text-muted-foreground/30"}`}
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                              </svg>
+                            ))}
+                            <span className="text-sm text-muted-foreground ml-2">{review.rating}/5</span>
+                          </div>
+
+                          <p className="text-sm text-foreground/90 rounded-md border border-border bg-muted/20 p-3">
+                            {review.comment}
+                          </p>
+
+                          <p className="text-xs text-muted-foreground">
+                            By {review.userName || review.userEmail} ({review.userEmail}) •{" "}
+                            {new Date(review.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={isPending}
+                          onClick={() => handleDeleteReview(review)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {filteredReviews.length === 0 && (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground">No reviews found</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Analytics Tab */}
           {activeTab === "analytics" && (
             <div className="space-y-6">
@@ -1678,6 +1853,15 @@ export default function AdminDashboard({
             >
               <Users className="w-5 h-5" />
               <span className="text-xs">Users</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("reviews")}
+              className={`flex flex-col items-center gap-1 ${
+                activeTab === "reviews" ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span className="text-xs">Reviews</span>
             </button>
           </div>
         </div>

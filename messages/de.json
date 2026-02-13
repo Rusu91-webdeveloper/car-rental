@@ -168,7 +168,11 @@
     "available": "Verfügbar",
     "unavailable": "Nicht verfügbar",
     "reviewsTitle": "Bewertungen",
-    "basedOnReviews": "basierend auf {count} {count, plural, one {Bewertung} other {Bewertungen}}"
+    "basedOnReviews": "basierend auf {count} {count, plural, one {Bewertung} other {Bewertungen}}",
+    "readReviews": "Bewertungen lesen ({count})",
+    "showingRecentReviews": "Es werden {shown} von {total} Bewertungen angezeigt",
+    "noReviewsYet": "Für dieses Auto gibt es noch keine Bewertungen.",
+    "verifiedCustomer": "Verifizierter Kunde"
   },
   "checkout": {
     "title": "Kasse",

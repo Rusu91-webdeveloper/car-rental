@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { Prisma, type Booking } from "@prisma/client"
-import { requireAuth } from "@/lib/auth"
+import { requireAdmin, requireAuth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { createBookingReviewSchema } from "@/lib/validations"
 import { z } from "zod"
@@ -101,5 +101,76 @@ export async function createBookingReview(data: unknown) {
     }
 
     return { error: "Failed to save review" }
+  }
+}
+
+export async function deleteReviewAsAdmin(reviewId: string): Promise<
+  | {
+      success: true
+      reviewId: string
+      carId: string
+      carRating: number
+      carReviewCount: number
+    }
+  | {
+      success: false
+      error: string
+    }
+> {
+  try {
+    await requireAdmin()
+
+    const result = await prisma.$transaction(async (tx) => {
+      const review = await tx.review.findUnique({
+        where: { id: reviewId },
+        select: {
+          id: true,
+          carId: true,
+        },
+      })
+
+      if (!review) {
+        throw new Error("Review not found")
+      }
+
+      await tx.review.delete({
+        where: { id: reviewId },
+      })
+
+      await syncCarRatingStats(tx, review.carId)
+
+      const updatedCar = await tx.car.findUnique({
+        where: { id: review.carId },
+        select: {
+          rating: true,
+          reviewCount: true,
+        },
+      })
+
+      return {
+        reviewId: review.id,
+        carId: review.carId,
+        carRating: updatedCar?.rating ?? 0,
+        carReviewCount: updatedCar?.reviewCount ?? 0,
+      }
+    })
+
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    revalidatePath("/cars")
+    revalidatePath(`/cars/${result.carId}`)
+
+    return {
+      success: true,
+      ...result,
+    }
+  } catch (error) {
+    console.error("[DELETE_REVIEW_AS_ADMIN_ERROR]", error)
+
+    if (error instanceof Error) {
+      return { success: false, error: error.message }
+    }
+
+    return { success: false, error: "Failed to delete review" }
   }
 }

@@ -168,7 +168,11 @@
     "available": "Available",
     "unavailable": "Unavailable",
     "reviewsTitle": "Reviews",
-    "basedOnReviews": "based on {count} {count, plural, one {review} other {reviews}}"
+    "basedOnReviews": "based on {count} {count, plural, one {review} other {reviews}}",
+    "readReviews": "Read reviews ({count})",
+    "showingRecentReviews": "Showing {shown} of {total} reviews",
+    "noReviewsYet": "No reviews yet for this car.",
+    "verifiedCustomer": "Verified Customer"
   },
   "checkout": {
     "title": "Checkout",

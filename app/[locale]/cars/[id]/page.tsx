@@ -24,6 +24,32 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
     notFound()
   }
 
+  const [recentReviews, ratingBuckets] = await Promise.all([
+    prisma.review.findMany({
+      where: { carId: car.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.review.groupBy({
+      by: ["rating"],
+      where: { carId: car.id },
+      _count: {
+        _all: true,
+      },
+    }),
+  ])
+
   const user = await getCurrentUser()
   const savedCar = user
     ? await prisma.savedCar.findUnique({
@@ -54,13 +80,12 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
             : null
   const statusLabel = statusKey ? t(`carStatus.${statusKey}`) : car.status.replace("_", " ")
 
-  const reviewBreakdown = {
-    5: 82,
-    4: 15,
-    3: 2,
-    2: 1,
-    1: 0,
-  }
+  const ratingCountMap = new Map<number, number>(ratingBuckets.map((bucket) => [bucket.rating, bucket._count._all]))
+  const reviewBreakdown = [5, 4, 3, 2, 1].map((stars) => {
+    const count = ratingCountMap.get(stars) ?? 0
+    const percentage = car.reviewCount > 0 ? Math.round((count / car.reviewCount) * 100) : 0
+    return { stars, percentage }
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/20 via-background to-background pb-28 sm:pb-32">
@@ -220,22 +245,69 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
             </div>
 
             <div className="space-y-2">
-              {Object.entries(reviewBreakdown)
-                .reverse()
-                .map(([stars, percentage]) => (
-                  <div key={stars} className="flex items-center gap-3">
-                    <span className="text-sm w-2">{stars}</span>
-                    <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-foreground rounded-full transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground w-10 text-right">{percentage}%</span>
+              {reviewBreakdown.map(({ stars, percentage }) => (
+                <div key={stars} className="flex items-center gap-3">
+                  <span className="text-sm w-2">{stars}</span>
+                  <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-foreground rounded-full transition-all"
+                      style={{ width: `${percentage}%` }}
+                    />
                   </div>
-                ))}
+                  <span className="text-sm text-muted-foreground w-10 text-right">{percentage}%</span>
+                </div>
+              ))}
             </div>
           </div>
+
+          {car.reviewCount > 0 ? (
+            <details className="mt-4 rounded-xl border border-border bg-background p-4">
+              <summary className="cursor-pointer list-none font-medium flex items-center justify-between">
+                <span>{t("car.readReviews", { count: car.reviewCount })}</span>
+                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </summary>
+
+              <div className="mt-4 space-y-3">
+                {recentReviews.map((review) => (
+                  <article key={review.id} className="rounded-lg border border-border bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-sm font-semibold">{review.user.name || t("car.verifiedCustomer")}</p>
+                      <time className="text-xs text-muted-foreground">
+                        {new Date(review.createdAt).toLocaleDateString(locale, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </time>
+                    </div>
+                    <div className="flex items-center gap-1 mb-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <svg
+                          key={star}
+                          className={`w-4 h-4 ${star <= review.rating ? "text-warning" : "text-muted-foreground/30"}`}
+                          fill="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                  </article>
+                ))}
+
+                {car.reviewCount > recentReviews.length && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    {t("car.showingRecentReviews", { shown: recentReviews.length, total: car.reviewCount })}
+                  </p>
+                )}
+              </div>
+            </details>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">{t("car.noReviewsYet")}</p>
+          )}
         </div>
       </div>
 

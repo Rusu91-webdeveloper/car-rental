@@ -59,7 +59,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
   const adminUser = user!
 
   await runBookingLifecycleMaintenance()
-  const [cars, bookings, users, blockedDates] = await Promise.all([
+  const [cars, bookings, users, blockedDates, reviews] = await Promise.all([
     prisma.car.findMany({
       where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
@@ -72,6 +72,29 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     }),
     prisma.blockedDate.findMany({
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.review.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+        car: {
+          select: {
+            id: true,
+            name: true,
+            nameDe: true,
+          },
+        },
+        booking: {
+          select: {
+            bookingNumber: true,
+          },
+        },
+      },
     }),
   ])
 
@@ -140,6 +163,18 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         role: item.role,
         isActive: item.isActive,
         createdAt: item.createdAt.toISOString(),
+      }))}
+      reviews={reviews.map((review) => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt.toISOString(),
+        carId: review.carId,
+        carName: review.car.name,
+        carNameDe: review.car.nameDe,
+        bookingNumber: review.booking.bookingNumber,
+        userName: review.user.name,
+        userEmail: review.user.email,
       }))}
       manualReservations={manualReservations}
     />
