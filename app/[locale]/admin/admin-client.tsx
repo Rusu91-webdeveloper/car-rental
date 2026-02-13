@@ -15,7 +15,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents } from "@/lib/money"
 import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
-import { createAdminUser, setUserActiveState, deleteAdminUser } from "@/app/actions/admin"
+import {
+  createAdminUser,
+  setUserActiveState,
+  deleteAdminUser,
+  createManualReservation,
+  deleteManualReservation,
+} from "@/app/actions/admin"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/settings"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -88,22 +94,36 @@ interface AdminBooking {
   createdAt: string
 }
 
+interface AdminManualReservation {
+  id: string
+  carId: string
+  customerName: string
+  customerPhone: string
+  totalPrice: number
+  pickupDate: string
+  dropoffDate: string
+  createdAt: string
+}
+
 export default function AdminDashboard({
   currentUser,
   cars,
   bookings,
   users,
+  manualReservations,
 }: {
   currentUser: { id: string; name: string; email: string }
   cars: AdminCar[]
   bookings: AdminBooking[]
   users: AdminUser[]
+  manualReservations: AdminManualReservation[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [carsState, setCarsState] = useState<AdminCar[]>(cars)
   const [bookingsState, setBookingsState] = useState<AdminBooking[]>(bookings)
   const [usersState, setUsersState] = useState<AdminUser[]>(users)
+  const [manualReservationsState, setManualReservationsState] = useState<AdminManualReservation[]>(manualReservations)
   const [activeTab, setActiveTab] = useState("overview")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false)
@@ -214,6 +234,19 @@ export default function AdminDashboard({
     (u) =>
       (u.name || "").toLowerCase().includes(normalizedSearch) || u.email.toLowerCase().includes(normalizedSearch),
   )
+
+  const filteredManualReservations = manualReservationsState
+    .filter((reservation) => {
+      const car = carsState.find((item) => item.id === reservation.carId)
+      return (
+        normalizedSearch === "" ||
+        reservation.customerName.toLowerCase().includes(normalizedSearch) ||
+        reservation.customerPhone.toLowerCase().includes(normalizedSearch) ||
+        car?.name.toLowerCase().includes(normalizedSearch) ||
+        (car?.nameDe || "").toLowerCase().includes(normalizedSearch)
+      )
+    })
+    .sort((a, b) => new Date(a.pickupDate).getTime() - new Date(b.pickupDate).getTime())
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" })
@@ -528,6 +561,74 @@ export default function AdminDashboard({
         return
       }
       setBookingsState((prev) => prev.map((booking) => (booking.id === bookingId ? { ...booking, status } : booking)))
+    })
+  }
+
+  const handleCreateManualReservation = (reservation: ManualReservationFormValues) => {
+    startTransition(async () => {
+      const pickupDate = new Date(reservation.pickupDate)
+      const dropoffDate = new Date(reservation.dropoffDate)
+
+      if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(dropoffDate.getTime())) {
+        toast({
+          title: "Error",
+          description: "Please select valid pickup and drop-off date/time values.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const result = await createManualReservation({
+        carId: reservation.carId,
+        customerName: reservation.customerName.trim(),
+        customerPhone: reservation.customerPhone.trim(),
+        pickupDate: pickupDate.toISOString(),
+        dropoffDate: dropoffDate.toISOString(),
+        totalPrice: Math.round(reservation.totalPrice * 100),
+      })
+
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (result?.reservation) {
+        setManualReservationsState((prev) => [result.reservation, ...prev])
+        toast({
+          title: "Success",
+          description: "Manual reservation created and car availability has been blocked for that period.",
+          variant: "default",
+        })
+      }
+    })
+  }
+
+  const handleDeleteManualReservation = (reservationId: string) => {
+    if (!confirm("Remove this manual reservation and make the car available again for those dates?")) {
+      return
+    }
+
+    startTransition(async () => {
+      const result = await deleteManualReservation(reservationId)
+      if (result?.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+        return
+      }
+
+      setManualReservationsState((prev) => prev.filter((reservation) => reservation.id !== reservationId))
+      toast({
+        title: "Success",
+        description: "Manual reservation removed successfully.",
+        variant: "default",
+      })
     })
   }
 
@@ -1001,6 +1102,67 @@ export default function AdminDashboard({
           {/* Bookings Tab */}
           {activeTab === "bookings" && (
             <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manual Car Reservation</CardTitle>
+                  <CardDescription>
+                    Reserve a car for direct customers. Reserved dates are blocked and cannot be booked online.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <ManualReservationForm cars={carsState} onSubmit={handleCreateManualReservation} isSubmitting={isPending} />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">Current manual reservations</h3>
+                      <Badge variant="outline">{manualReservationsState.length}</Badge>
+                    </div>
+
+                    {manualReservationsState.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No manual reservations yet.</p>
+                    ) : (
+                      filteredManualReservations.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No manual reservations match your search.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {filteredManualReservations.map((reservation) => {
+                            const car = carsState.find((item) => item.id === reservation.carId)
+                            return (
+                              <div key={reservation.id} className="rounded-lg border border-border p-3">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="space-y-2">
+                                    <p className="font-semibold">{car ? getCarName(car) : "Unknown car"}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Reserved for {reservation.customerName} • {reservation.customerPhone}
+                                    </p>
+                                    <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                                      <p>Pick-up: {new Date(reservation.pickupDate).toLocaleString()}</p>
+                                      <p>Drop-off: {new Date(reservation.dropoffDate).toLocaleString()}</p>
+                                      <p>Price: {formatCents(reservation.totalPrice)}</p>
+                                      <p>Created: {new Date(reservation.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                  </div>
+
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={isPending}
+                                    onClick={() => handleDeleteManualReservation(reservation.id)}
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Search and Filter */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
@@ -1543,10 +1705,221 @@ interface CarFormValues {
   descriptionDe: string
 }
 
+interface ManualReservationFormValues {
+  carId: string
+  customerName: string
+  customerPhone: string
+  pickupDate: string
+  dropoffDate: string
+  totalPrice: number
+}
+
 interface UserFormValues {
   name: string
   email: string
   role: "ADMIN" | "USER"
+}
+
+function ManualReservationForm({
+  cars,
+  onSubmit,
+  isSubmitting = false,
+}: {
+  cars: AdminCar[]
+  onSubmit: (reservation: ManualReservationFormValues) => void
+  isSubmitting?: boolean
+}) {
+  const formatDatetimeLocal = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    const hours = String(date.getHours()).padStart(2, "0")
+    const minutes = String(date.getMinutes()).padStart(2, "0")
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  const createInitialDates = () => {
+    const pickup = new Date()
+    pickup.setDate(pickup.getDate() + 1)
+    pickup.setHours(10, 0, 0, 0)
+    const dropoff = new Date(pickup)
+    dropoff.setDate(dropoff.getDate() + 2)
+    return {
+      pickupDate: formatDatetimeLocal(pickup),
+      dropoffDate: formatDatetimeLocal(dropoff),
+    }
+  }
+
+  const initialDates = createInitialDates()
+  const [formData, setFormData] = useState<ManualReservationFormValues>({
+    carId: cars[0]?.id || "",
+    customerName: "",
+    customerPhone: "",
+    pickupDate: initialDates.pickupDate,
+    dropoffDate: initialDates.dropoffDate,
+    totalPrice: 0,
+  })
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!formData.carId && cars[0]?.id) {
+      setFormData((prev) => ({ ...prev, carId: cars[0].id }))
+    }
+  }, [cars, formData.carId])
+
+  const validateForm = () => {
+    const errors: string[] = []
+
+    if (!formData.carId) errors.push("Please select a car.")
+    if (!formData.customerName.trim()) errors.push("Customer name is required.")
+    if (!formData.customerPhone.trim()) errors.push("Customer phone number is required.")
+    if (formData.totalPrice < 0 || !Number.isFinite(formData.totalPrice)) {
+      errors.push("Price must be 0 or greater.")
+    }
+
+    const pickupDate = new Date(formData.pickupDate)
+    const dropoffDate = new Date(formData.dropoffDate)
+
+    if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(dropoffDate.getTime())) {
+      errors.push("Please select valid pickup and drop-off date/time.")
+    } else {
+      if (pickupDate <= new Date()) {
+        errors.push("Pickup date must be in the future.")
+      }
+      if (dropoffDate <= pickupDate) {
+        errors.push("Drop-off date must be after pickup date.")
+      }
+    }
+
+    return errors
+  }
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const errors = validateForm()
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+
+    setValidationErrors([])
+    onSubmit({
+      carId: formData.carId,
+      customerName: formData.customerName.trim(),
+      customerPhone: formData.customerPhone.trim(),
+      pickupDate: formData.pickupDate,
+      dropoffDate: formData.dropoffDate,
+      totalPrice: formData.totalPrice,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {validationErrors.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Missing information</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {validationErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="reservationCarId">Car</Label>
+          <Select
+            value={formData.carId}
+            onValueChange={(value) => setFormData((prev) => ({ ...prev, carId: value }))}
+            disabled={isSubmitting || cars.length === 0}
+          >
+            <SelectTrigger id="reservationCarId">
+              <SelectValue placeholder={cars.length === 0 ? "No cars available" : "Select a car"} />
+            </SelectTrigger>
+            <SelectContent>
+              {cars.map((car) => (
+                <SelectItem key={car.id} value={car.id}>
+                  {car.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservationPrice">Price (€)</Label>
+          <Input
+            id="reservationPrice"
+            type="number"
+            min={0}
+            step="0.01"
+            value={formData.totalPrice}
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                totalPrice: Number(event.target.value),
+              }))
+            }
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservationCustomerName">Customer Name</Label>
+          <Input
+            id="reservationCustomerName"
+            value={formData.customerName}
+            onChange={(event) => setFormData((prev) => ({ ...prev, customerName: event.target.value }))}
+            placeholder="John Doe"
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservationCustomerPhone">Phone Number</Label>
+          <Input
+            id="reservationCustomerPhone"
+            value={formData.customerPhone}
+            onChange={(event) => setFormData((prev) => ({ ...prev, customerPhone: event.target.value }))}
+            placeholder="+49 176 1234567"
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservationPickupDate">Pick-up Date & Time</Label>
+          <Input
+            id="reservationPickupDate"
+            type="datetime-local"
+            value={formData.pickupDate}
+            min={formatDatetimeLocal(new Date())}
+            onChange={(event) => setFormData((prev) => ({ ...prev, pickupDate: event.target.value }))}
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservationDropoffDate">Drop-off Date & Time</Label>
+          <Input
+            id="reservationDropoffDate"
+            type="datetime-local"
+            value={formData.dropoffDate}
+            min={formData.pickupDate}
+            onChange={(event) => setFormData((prev) => ({ ...prev, dropoffDate: event.target.value }))}
+            disabled={isSubmitting}
+          />
+        </div>
+      </div>
+
+      <Button type="submit" disabled={isSubmitting || cars.length === 0}>
+        {isSubmitting ? "Saving..." : "Reserve Car"}
+      </Button>
+    </form>
+  )
 }
 
 function UserForm({

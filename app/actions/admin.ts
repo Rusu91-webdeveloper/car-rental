@@ -4,7 +4,53 @@ import { requireAdmin } from "@/lib/auth"
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import { revalidatePath } from "next/cache"
 import { createAdminUserSchema, setUserActiveStatusSchema } from "@/lib/validations"
+import { isCarAvailable } from "@/lib/availability"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
+
+const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
+
+const createManualReservationSchema = z
+  .object({
+    carId: z.string().min(1),
+    customerName: z.string().trim().min(2, "Customer name is required").max(120),
+    customerPhone: z
+      .string()
+      .trim()
+      .min(6, "Phone number is required")
+      .max(40, "Phone number is too long")
+      .regex(/^[0-9+\s()\-/.]+$/, "Please enter a valid phone number"),
+    pickupDate: z.string().datetime(),
+    dropoffDate: z.string().datetime(),
+    totalPrice: z.number().int().min(0, "Price must be 0 or greater"),
+  })
+  .refine(
+    (value) => {
+      const pickup = new Date(value.pickupDate)
+      const dropoff = new Date(value.dropoffDate)
+      return dropoff > pickup
+    },
+    {
+      message: "Drop-off date must be after pickup date",
+      path: ["dropoffDate"],
+    },
+  )
+  .refine(
+    (value) => {
+      const pickup = new Date(value.pickupDate)
+      return pickup > new Date()
+    },
+    {
+      message: "Pickup date must be in the future",
+      path: ["pickupDate"],
+    },
+  )
+
+const encodeManualReservationReason = (data: { customerName: string; customerPhone: string; totalPrice: number }) =>
+  `${MANUAL_RESERVATION_PREFIX}${JSON.stringify(data)}`
+
+const isManualReservationReason = (reason: string | null): boolean =>
+  typeof reason === "string" && reason.startsWith(MANUAL_RESERVATION_PREFIX)
 
 export async function getAdminStats() {
   try {
@@ -342,6 +388,166 @@ export async function deleteAdminUser(userId: string) {
     }
 
     return { error: "Failed to delete user" }
+  }
+}
+
+export async function createManualReservation(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    await cancelExpiredBookings()
+    const validated = createManualReservationSchema.parse(data)
+
+    const pickupDate = new Date(validated.pickupDate)
+    const dropoffDate = new Date(validated.dropoffDate)
+
+    const car = await prisma.car.findUnique({
+      where: { id: validated.carId },
+      select: { id: true, name: true, isDeleted: true },
+    })
+
+    if (!car || car.isDeleted) {
+      return { error: "Car not found" }
+    }
+
+    const reservationReason = encodeManualReservationReason({
+      customerName: validated.customerName,
+      customerPhone: validated.customerPhone,
+      totalPrice: validated.totalPrice,
+    })
+
+    const blockedDate = await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
+        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, undefined, tx)
+
+        if (!stillAvailable) {
+          throw new Error("Car is not available for the selected date range")
+        }
+
+        const createdBlockedDate = await tx.blockedDate.create({
+          data: {
+            carId: validated.carId,
+            startDate: pickupDate,
+            endDate: dropoffDate,
+            reason: reservationReason,
+          },
+        })
+
+        await tx.adminAuditLog.create({
+          data: {
+            adminId: admin.id,
+            action: "BLOCKED_DATE_ADDED",
+            targetType: "car",
+            targetId: validated.carId,
+            reason: "manual_reservation_created",
+            newValue: {
+              blockedDateId: createdBlockedDate.id,
+              customerName: validated.customerName,
+              customerPhone: validated.customerPhone,
+              totalPrice: validated.totalPrice,
+              pickupDate: pickupDate.toISOString(),
+              dropoffDate: dropoffDate.toISOString(),
+            },
+          },
+        })
+
+        return createdBlockedDate
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    )
+
+    revalidatePath("/admin")
+    revalidatePath("/")
+    revalidatePath(`/cars/${validated.carId}`)
+
+    return {
+      success: true,
+      reservation: {
+        id: blockedDate.id,
+        carId: blockedDate.carId,
+        customerName: validated.customerName,
+        customerPhone: validated.customerPhone,
+        totalPrice: validated.totalPrice,
+        pickupDate: blockedDate.startDate.toISOString(),
+        dropoffDate: blockedDate.endDate.toISOString(),
+        createdAt: blockedDate.createdAt.toISOString(),
+      },
+    }
+  } catch (error) {
+    console.error("[CREATE_MANUAL_RESERVATION_ERROR]", error)
+
+    if (error instanceof z.ZodError) {
+      return { error: error.issues[0]?.message || "Invalid reservation data" }
+    }
+
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+
+    return { error: "Failed to create manual reservation" }
+  }
+}
+
+export async function deleteManualReservation(blockedDateId: string) {
+  try {
+    const admin = await requireAdmin()
+
+    const blockedDate = await prisma.blockedDate.findUnique({
+      where: { id: blockedDateId },
+      select: {
+        id: true,
+        carId: true,
+        startDate: true,
+        endDate: true,
+        reason: true,
+      },
+    })
+
+    if (!blockedDate) {
+      return { error: "Reservation not found" }
+    }
+
+    if (!isManualReservationReason(blockedDate.reason)) {
+      return { error: "Only manual reservations can be removed from this section" }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.blockedDate.delete({
+        where: { id: blockedDateId },
+      })
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "BLOCKED_DATE_REMOVED",
+          targetType: "car",
+          targetId: blockedDate.carId,
+          reason: "manual_reservation_removed",
+          oldValue: {
+            blockedDateId: blockedDate.id,
+            pickupDate: blockedDate.startDate.toISOString(),
+            dropoffDate: blockedDate.endDate.toISOString(),
+            rawReason: blockedDate.reason,
+          },
+        },
+      })
+    })
+
+    revalidatePath("/admin")
+    revalidatePath("/")
+    revalidatePath(`/cars/${blockedDate.carId}`)
+
+    return { success: true }
+  } catch (error) {
+    console.error("[DELETE_MANUAL_RESERVATION_ERROR]", error)
+
+    if (error instanceof Error) {
+      return { error: error.message }
+    }
+
+    return { error: "Failed to remove manual reservation" }
   }
 }
 

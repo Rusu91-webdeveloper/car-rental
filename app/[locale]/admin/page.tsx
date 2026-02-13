@@ -8,6 +8,39 @@ import type { Car, Booking, User } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
+const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
+
+type ManualReservationPayload = {
+  customerName: string
+  customerPhone: string
+  totalPrice: number
+}
+
+const parseManualReservationPayload = (reason: string | null): ManualReservationPayload | null => {
+  if (!reason || !reason.startsWith(MANUAL_RESERVATION_PREFIX)) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(reason.slice(MANUAL_RESERVATION_PREFIX.length))
+    if (
+      typeof parsed?.customerName === "string" &&
+      typeof parsed?.customerPhone === "string" &&
+      typeof parsed?.totalPrice === "number"
+    ) {
+      return {
+        customerName: parsed.customerName,
+        customerPhone: parsed.customerPhone,
+        totalPrice: parsed.totalPrice,
+      }
+    }
+  } catch (error) {
+    console.error("[PARSE_MANUAL_RESERVATION_ERROR]", error)
+  }
+
+  return null
+}
+
 export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const user = await getCurrentUser()
@@ -26,7 +59,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
   const adminUser = user!
 
   await cancelExpiredBookings()
-  const [cars, bookings, users] = await Promise.all([
+  const [cars, bookings, users, blockedDates] = await Promise.all([
     prisma.car.findMany({
       where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
@@ -37,7 +70,30 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
     }),
+    prisma.blockedDate.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
   ])
+
+  const manualReservations = blockedDates
+    .map((blockedDate) => {
+      const payload = parseManualReservationPayload(blockedDate.reason)
+      if (!payload) {
+        return null
+      }
+
+      return {
+        id: blockedDate.id,
+        carId: blockedDate.carId,
+        customerName: payload.customerName,
+        customerPhone: payload.customerPhone,
+        totalPrice: payload.totalPrice,
+        pickupDate: blockedDate.startDate.toISOString(),
+        dropoffDate: blockedDate.endDate.toISOString(),
+        createdAt: blockedDate.createdAt.toISOString(),
+      }
+    })
+    .filter((reservation): reservation is NonNullable<typeof reservation> => reservation !== null)
 
   return (
     <AdminDashboard
@@ -85,6 +141,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         isActive: item.isActive,
         createdAt: item.createdAt.toISOString(),
       }))}
+      manualReservations={manualReservations}
     />
   )
 }
