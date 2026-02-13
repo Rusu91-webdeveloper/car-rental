@@ -86,13 +86,13 @@ export function CarCard({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "AVAILABLE":
-        return "bg-green-50 text-success"
+        return "bg-emerald-600 text-white"
       case "LOW_STOCK":
-        return "bg-orange-50 text-warning"
+        return "bg-amber-500 text-white"
       case "MAINTENANCE":
-        return "bg-red-50 text-error"
+        return "bg-rose-600 text-white"
       default:
-        return "bg-gray-100 text-gray-600"
+        return "bg-slate-700 text-white"
     }
   }
 
@@ -110,23 +110,34 @@ export function CarCard({
   }
 
   return (
-    <Link href={getCarDetailUrl()}>
-      <div className="bg-card rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow">
+    <Link href={getCarDetailUrl()} className="block h-full">
+      <article className="group h-full overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_48px_-36px_rgba(15,23,42,0.65)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_70px_-42px_rgba(15,23,42,0.75)]">
         {/* Image */}
-        <div className="relative h-48 bg-gradient-to-b from-gray-100 to-gray-200">
-          <img src={car.image || "/placeholder.jpg"} alt={displayName} className="w-full h-full object-cover" />
+        <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+          <img
+            src={car.image || "/placeholder.jpg"}
+            alt={displayName}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.24),transparent_34%),radial-gradient(circle_at_82%_100%,rgba(15,23,42,0.16),transparent_45%)]" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/58 via-black/30 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/28 to-transparent" />
           <div className="absolute top-3 left-3">
-            <span className={`px-3 py-1 ${getStatusColor(car.status)} text-xs font-semibold rounded-full`}>
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.09em] shadow-lg ring-1 ring-black/10 ${getStatusColor(car.status)}`}
+            >
               {getStatusText(car.status)}
             </span>
           </div>
           <button
             onClick={handleSaveClick}
             disabled={isPending}
-            className="absolute top-3 right-3 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform disabled:opacity-60"
+            className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/75 bg-white/95 text-slate-700 shadow-lg transition-transform hover:scale-110 disabled:opacity-60"
+            aria-label={isSaved ? "Unsave car" : "Save car"}
           >
             <svg
-              className={`w-5 h-5 ${isSaved ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-600"}`}
+              className={`h-5 w-5 ${isSaved ? "fill-rose-500 stroke-rose-500" : "fill-none stroke-current"}`}
               strokeWidth={2}
               viewBox="0 0 24 24"
             >
@@ -140,24 +151,34 @@ export function CarCard({
         </div>
 
         {/* Content */}
-        <div className="p-4">
-          <div className="flex items-start justify-between mb-3">
+        <div className="p-4 sm:p-5">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <span className="text-xs text-primary font-semibold uppercase">{categoryLabel}</span>
-              <h3 className="font-bold text-lg">{displayName}</h3>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">{categoryLabel}</span>
+              <h3 className="mt-1 line-clamp-1 text-xl font-bold leading-tight text-slate-900 sm:text-2xl">{displayName}</h3>
             </div>
-            <div className="text-right">
-              <div className="font-bold text-lg">
+            <div className="shrink-0 text-right">
+              <div className="text-lg font-bold text-slate-900">
                 {formatCents(car.price)}
-                <span className="text-sm text-muted-foreground font-normal">/ {t("car.pricePerDay")}</span>
+                <span className="text-sm font-normal text-slate-500">/ {t("car.pricePerDay")}</span>
               </div>
             </div>
           </div>
 
+          <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+            <div className="flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700">
+              <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.922-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.196-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z" />
+              </svg>
+              <span className="font-semibold text-slate-900">{car.rating.toFixed(1)}</span>
+            </div>
+            <span>{t("car.reviews", { count: car.reviews })}</span>
+          </div>
+
           {/* Specs */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
-            <div className="flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mb-5 grid grid-cols-3 gap-2 text-xs text-slate-600">
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -165,10 +186,10 @@ export function CarCard({
                   d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
                 />
               </svg>
-              <span>{car.specs.gearbox}</span>
+              <span className="line-clamp-1">{car.specs.gearbox}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -176,15 +197,15 @@ export function CarCard({
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                 />
               </svg>
-              <span>{t("car.seats", { count: car.specs.seats })}</span>
+              <span className="line-clamp-1">{t("car.seats", { count: car.specs.seats })}</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
               {car.specs.fuel === "EV" || car.specs.fuel === "Electric" ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               ) : car.specs.fuel === "Hybrid" ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -193,7 +214,7 @@ export function CarCard({
                   />
                 </svg>
               ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -202,16 +223,19 @@ export function CarCard({
                   />
                 </svg>
               )}
-              <span>{car.specs.fuel}</span>
+              <span className="line-clamp-1">{car.specs.fuel}</span>
             </div>
           </div>
 
           {/* Book Button */}
-          <button className="w-full bg-primary text-white font-semibold py-3 rounded-xl hover:bg-primary-hover transition-colors">
-            {t("common.bookNow")}
+          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-800">
+            <span>{t("common.bookNow")}</span>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
-      </div>
+      </article>
     </Link>
   )
 }

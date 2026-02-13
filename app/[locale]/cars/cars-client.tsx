@@ -2,7 +2,7 @@
 
 import Link from "@/navigation"
 import { useState, useEffect } from "react"
-import { useLocale, useTranslations } from "next-intl"
+import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
 import { CarCard } from "@/components/car-card"
 import { BottomNav } from "@/components/bottom-nav"
@@ -46,7 +46,6 @@ export function CarsClient({
   savedCarIds: string[]
   signInUrl: string
 }) {
-  const locale = useLocale()
   const t = useTranslations()
   const searchParams = useSearchParams()
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL")
@@ -94,48 +93,50 @@ export function CarsClient({
     filterCars()
   }, [cars, selectedCategory, selectedYear, pickupDateParam, dropoffDateParam])
 
-  const getLocalizedText = (valueEn: string, valueDe?: string | null) => {
-    return locale === "de" ? valueDe || valueEn : valueEn
-  }
-
   return (
-    <div className="min-h-screen bg-muted pb-20">
+    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.96)_100%)] pb-24">
       {/* Header */}
-      <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold">{t("cars.title")}</h1>
-              <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: filteredCars.length })}</p>
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link
+                href="/"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background shadow-sm transition-colors hover:bg-muted"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold sm:text-2xl">{t("cars.title")}</h1>
+                <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: filteredCars.length })}</p>
+              </div>
             </div>
+            <ClientOnly>
+              <LanguageSwitcher />
+            </ClientOnly>
           </div>
-          <ClientOnly>
-            <LanguageSwitcher />
-          </ClientOnly>
+
+          <div className="rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm">
+            <ClientOnly>
+              <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
+            </ClientOnly>
+          </div>
         </div>
-        
-        <ClientOnly>
-          <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
-        </ClientOnly>
       </header>
 
       {/* Category Filter */}
-      <div className="px-4 py-4 bg-background border-b border-border sticky top-[120px] z-10">
-        <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
+      <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6">
+        <div className="rounded-2xl border border-border/70 bg-background/85 p-2 shadow-sm">
+          <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
+        </div>
       </div>
 
       {/* Cars Grid */}
-      <div className="px-4 pt-4">
+      <div className="mx-auto w-full max-w-7xl px-4 pt-5 sm:px-6">
         {filteredCars.length > 0 ? (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-5 pb-4 sm:grid-cols-2 xl:grid-cols-3">
             {filteredCars.map((car) => (
               <CarCard
                 key={car.id}
@@ -147,9 +148,9 @@ export function CarsClient({
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="rounded-2xl border border-border/70 bg-card/85 py-14 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <svg className="h-8 w-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -158,14 +159,14 @@ export function CarsClient({
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold mb-2">{t("cars.noCars")}</h3>
-            <p className="text-muted-foreground text-sm mb-4">{t("cars.adjustFilters")}</p>
+            <h3 className="mb-2 text-lg font-semibold">{t("cars.noCars")}</h3>
+            <p className="mb-4 text-sm text-muted-foreground">{t("cars.adjustFilters")}</p>
             <button
               onClick={() => {
                 setSelectedCategory("ALL")
                 setSelectedYear("ALL")
               }}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              className="rounded-lg bg-primary px-4 py-2 text-white transition-colors hover:bg-primary/90"
             >
               {t("cars.clearFilters")}
             </button>

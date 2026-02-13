@@ -254,7 +254,8 @@
   "saved": {
     "title": "Saved Cars",
     "noSaved": "No saved cars",
-    "explore": "Explore cars and save your favorites"
+    "explore": "Explore cars and save your favorites",
+    "browseCars": "Browse Cars"
   },
   "admin": {
     "title": "Admin Dashboard",

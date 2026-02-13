@@ -20,15 +20,15 @@ export function CategoryFilter({ selected, onSelect }: CategoryFilterProps) {
   const t = useTranslations("categories")
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+    <div className="flex gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {categories.map((category) => (
         <button
           key={category.value}
           onClick={() => onSelect(category.value)}
-          className={`px-5 py-2.5 rounded-full font-medium text-sm whitespace-nowrap transition-colors ${
+          className={`whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-medium transition-all ${
             selected === category.value
-              ? "bg-primary text-white"
-              : "bg-background border-2 border-border text-foreground hover:bg-muted"
+              ? "bg-primary text-white shadow-md"
+              : "border border-border/70 bg-background text-foreground hover:bg-muted/70"
           }`}
         >
           {t(category.labelKey)}

@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "@/navigation"
 import { locales } from "@/i18n"
 import { signOut } from "next-auth/react"
 import { useTranslations, useLocale } from "next-intl"
+import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,29 +62,71 @@ function NavigationMenuContent({
   const isActive = (path: string) => pathname === path
 
   const Icon = ({ children, active }: { children: React.ReactNode; active: boolean }) => (
-    <span className={`w-5 h-5 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`}>{children}</span>
+    <span
+      className={cn(
+        "grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors duration-200",
+        active
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-border/60 bg-background text-muted-foreground group-hover:border-border group-hover:text-foreground"
+      )}
+    >
+      {children}
+    </span>
   )
+
+  const menuItemClasses = (active: boolean, tone: "default" | "admin" = "default") =>
+    cn(
+      "group flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-[15px] font-medium transition-all duration-200",
+      active
+        ? "bg-primary/12 text-primary shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
+        : "text-foreground/90 hover:bg-muted/80 hover:text-foreground",
+      tone === "admin" && "font-semibold text-primary"
+    )
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
-          className="p-2 hover:bg-muted rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className={cn(
+            "relative grid h-10 w-10 place-items-center rounded-xl border border-border/70 bg-background/90 shadow-sm backdrop-blur transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+            "hover:bg-background hover:shadow-md",
+            open && "border-primary/35 bg-primary/5 shadow-primary/20"
+          )}
           aria-label="Open navigation menu"
           aria-expanded={open}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <span className="relative block h-4 w-5" aria-hidden="true">
+            <span
+              className={cn(
+                "absolute left-0 top-0 h-[2px] w-5 rounded-full bg-foreground transition-all duration-300",
+                open && "translate-y-[7px] rotate-45"
+              )}
+            />
+            <span
+              className={cn(
+                "absolute left-0 top-[7px] h-[2px] w-5 rounded-full bg-foreground transition-all duration-300",
+                open && "scale-x-0 opacity-0"
+              )}
+            />
+            <span
+              className={cn(
+                "absolute left-0 top-[14px] h-[2px] w-5 rounded-full bg-foreground transition-all duration-300",
+                open && "-translate-y-[7px] -rotate-45"
+              )}
+            />
+          </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72 max-h-[calc(100vh-8rem)] overflow-y-auto">
+      <DropdownMenuContent
+        align="start"
+        className="w-[21rem] max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border/60 bg-background/95 p-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.65)] backdrop-blur-2xl"
+      >
         {/* Main Navigation */}
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
           <Link
             href="/"
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 ${isActive("/") ? "bg-primary/10 text-primary" : ""}`}
+            className={menuItemClasses(isActive("/"))}
           >
             <Icon active={isActive("/")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,11 +142,11 @@ function NavigationMenuContent({
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
           <Link
             href="/cars"
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 ${isActive("/cars") ? "bg-primary/10 text-primary" : ""}`}
+            className={menuItemClasses(isActive("/cars"))}
           >
             <Icon active={isActive("/cars")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,11 +166,11 @@ function NavigationMenuContent({
         {user && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
               <Link
                 href="/bookings"
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 ${isActive("/bookings") ? "bg-primary/10 text-primary" : ""}`}
+                className={menuItemClasses(isActive("/bookings"))}
               >
                 <Icon active={isActive("/bookings")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,11 +186,11 @@ function NavigationMenuContent({
               </Link>
             </DropdownMenuItem>
 
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
               <Link
                 href="/saved"
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 ${isActive("/saved") ? "bg-primary/10 text-primary" : ""}`}
+                className={menuItemClasses(isActive("/saved"))}
               >
                 <Icon active={isActive("/saved")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,11 +206,11 @@ function NavigationMenuContent({
               </Link>
             </DropdownMenuItem>
 
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
               <Link
                 href="/profile"
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 ${isActive("/profile") ? "bg-primary/10 text-primary" : ""}`}
+                className={menuItemClasses(isActive("/profile"))}
               >
                 <Icon active={isActive("/profile")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,11 +230,11 @@ function NavigationMenuContent({
 
         {/* Information Section */}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
           <Link
             href="/about"
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 ${isActive("/about") ? "bg-primary/10 text-primary" : ""}`}
+            className={menuItemClasses(isActive("/about"))}
           >
             <Icon active={isActive("/about")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,11 +250,11 @@ function NavigationMenuContent({
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
           <Link
             href="/contact"
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 ${isActive("/contact") ? "bg-primary/10 text-primary" : ""}`}
+            className={menuItemClasses(isActive("/contact"))}
           >
             <Icon active={isActive("/contact")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,11 +270,11 @@ function NavigationMenuContent({
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
           <Link
             href="/help"
             onClick={() => setOpen(false)}
-            className={`flex items-center gap-3 ${isActive("/help") ? "bg-primary/10 text-primary" : ""}`}
+            className={menuItemClasses(isActive("/help"))}
           >
             <Icon active={isActive("/help")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,11 +294,11 @@ function NavigationMenuContent({
         {isAdmin && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
               <Link
                 href="/admin"
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 text-primary ${isActive("/admin") ? "bg-primary/10" : ""}`}
+                className={menuItemClasses(isActive("/admin"), "admin")}
               >
                 <Icon active={isActive("/admin")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,10 +324,10 @@ function NavigationMenuContent({
 
         {/* Language Switcher */}
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5">
+        <div className="px-2 py-2">
           <div className="space-y-2">
-            <span className="text-sm font-medium text-foreground">{t("navigation.language")}</span>
-            <div className="flex gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t("navigation.language")}</span>
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/70 bg-muted/35 p-1">
               {locales.map((loc) => (
                 <button
                   key={loc}
@@ -292,10 +335,10 @@ function NavigationMenuContent({
                     switchLocale(loc)
                     setOpen(false)
                   }}
-                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     locale === loc
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-background/80"
                   }`}
                 >
                   {localeNames[loc] || loc}
@@ -310,8 +353,8 @@ function NavigationMenuContent({
           <>
             <DropdownMenuSeparator />
             <div className="px-2 py-2">
-              <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-background/80 p-2.5 mb-2">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+              <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-border/70 bg-background/80 p-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold text-white">
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -324,7 +367,7 @@ function NavigationMenuContent({
                   handleLogout()
                   setOpen(false)
                 }}
-                className="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-error hover:bg-destructive/10 rounded-lg transition-colors"
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-error transition-colors hover:bg-destructive/10"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -345,7 +388,7 @@ function NavigationMenuContent({
               <Link
                 href={signInUrl}
                 onClick={() => setOpen(false)}
-                className="block w-full py-2.5 px-3 bg-primary text-primary-foreground text-center font-semibold rounded-lg hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 text-sm"
+                className="block w-full rounded-xl bg-primary px-3 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/25 transition-colors hover:bg-primary/90"
               >
                 {t("auth.signIn")}
               </Link>
@@ -358,4 +401,3 @@ function NavigationMenuContent({
 }
 
 export { NavigationMenu }
-

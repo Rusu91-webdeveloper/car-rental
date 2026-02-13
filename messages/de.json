@@ -254,7 +254,8 @@
   "saved": {
     "title": "Gespeicherte Autos",
     "noSaved": "Keine gespeicherten Autos",
-    "explore": "Durchsuchen Sie Autos und speichern Sie Ihre Favoriten"
+    "explore": "Durchsuchen Sie Autos und speichern Sie Ihre Favoriten",
+    "browseCars": "Autos ansehen"
   },
   "admin": {
     "title": "Admin-Dashboard",
