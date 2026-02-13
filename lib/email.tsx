@@ -154,7 +154,8 @@ interface BookingEmailData {
   dropoffDate: string
   location: string
   totalPrice: number
-  transferCode: string
+  transferCode?: string
+  paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
   bookingNumber: string
 }
 
@@ -178,6 +179,29 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
       return { error: `Invalid email address: ${data.to}` }
     }
+
+    const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
+    const paymentMethodLabel = isTransfer ? "Bank Transfer" : data.paymentMethod === "CARD" ? "Card" : "Pay at Pickup"
+    const transferCodeHtml =
+      isTransfer && data.transferCode
+        ? `
+                <div class="transfer-code">
+                  Transfer Code: ${data.transferCode}
+                </div>
+                <p style="text-align: center; color: #666; font-size: 14px;">Please show this code when picking up your vehicle</p>
+          `
+        : ""
+    const nextStepsHtml = isTransfer
+      ? `
+                  <li>Save your transfer code (${data.transferCode || "-"})</li>
+                  <li>Bring a valid driver's license</li>
+                  <li>Arrive at the pickup location 15 minutes early</li>
+        `
+      : `
+                  <li>Bring a valid driver's license</li>
+                  <li>Arrive at the pickup location 15 minutes early</li>
+                  <li>Complete payment using your selected method at pickup</li>
+        `
 
     const { id, error } = await sendEmail({
       to: data.to,
@@ -206,11 +230,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
               <div class="content">
                 <p>Hi ${data.userName},</p>
                 <p>Great news! Your booking has been confirmed. Here are your booking details:</p>
-                
-                <div class="transfer-code">
-                  Transfer Code: ${data.transferCode}
-                </div>
-                <p style="text-align: center; color: #666; font-size: 14px;">Please show this code when picking up your vehicle</p>
+                ${transferCodeHtml}
                 
                 <div class="details">
                   <div class="detail-row">
@@ -233,6 +253,10 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                     <span><strong>Location:</strong></span>
                     <span>${data.location}</span>
                   </div>
+                  <div class="detail-row">
+                    <span><strong>Payment Method:</strong></span>
+                    <span>${paymentMethodLabel}</span>
+                  </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Price:</strong></span>
                     <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice)}</span>
@@ -241,9 +265,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 
                 <p><strong>Next Steps:</strong></p>
                 <ul>
-                  <li>Save your transfer code (${data.transferCode})</li>
-                  <li>Bring a valid driver's license</li>
-                  <li>Arrive at the pickup location 15 minutes early</li>
+                  ${nextStepsHtml}
                 </ul>
               </div>
               <div class="footer">
@@ -781,6 +803,7 @@ export async function sendAdminBookingNotification(data: {
       where: { id: "company-settings" },
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
+    const depositPercent = Math.round((companySettings?.depositPercentage ?? 0.2) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
       new Set(
@@ -824,7 +847,7 @@ export async function sendAdminBookingNotification(data: {
                     <p style="font-size: 14px; color: #666; margin: 5px 0;">Customer should include this code in their bank transfer</p>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Deposit (20%):</strong></span>
+                    <span><strong>Deposit (${depositPercent}%):</strong></span>
                     <span>${formatCents(data.depositAmount)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">

@@ -252,7 +252,17 @@
     "partiallyRefunded": "Partially Refunded",
     "bookedAt": "Booked At",
     "cancellationDeadline": "Cancellation Deadline",
-    "willCancelAt": "Will be cancelled if not paid by"
+    "willCancelAt": "Will be cancelled if not paid by",
+    "review": {
+      "yourReview": "Your Review",
+      "rateExperience": "Rate your experience",
+      "eligibleMessage": "Your completed booking is eligible for a verified review.",
+      "leaveReview": "Leave a review",
+      "submitReview": "Submit review",
+      "submitting": "Submitting...",
+      "cancel": "Cancel",
+      "placeholder": "Tell us how your rental experience went..."
+    }
   },
   "saved": {
     "title": "Saved Cars",

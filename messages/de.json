@@ -252,7 +252,17 @@
     "partiallyRefunded": "Teilweise rückerstattet",
     "bookedAt": "Gebucht am",
     "cancellationDeadline": "Stornierungsfrist",
-    "willCancelAt": "Wird storniert, wenn nicht bezahlt bis"
+    "willCancelAt": "Wird storniert, wenn nicht bezahlt bis",
+    "review": {
+      "yourReview": "Ihre Bewertung",
+      "rateExperience": "Bewerten Sie Ihre Erfahrung",
+      "eligibleMessage": "Ihre abgeschlossene Buchung ist für eine verifizierte Bewertung berechtigt.",
+      "leaveReview": "Bewertung schreiben",
+      "submitReview": "Bewertung senden",
+      "submitting": "Wird gesendet...",
+      "cancel": "Abbrechen",
+      "placeholder": "Erzählen Sie uns von Ihrer Mietwagen-Erfahrung..."
+    }
   },
   "saved": {
     "title": "Gespeicherte Autos",

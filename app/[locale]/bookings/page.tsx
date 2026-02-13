@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/money"
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
+import { BookingReviewSection } from "./booking-review-section"
 
 export const dynamic = "force-dynamic"
 
@@ -28,7 +29,17 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   await cancelExpiredBookings()
   const userBookings = await prisma.booking.findMany({
     where: { userId: currentUser.id },
-    include: { car: true },
+    include: {
+      car: true,
+      review: {
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          createdAt: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   })
 
@@ -106,6 +117,17 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     })
   }
 
+  const reviewCopy = {
+    yourReview: t("bookings.review.yourReview"),
+    rateExperience: t("bookings.review.rateExperience"),
+    eligibleMessage: t("bookings.review.eligibleMessage"),
+    leaveReview: t("bookings.review.leaveReview"),
+    submitReview: t("bookings.review.submitReview"),
+    submitting: t("bookings.review.submitting"),
+    cancel: t("bookings.review.cancel"),
+    placeholder: t("bookings.review.placeholder"),
+  }
+
   return (
     <div className="min-h-screen bg-muted pb-20">
       {/* Header */}
@@ -146,6 +168,9 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                 booking.status === "PENDING" &&
                 booking.paymentStatus === "PENDING" &&
                 booking.paymentMethod === "TRANSFER"
+              const canLeaveReview =
+                booking.status === "COMPLETED" &&
+                (booking.paymentStatus === "PAID" || booking.paymentMethod === "PAY_AT_PICKUP")
 
               return (
                 <div key={booking.id} className="bg-background rounded-xl p-4 border border-border">
@@ -241,6 +266,23 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                       <span className="font-bold text-lg">{formatCents(booking.totalPrice)}</span>
                     </div>
                   </div>
+
+                  <BookingReviewSection
+                    bookingId={booking.id}
+                    locale={locale}
+                    canLeaveReview={canLeaveReview}
+                    copy={reviewCopy}
+                    existingReview={
+                      booking.review
+                        ? {
+                            id: booking.review.id,
+                            rating: booking.review.rating,
+                            comment: booking.review.comment,
+                            createdAt: booking.review.createdAt.toISOString(),
+                          }
+                        : null
+                    }
+                  />
                 </div>
               )
             })}

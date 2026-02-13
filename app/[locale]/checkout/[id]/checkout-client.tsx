@@ -41,6 +41,8 @@ export function CheckoutClient({
     companyName: string
     supportEmail: string
     depositPercentage: number
+    taxRate: number
+    taxIncluded: boolean
   }
 }) {
   const router = useRouter()
@@ -490,7 +492,8 @@ export function CheckoutClient({
 
   const days = calculateDays()
   const subtotalCents = car.price * days
-  const taxCents = Math.round(subtotalCents * 0.1)
+  const effectiveTaxRate = companySettings.taxRate > 0 ? companySettings.taxRate : 0.1
+  const taxCents = companySettings.taxIncluded ? 0 : Math.round(subtotalCents * effectiveTaxRate)
   const totalCents = subtotalCents + taxCents
 
   const handleConfirmBooking = () => {
@@ -785,10 +788,17 @@ export function CheckoutClient({
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">{formatCents(subtotalCents)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax (10%)</span>
-              <span className="font-medium">{formatCents(taxCents)}</span>
-            </div>
+            {companySettings.taxIncluded ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax</span>
+                <span className="font-medium">Included</span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax ({Math.round(effectiveTaxRate * 100)}%)</span>
+                <span className="font-medium">{formatCents(taxCents)}</span>
+              </div>
+            )}
             <div className="border-t border-border pt-2 flex justify-between">
               <span className="font-semibold">Total</span>
               <span className="font-bold text-xl">{formatCents(totalCents)}</span>

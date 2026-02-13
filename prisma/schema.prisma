@@ -24,6 +24,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   bookings      Booking[]
+  reviews       Review[]
   savedCars     SavedCar[]
   adminActions  AdminAuditLog[]
   stripeCustomerId String?
@@ -114,6 +115,7 @@ model Car {
   updatedAt    DateTime    @updatedAt
 
   bookings     Booking[]
+  reviews      Review[]
   savedBy      SavedCar[]
   blockedDates BlockedDate[]
 
@@ -179,6 +181,7 @@ model Booking {
   
   // Relations
   payments        Payment[]
+  review          Review?
   adminActions    AdminAuditLog[]
 
   @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
@@ -210,6 +213,23 @@ enum PaymentStatus {
 enum BookingPaymentMethod {
   TRANSFER
   PAY_AT_PICKUP
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carId     String
+  car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([carId])
 }
 
 // Payment tracking

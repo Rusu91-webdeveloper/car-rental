@@ -43,6 +43,12 @@ export const updateBookingStatusSchema = z.object({
   reason: z.string().optional(),
 })
 
+export const createBookingReviewSchema = z.object({
+  bookingId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().min(5).max(1000),
+})
+
 // Car validations
 export const createCarSchema = z.object({
   name: z.string().min(1).max(100),

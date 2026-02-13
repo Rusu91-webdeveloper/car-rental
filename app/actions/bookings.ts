@@ -53,8 +53,21 @@ export async function createBooking(data: unknown) {
 
     // Calculate pricing
     const totalDays = calculateTotalDays(pickupDate, dropoffDate)
-    const totalPrice = car.price * totalDays
-    const depositAmount = Math.round(totalPrice * 0.2) // 20% deposit
+    const subtotalPrice = car.price * totalDays
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: {
+        taxRate: true,
+        taxIncluded: true,
+        depositPercentage: true,
+      },
+    })
+    const configuredTaxRate = companySettings?.taxRate ?? 0
+    const effectiveTaxRate = configuredTaxRate > 0 ? configuredTaxRate : 0.1
+    const taxAmount = companySettings?.taxIncluded ? 0 : Math.round(subtotalPrice * effectiveTaxRate)
+    const totalPrice = subtotalPrice + taxAmount
+    const depositPercentage = companySettings?.depositPercentage ?? 0.2
+    const depositAmount = validated.paymentMethod === "TRANSFER" ? Math.round(totalPrice * depositPercentage) : 0
 
     // Generate unique booking number and transfer code
     const bookingNumber = `BK${Date.now().toString().slice(-8)}`
@@ -315,11 +328,14 @@ export async function updateBookingStatus(data: unknown) {
     // Update booking in transaction with audit log
     await prisma.$transaction(async (tx) => {
       const oldStatus = booking.status
+      const nextPaymentStatus =
+        validated.status === "COMPLETED" && booking.paymentStatus === "PENDING" ? "PAID" : booking.paymentStatus
 
       await tx.booking.update({
         where: { id: validated.bookingId },
         data: {
           status: validated.status,
+          paymentStatus: nextPaymentStatus,
           confirmedAt: validated.status === "CONFIRMED" ? new Date() : booking.confirmedAt,
           cancelledAt: validated.status === "CANCELLED" ? new Date() : booking.cancelledAt,
           completedAt: validated.status === "COMPLETED" ? new Date() : booking.completedAt,
@@ -339,8 +355,8 @@ export async function updateBookingStatus(data: unknown) {
           targetType: "booking",
           targetId: validated.bookingId,
           bookingId: validated.bookingId,
-          oldValue: { status: oldStatus },
-          newValue: { status: validated.status },
+          oldValue: { status: oldStatus, paymentStatus: booking.paymentStatus },
+          newValue: { status: validated.status, paymentStatus: nextPaymentStatus },
           reason: validated.reason,
         },
       })
@@ -385,7 +401,8 @@ export async function updateBookingStatus(data: unknown) {
           dropoffDate: formatDateForEmail(booking.dropoffDate),
           location: booking.location,
           totalPrice: booking.totalPrice,
-          transferCode: booking.transferCode,
+          transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
+          paymentMethod: booking.paymentMethod,
           bookingNumber: booking.bookingNumber,
         })
 
