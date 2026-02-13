@@ -13,6 +13,7 @@ export const createBookingSchema = z
     dropoffDate: z.string().datetime(),
     location: z.string().min(1),
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
+    locale: z.enum(["de", "en"]).default("de"),
   })
   .refine(
     (data) => {

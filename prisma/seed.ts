@@ -270,6 +270,36 @@ async function main() {
     console.log("✅ Created car:", created.name)
   }
 
+  // Always sync denormalized car rating/review counters from real reviews.
+  const allCars = await prisma.car.findMany({
+    select: { id: true },
+  })
+  const reviewAggregates = await prisma.review.groupBy({
+    by: ["carId"],
+    _avg: { rating: true },
+    _count: { _all: true },
+  })
+  const reviewStatsByCarId = new Map(
+    reviewAggregates.map((item) => [
+      item.carId,
+      {
+        rating: item._avg.rating ? Number(item._avg.rating.toFixed(1)) : 0,
+        reviewCount: item._count._all,
+      },
+    ]),
+  )
+
+  for (const car of allCars) {
+    const stats = reviewStatsByCarId.get(car.id) ?? { rating: 0, reviewCount: 0 }
+    await prisma.car.update({
+      where: { id: car.id },
+      data: {
+        rating: stats.rating,
+        reviewCount: stats.reviewCount,
+      },
+    })
+  }
+
   console.log("✨ Database seeded successfully!")
 }
 

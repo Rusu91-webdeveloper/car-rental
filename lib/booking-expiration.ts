@@ -5,6 +5,16 @@ import { config } from "@/lib/config"
 import { sendBookingCompletionReviewEmail } from "@/lib/email"
 
 type DbClient = PrismaClient | Prisma.TransactionClient
+const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
+const formatDateForLocale = (date: Date, locale: string) =>
+  new Date(date).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 
 export async function cancelExpiredBookings(db: DbClient = prisma, now = new Date()) {
   const cutoff = new Date(now.getTime() - BOOKING_PAYMENT_WINDOW_MS)
@@ -41,6 +51,7 @@ export async function completeFinishedBookings(now = new Date()) {
       car: {
         select: {
           name: true,
+          nameDe: true,
         },
       },
     },
@@ -50,17 +61,6 @@ export async function completeFinishedBookings(now = new Date()) {
 
   let completedCount = 0
   let completionEmailsSent = 0
-
-  const reviewUrl = `${config.appUrl.replace(/\/$/, "")}/bookings`
-  const formatDateForEmail = (date: Date) =>
-    new Date(date).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
 
   for (const booking of bookingsToComplete) {
     const updated = await prisma.booking.updateMany({
@@ -85,14 +85,18 @@ export async function completeFinishedBookings(now = new Date()) {
       continue
     }
 
+    const bookingLocale = normalizeBookingLocale(booking.locale)
+    const reviewUrl = `${config.appUrl.replace(/\/$/, "")}/${bookingLocale}/bookings`
+    const localizedCarName = bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
     const completionEmailResult = await sendBookingCompletionReviewEmail({
       to: booking.user.email,
       userName: booking.user.name || booking.user.email,
-      carName: booking.car.name,
+      carName: localizedCarName,
       bookingNumber: booking.bookingNumber,
-      pickupDate: formatDateForEmail(booking.pickupDate),
-      dropoffDate: formatDateForEmail(booking.dropoffDate),
+      pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
+      dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
       reviewUrl,
+      locale: bookingLocale,
     })
 
     if (!completionEmailResult?.error) {

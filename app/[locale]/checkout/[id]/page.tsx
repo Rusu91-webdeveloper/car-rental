@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { getPaymentDetails } from "@/lib/payment-details"
+import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CheckoutClient } from "./checkout-client"
 
 export const dynamic = "force-dynamic"
@@ -49,6 +50,8 @@ export default async function CheckoutPage({
 
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
   const displaySubtitle = locale === "de" ? car.subtitleDe || car.subtitle : car.subtitle
+  const reviewStatsByCar = await getCarReviewStatsMap([car.id])
+  const reviewStats = getCarReviewStats(reviewStatsByCar, car.id)
 
   // Fetch payment details and company settings
   const paymentDetails = await getPaymentDetails()
@@ -58,14 +61,15 @@ export default async function CheckoutPage({
 
   return (
     <CheckoutClient
+      locale={locale}
       car={{
         id: car.id,
         name: displayName,
         subtitle: displaySubtitle,
         image: car.image,
         price: car.price,
-        rating: car.rating,
-        reviews: car.reviewCount,
+        rating: reviewStats.rating,
+        reviews: reviewStats.reviewCount,
       }}
       signInUrl={signInUrl}
       paymentDetails={paymentDetails}

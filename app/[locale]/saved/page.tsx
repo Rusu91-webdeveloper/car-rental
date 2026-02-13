@@ -5,6 +5,7 @@ import { CarCard } from "@/components/car-card"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
+import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getTranslations } from "next-intl/server"
 
 export const dynamic = "force-dynamic"
@@ -29,6 +30,7 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
   })
 
   const savedCarsList = savedCars.map((saved) => saved.car)
+  const reviewStatsByCar = await getCarReviewStatsMap(savedCarsList.map((car) => car.id))
 
   return (
     <div className="min-h-screen bg-muted pb-20">
@@ -61,31 +63,35 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
           </div>
         ) : (
           <div className="space-y-4">
-            {savedCarsList.map((car) => (
-              <CarCard
-                key={car.id}
-                car={{
-                  id: car.id,
-                  name: car.name,
-                  nameDe: car.nameDe,
-                  category: car.category,
-                  price: car.price,
-                  image: car.image,
-                  status: car.status,
-                  specs: {
-                    gearbox: car.gearbox,
-                    seats: car.seats,
-                    fuel: car.fuelType,
-                    acceleration: car.acceleration,
-                  },
-                  rating: car.rating,
-                  reviews: car.reviewCount,
-                }}
-                isSaved
-                isSignedIn
-                signInUrl={signInUrl}
-              />
-            ))}
+            {savedCarsList.map((car) => {
+              const stats = getCarReviewStats(reviewStatsByCar, car.id)
+
+              return (
+                <CarCard
+                  key={car.id}
+                  car={{
+                    id: car.id,
+                    name: car.name,
+                    nameDe: car.nameDe,
+                    category: car.category,
+                    price: car.price,
+                    image: car.image,
+                    status: car.status,
+                    specs: {
+                      gearbox: car.gearbox,
+                      seats: car.seats,
+                      fuel: car.fuelType,
+                      acceleration: car.acceleration,
+                    },
+                    rating: stats.rating,
+                    reviews: stats.reviewCount,
+                  }}
+                  isSaved
+                  isSignedIn
+                  signInUrl={signInUrl}
+                />
+              )
+            })}
           </div>
         )}
       </div>

@@ -24,7 +24,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
     notFound()
   }
 
-  const [recentReviews, ratingBuckets] = await Promise.all([
+  const [recentReviews, ratingBuckets, reviewAggregate] = await Promise.all([
     prisma.review.findMany({
       where: { carId: car.id },
       orderBy: { createdAt: "desc" },
@@ -47,6 +47,11 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
       _count: {
         _all: true,
       },
+    }),
+    prisma.review.aggregate({
+      where: { carId: car.id },
+      _avg: { rating: true },
+      _count: { _all: true },
     }),
   ])
 
@@ -81,9 +86,11 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
   const statusLabel = statusKey ? t(`carStatus.${statusKey}`) : car.status.replace("_", " ")
 
   const ratingCountMap = new Map<number, number>(ratingBuckets.map((bucket) => [bucket.rating, bucket._count._all]))
+  const liveReviewCount = reviewAggregate._count._all
+  const liveRating = reviewAggregate._avg.rating ? Number(reviewAggregate._avg.rating.toFixed(1)) : 0
   const reviewBreakdown = [5, 4, 3, 2, 1].map((stars) => {
     const count = ratingCountMap.get(stars) ?? 0
-    const percentage = car.reviewCount > 0 ? Math.round((count / car.reviewCount) * 100) : 0
+    const percentage = liveReviewCount > 0 ? Math.round((count / liveReviewCount) * 100) : 0
     return { stars, percentage }
   })
 
@@ -151,9 +158,9 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
             <svg className="w-4 h-4 text-warning" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
             </svg>
-            <span className="font-semibold">{car.rating}</span>
+            <span className="font-semibold">{liveRating}</span>
           </div>
-          <span className="text-muted-foreground text-sm">({t("car.reviews", { count: car.reviewCount })})</span>
+          <span className="text-muted-foreground text-sm">({t("car.reviews", { count: liveReviewCount })})</span>
         </div>
 
         {/* Car Specifications */}
@@ -233,7 +240,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
 
           <div className="p-6 bg-muted rounded-xl">
             <div className="text-center mb-4">
-              <div className="text-4xl font-bold mb-2">{car.rating}</div>
+              <div className="text-4xl font-bold mb-2">{liveRating}</div>
               <div className="flex items-center justify-center gap-1 mb-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <svg key={star} className="w-5 h-5 text-warning" fill="currentColor" viewBox="0 0 24 24">
@@ -241,7 +248,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
                   </svg>
                 ))}
               </div>
-              <p className="text-sm text-muted-foreground">{t("car.basedOnReviews", { count: car.reviewCount })}</p>
+              <p className="text-sm text-muted-foreground">{t("car.basedOnReviews", { count: liveReviewCount })}</p>
             </div>
 
             <div className="space-y-2">
@@ -260,10 +267,10 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
             </div>
           </div>
 
-          {car.reviewCount > 0 ? (
+          {liveReviewCount > 0 ? (
             <details className="mt-4 rounded-xl border border-border bg-background p-4">
               <summary className="cursor-pointer list-none font-medium flex items-center justify-between">
-                <span>{t("car.readReviews", { count: car.reviewCount })}</span>
+                <span>{t("car.readReviews", { count: liveReviewCount })}</span>
                 <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -298,9 +305,9 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
                   </article>
                 ))}
 
-                {car.reviewCount > recentReviews.length && (
+                {liveReviewCount > recentReviews.length && (
                   <p className="text-xs text-muted-foreground text-center pt-1">
-                    {t("car.showingRecentReviews", { shown: recentReviews.length, total: car.reviewCount })}
+                    {t("car.showingRecentReviews", { shown: recentReviews.length, total: liveReviewCount })}
                   </p>
                 )}
               </div>

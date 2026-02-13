@@ -21,6 +21,18 @@ import crypto from "crypto"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
 
+const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
+
+const formatDateForLocale = (date: Date, locale: string) =>
+  new Date(date).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
 export async function createBooking(data: unknown) {
   try {
     const user = await requireAuth()
@@ -28,6 +40,7 @@ export async function createBooking(data: unknown) {
 
     // Validate input
     const validated = createBookingSchema.parse(data)
+    const bookingLocale = normalizeBookingLocale(validated.locale)
 
     const pickupDate = new Date(validated.pickupDate)
     const dropoffDate = new Date(validated.dropoffDate)
@@ -95,6 +108,7 @@ export async function createBooking(data: unknown) {
           data: {
             userId: user.id,
             carId: validated.carId,
+            locale: bookingLocale,
             pickupDate,
             dropoffDate,
             location: validated.location,
@@ -169,16 +183,8 @@ export async function createBooking(data: unknown) {
 
     // Manual payment flow (no Stripe)
     // Send email notifications
-    const formatDateForEmail = (date: Date) => {
-      return new Date(date).toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    }
+    const userEmailLocale = normalizeBookingLocale(booking.locale)
+    const userCarName = userEmailLocale === "de" ? car.nameDe || car.name : car.name
 
     // Send email notifications
     console.log("[BOOKING] Email configuration check:", {
@@ -200,26 +206,28 @@ export async function createBooking(data: unknown) {
           ? await sendManualPaymentEmail({
               to: user.email,
               userName: user.name || user.email,
-              carName: car.name,
-              pickupDate: formatDateForEmail(booking.pickupDate),
-              dropoffDate: formatDateForEmail(booking.dropoffDate),
+              carName: userCarName,
+              pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
+              dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
               location: booking.location,
               totalPrice: booking.totalPrice,
               depositAmount: booking.depositAmount,
               guaranteeAmount: booking.guaranteeAmount,
               transferCode: booking.transferCode,
               bookingNumber: booking.bookingNumber,
+              locale: userEmailLocale,
             })
           : await sendPayAtPickupEmail({
               to: user.email,
               userName: user.name || user.email,
-              carName: car.name,
-              pickupDate: formatDateForEmail(booking.pickupDate),
-              dropoffDate: formatDateForEmail(booking.dropoffDate),
+              carName: userCarName,
+              pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
+              dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
               location: booking.location,
               totalPrice: booking.totalPrice,
               guaranteeAmount: booking.guaranteeAmount,
               bookingNumber: booking.bookingNumber,
+              locale: userEmailLocale,
             })
 
       if (userEmailResult.error) {
@@ -240,8 +248,8 @@ export async function createBooking(data: unknown) {
         userName: user.name || user.email,
         userEmail: user.email,
         carName: car.name,
-        pickupDate: formatDateForEmail(booking.pickupDate),
-        dropoffDate: formatDateForEmail(booking.dropoffDate),
+        pickupDate: formatDateForLocale(booking.pickupDate, "en"),
+        dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
         location: booking.location,
         totalPrice: booking.totalPrice,
         depositAmount: booking.depositAmount,
@@ -288,7 +296,7 @@ export async function createBooking(data: unknown) {
         pickupDate: booking.pickupDate,
         dropoffDate: booking.dropoffDate,
         location: booking.location,
-        carName: car.name,
+        carName: userCarName,
         paymentMethod: booking.paymentMethod,
       },
       manualPayment: true,
@@ -382,17 +390,7 @@ export async function updateBookingStatus(data: unknown) {
     })
 
     if (config.features.emailEnabled && booking.user?.email) {
-      const formatDateForEmail = (date: Date) => {
-        return new Date(date).toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      }
-
+      const bookingLocale = normalizeBookingLocale(booking.locale)
       // Send appropriate email based on status
       if (validated.status === "CONFIRMED") {
         console.log("[BOOKING] Sending CONFIRMED status emails:", {
@@ -401,18 +399,20 @@ export async function updateBookingStatus(data: unknown) {
           adminEmails: config.adminEmails,
         })
 
+        const userCarName = bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
         const userConfirmationResult = await sendBookingConfirmationEmail({
           to: booking.user.email,
           userName: booking.user.name || booking.user.email,
-          carName: booking.car.name,
-          pickupDate: formatDateForEmail(booking.pickupDate),
-          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          carName: userCarName,
+          pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
+          dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
           location: booking.location,
           totalPrice: booking.totalPrice,
           guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
           paymentMethod: booking.paymentMethod,
           bookingNumber: booking.bookingNumber,
+          locale: bookingLocale,
         })
 
         if (userConfirmationResult.error) {
@@ -434,8 +434,8 @@ export async function updateBookingStatus(data: unknown) {
           userName: booking.user.name || booking.user.email,
           userEmail: booking.user.email,
           carName: booking.car.name,
-          pickupDate: formatDateForEmail(booking.pickupDate),
-          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          pickupDate: formatDateForLocale(booking.pickupDate, "en"),
+          dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
           location: booking.location,
           totalPrice: booking.totalPrice,
           guaranteeAmount: booking.guaranteeAmount,
@@ -462,15 +462,17 @@ export async function updateBookingStatus(data: unknown) {
           userEmail: booking.user.email,
         })
 
-        const reviewUrl = `${config.appUrl.replace(/\/$/, "")}/bookings`
+        const localizedCarName = bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
+        const reviewUrl = `${config.appUrl.replace(/\/$/, "")}/${bookingLocale}/bookings`
         const completionEmailResult = await sendBookingCompletionReviewEmail({
           to: booking.user.email,
           userName: booking.user.name || booking.user.email,
-          carName: booking.car.name,
+          carName: localizedCarName,
           bookingNumber: booking.bookingNumber,
-          pickupDate: formatDateForEmail(booking.pickupDate),
-          dropoffDate: formatDateForEmail(booking.dropoffDate),
+          pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
+          dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
           reviewUrl,
+          locale: bookingLocale,
         })
 
         if (completionEmailResult.error) {
@@ -496,9 +498,10 @@ export async function updateBookingStatus(data: unknown) {
         const statusEmailResult = await sendBookingStatusEmail(
           booking.user.email,
           booking.user.name || booking.user.email,
-          booking.car.name,
+          bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name,
           validated.status,
           booking.bookingNumber,
+          bookingLocale,
         )
 
         if (statusEmailResult.error) {

@@ -71,6 +71,15 @@ function extractEmailAddress(value: string | undefined | null): string {
   return (match?.[1] || value).trim()
 }
 
+type EmailLocale = "de" | "en"
+
+function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
+  if (!locale) {
+    return "de"
+  }
+  return locale.toLowerCase().startsWith("de") ? "de" : "en"
+}
+
 function resolveSupportEmail(settings: { supportEmail?: string | null; companyEmail?: string | null } | null): string {
   return (
     settings?.supportEmail ||
@@ -177,6 +186,7 @@ interface BookingEmailData {
   transferCode?: string
   paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
   bookingNumber: string
+  locale?: "de" | "en"
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
@@ -210,15 +220,27 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     })
     const companyName = companySettings?.companyName || "RentCar"
     const supportEmail = resolveSupportEmail(companySettings)
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
 
     const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
-    const paymentMethodLabel = isTransfer ? "Bank Transfer" : data.paymentMethod === "CARD" ? "Card" : "Pay at Pickup"
+    const paymentMethodLabel = isTransfer
+      ? isGerman
+        ? "Bankuberweisung"
+        : "Bank Transfer"
+      : data.paymentMethod === "CARD"
+        ? isGerman
+          ? "Karte"
+          : "Card"
+        : isGerman
+          ? "Zahlung bei Abholung"
+          : "Pay at Pickup"
     const guaranteeAmount = data.guaranteeAmount ?? 0
     const guaranteeDetailsHtml =
       guaranteeAmount > 0
         ? `
                   <div class="detail-row">
-                    <span><strong>Refundable Guarantee Hold:</strong></span>
+                    <span><strong>${isGerman ? "Erstattbare Kautionsreservierung:" : "Refundable Guarantee Hold:"}</strong></span>
                     <span>${formatCents(guaranteeAmount)}</span>
                   </div>
         `
@@ -227,26 +249,26 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       isTransfer && data.transferCode
         ? `
                 <div class="transfer-code">
-                  Transfer Code: ${data.transferCode}
+                  ${isGerman ? "Uberweisungscode" : "Transfer Code"}: ${data.transferCode}
                 </div>
-                <p style="text-align: center; color: #666; font-size: 14px;">Please show this code when picking up your vehicle</p>
+                <p style="text-align: center; color: #666; font-size: 14px;">${isGerman ? "Bitte diesen Code bei der Fahrzeugabholung vorzeigen." : "Please show this code when picking up your vehicle"}</p>
           `
         : ""
     const nextStepsHtml = isTransfer
       ? `
-                  <li>Save your transfer code (${data.transferCode || "-"})</li>
-                  <li>Bring a valid driver's license</li>
-                  <li>Arrive at the pickup location 15 minutes early</li>
+                  <li>${isGerman ? "Speichern Sie Ihren Uberweisungscode" : "Save your transfer code"} (${data.transferCode || "-"})</li>
+                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+                  <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
         `
       : `
-                  <li>Bring a valid driver's license</li>
-                  <li>Arrive at the pickup location 15 minutes early</li>
-                  <li>Complete payment using your selected method at pickup</li>
+                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+                  <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
+                  <li>${isGerman ? "Die Zahlung bei Abholung mit der gewahlten Methode abschliessen" : "Complete payment using your selected method at pickup"}</li>
         `
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `Booking Confirmed - ${data.carName}`,
+      subject: `${isGerman ? "Buchung bestatigt" : "Booking Confirmed"} - ${data.carName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -266,60 +288,60 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
           <body>
             <div class="container">
               <div class="header">
-                <h1>🚗 Booking Confirmed!</h1>
+                <h1>🚗 ${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
               </div>
               <div class="content">
-                <p>Hi ${data.userName},</p>
-                <p>Great news! Your booking has been confirmed. Here are your booking details:</p>
+                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
+                <p>${isGerman ? "Gute Nachrichten! Ihre Buchung wurde bestatigt. Hier sind Ihre Buchungsdetails:" : "Great news! Your booking has been confirmed. Here are your booking details:"}</p>
                 ${transferCodeHtml}
                 
                 <div class="details">
                   <div class="detail-row">
-                    <span><strong>Booking Number:</strong></span>
+                    <span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong></span>
                     <span>${data.bookingNumber}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Vehicle:</strong></span>
+                    <span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong></span>
                     <span>${data.carName}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Pick-up:</strong></span>
+                    <span><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong></span>
                     <span>${data.pickupDate}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Drop-off:</strong></span>
+                    <span><strong>${isGerman ? "Ruckgabe" : "Drop-off"}:</strong></span>
                     <span>${data.dropoffDate}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Location:</strong></span>
+                    <span><strong>${isGerman ? "Standort" : "Location"}:</strong></span>
                     <span>${data.location}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>Payment Method:</strong></span>
+                    <span><strong>${isGerman ? "Zahlungsmethode" : "Payment Method"}:</strong></span>
                     <span>${paymentMethodLabel}</span>
                   </div>
                   ${guaranteeDetailsHtml}
                   <div class="detail-row" style="border-bottom: none;">
-                    <span><strong>Total Price:</strong></span>
+                    <span><strong>${isGerman ? "Gesamtpreis" : "Total Price"}:</strong></span>
                     <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice)}</span>
                   </div>
                 </div>
                 ${
                   guaranteeAmount > 0
                     ? `<p style="font-size: 13px; color: #4b5563; margin-top: 10px;">
-                    The guarantee is a temporary security hold and not an extra rental fee. It is released after return if there are no damages, fines, or policy violations.
+                    ${isGerman ? "Die Garantie ist eine vorubergehende Sicherheitsreservierung und keine zusatzliche Mietgebuhr. Sie wird nach der Ruckgabe freigegeben, wenn keine Schaden, Bussgelder oder Verstosse vorliegen." : "The guarantee is a temporary security hold and not an extra rental fee. It is released after return if there are no damages, fines, or policy violations."}
                   </p>`
                     : ""
                 }
                 
-                <p><strong>Next Steps:</strong></p>
+                <p><strong>${isGerman ? "Nachste Schritte" : "Next Steps"}:</strong></p>
                 <ul>
                   ${nextStepsHtml}
                 </ul>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at ${supportEmail}</p>
-                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+                <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. ${isGerman ? "Alle Rechte vorbehalten." : "All rights reserved."}</p>
               </div>
             </div>
           </body>
@@ -359,6 +381,7 @@ export async function sendBookingStatusEmail(
   carName: string,
   status: string,
   bookingNumber: string,
+  locale?: "de" | "en",
 ) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -381,22 +404,30 @@ export async function sendBookingStatusEmail(
       return { error: `Invalid email address: ${to}` }
     }
 
+    const emailLocale = normalizeEmailLocale(locale)
+    const isGerman = emailLocale === "de"
     let subject = ""
     let message = ""
 
     switch (status) {
       case "CONFIRMED":
-        subject = `Booking Confirmed - ${carName}`
-        message = "Your booking has been confirmed by our team. You're all set!"
+        subject = `${isGerman ? "Buchung bestatigt" : "Booking Confirmed"} - ${carName}`
+        message = isGerman
+          ? "Ihre Buchung wurde von unserem Team bestatigt. Alles ist bereit."
+          : "Your booking has been confirmed by our team. You're all set!"
         break
       case "CANCELLED":
-        subject = `Booking Cancelled - ${carName}`
-        message = "Your booking has been cancelled. If you have any questions, please contact support."
+        subject = `${isGerman ? "Buchung storniert" : "Booking Cancelled"} - ${carName}`
+        message = isGerman
+          ? "Ihre Buchung wurde storniert. Bei Fragen kontaktieren Sie bitte den Support."
+          : "Your booking has been cancelled. If you have any questions, please contact support."
         break
       case "REJECTED":
-        subject = `Booking Update - ${carName}`
+        subject = `${isGerman ? "Buchungsupdate" : "Booking Update"} - ${carName}`
         message =
-          "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
+          isGerman
+            ? "Leider konnen wir Ihre Buchung derzeit nicht bearbeiten. Bitte kontaktieren Sie den Support fur weitere Informationen."
+            : "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
         break
       default:
         console.log("[EMAIL] Status email skipped for status:", status)
@@ -420,13 +451,13 @@ export async function sendBookingStatusEmail(
         <html>
           <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2>Booking Status Update</h2>
-              <p>Hi ${userName},</p>
+              <h2>${isGerman ? "Buchungsstatus-Update" : "Booking Status Update"}</h2>
+              <p>${isGerman ? "Hallo" : "Hi"} ${userName},</p>
               <p>${message}</p>
-              <p><strong>Booking Number:</strong> ${bookingNumber}</p>
-              <p><strong>Vehicle:</strong> ${carName}</p>
+              <p><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong> ${bookingNumber}</p>
+              <p><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${carName}</p>
               <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-              <p style="color: #666; font-size: 14px;">Questions? Contact us at ${supportEmail}</p>
+              <p style="color: #666; font-size: 14px;">${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
             </div>
           </body>
         </html>
@@ -469,6 +500,7 @@ export async function sendBookingCompletionReviewEmail(data: {
   pickupDate: string
   dropoffDate: string
   reviewUrl: string
+  locale?: "de" | "en"
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -496,10 +528,12 @@ export async function sendBookingCompletionReviewEmail(data: {
 
     const companyName = companySettings?.companyName || "Car Rental Company"
     const supportEmail = resolveSupportEmail(companySettings)
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `Thank you for choosing us - ${data.carName}`,
+      subject: `${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for choosing us"} - ${data.carName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -521,28 +555,28 @@ export async function sendBookingCompletionReviewEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1 style="margin:0 0 8px 0;">Thank you for your booking</h1>
-                <p style="margin:0; opacity:0.95;">We hope you enjoyed your rental experience.</p>
+                <h1 style="margin:0 0 8px 0;">${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for your booking"}</h1>
+                <p style="margin:0; opacity:0.95;">${isGerman ? "Wir hoffen, Sie hatten eine gute Mieterfahrung." : "We hope you enjoyed your rental experience."}</p>
               </div>
               <div class="content">
-                <p>Hi ${data.userName},</p>
-                <p>Your booking has been completed successfully. We appreciate your trust.</p>
+                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
+                <p>${isGerman ? "Ihre Buchung wurde erfolgreich abgeschlossen. Vielen Dank fur Ihr Vertrauen." : "Your booking has been completed successfully. We appreciate your trust."}</p>
 
                 <div class="card">
-                  <div class="row"><span><strong>Booking Number</strong></span><span>${data.bookingNumber}</span></div>
-                  <div class="row"><span><strong>Vehicle</strong></span><span>${data.carName}</span></div>
-                  <div class="row"><span><strong>Pick-up</strong></span><span>${data.pickupDate}</span></div>
-                  <div class="row"><span><strong>Drop-off</strong></span><span>${data.dropoffDate}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}</strong></span><span>${data.bookingNumber}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}</strong></span><span>${data.carName}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Abholung" : "Pick-up"}</strong></span><span>${data.pickupDate}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Ruckgabe" : "Drop-off"}</strong></span><span>${data.dropoffDate}</span></div>
                 </div>
 
-                <p>Would you take a minute to rate your experience? Your feedback helps us improve.</p>
+                <p>${isGerman ? "Nehmen Sie sich eine Minute Zeit fur eine Bewertung? Ihr Feedback hilft uns, besser zu werden." : "Would you take a minute to rate your experience? Your feedback helps us improve."}</p>
                 <div class="button-wrap">
-                  <a class="button" href="${data.reviewUrl}">Leave a Review</a>
+                  <a class="button" href="${data.reviewUrl}">${isGerman ? "Bewertung abgeben" : "Leave a Review"}</a>
                 </div>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at ${supportEmail}</p>
-                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+                <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. ${isGerman ? "Alle Rechte vorbehalten." : "All rights reserved."}</p>
               </div>
             </div>
           </body>
@@ -588,6 +622,7 @@ export async function sendManualPaymentEmail(data: {
   guaranteeAmount: number
   transferCode: string
   bookingNumber: string
+  locale?: "de" | "en"
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -617,6 +652,8 @@ export async function sendManualPaymentEmail(data: {
 
     const companyName = companySettings?.companyName || "Car Rental Company"
     const supportEmail = resolveSupportEmail(companySettings)
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
     const depositPercentage = companySettings?.depositPercentage ?? 0.2
     const depositPercent = Math.round(depositPercentage * 100)
     const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
@@ -625,7 +662,7 @@ export async function sendManualPaymentEmail(data: {
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `Booking Confirmed! - ${data.bookingNumber}`,
+      subject: `${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"} - ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -675,69 +712,69 @@ export async function sendManualPaymentEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>Booking Confirmed!</h1>
-                <p>Your reservation has been created successfully</p>
+                <h1>${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
+                <p>${isGerman ? "Ihre Reservierung wurde erfolgreich erstellt" : "Your reservation has been created successfully"}</p>
               </div>
               <div class="content">
                 <!-- Booking Number -->
                 <div class="booking-number-box">
-                  <div class="booking-number-label">Booking Number</div>
+                  <div class="booking-number-label">${isGerman ? "Buchungsnummer" : "Booking Number"}</div>
                   <div class="booking-number-value">${data.bookingNumber}</div>
                 </div>
 
                 <!-- Transfer Reference Code -->
                 <div class="transfer-code-box">
-                  <div class="transfer-code-label">Transfer Reference Code</div>
+                  <div class="transfer-code-label">${isGerman ? "Uberweisungsreferenzcode" : "Transfer Reference Code"}</div>
                   <div class="transfer-code-value">${data.transferCode}</div>
-                  <div class="transfer-code-hint">Use this code as reference when making payment</div>
+                  <div class="transfer-code-hint">${isGerman ? "Bitte diesen Code als Verwendungszweck bei der Zahlung nutzen" : "Use this code as reference when making payment"}</div>
                 </div>
 
                 <!-- Booking Details -->
                 <div class="booking-details">
-                  <h3>Booking Details</h3>
+                  <h3>${isGerman ? "Buchungsdetails" : "Booking Details"}</h3>
                   <div class="detail-row">
-                    <span class="detail-label">Car:</span>
+                    <span class="detail-label">${isGerman ? "Fahrzeug:" : "Car:"}</span>
                     <span class="detail-value">${data.carName}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Pick-up:</span>
+                    <span class="detail-label">${isGerman ? "Abholung:" : "Pick-up:"}</span>
                     <span class="detail-value">${data.pickupDate}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Drop-off:</span>
+                    <span class="detail-label">${isGerman ? "Ruckgabe:" : "Drop-off:"}</span>
                     <span class="detail-value">${data.dropoffDate}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">Location:</span>
+                    <span class="detail-label">${isGerman ? "Standort:" : "Location:"}</span>
                     <span class="detail-value">${data.location}</span>
                   </div>
                 </div>
 
                 <!-- Payment Required -->
                 <div class="payment-box">
-                  <h4>⚠️ Payment Required</h4>
-                  <p style="margin-bottom: 8px;">Please complete payment via bank transfer:</p>
+                  <h4>⚠️ ${isGerman ? "Zahlung erforderlich" : "Payment Required"}</h4>
+                  <p style="margin-bottom: 8px;">${isGerman ? "Bitte zahlen Sie per Bankuberweisung:" : "Please complete payment via bank transfer:"}</p>
                   <p class="payment-warning">
-                    <strong>Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.</strong>
+                    <strong>${isGerman ? `Bitte innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden bezahlen, sonst wird die Buchung storniert.` : `Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.`}</strong>
                   </p>
                   
                   <div class="payment-amounts">
                     <div class="payment-row">
-                      <span>Deposit (${depositPercent}%):</span>
+                      <span>${isGerman ? "Anzahlung" : "Deposit"} (${depositPercent}%):</span>
                       <strong>${formatCents(data.depositAmount)}</strong>
                     </div>
                     <div class="payment-row">
-                      <span>Remaining rental at pickup:</span>
+                      <span>${isGerman ? "Restbetrag bei Abholung:" : "Remaining rental at pickup:"}</span>
                       <strong>${formatCents(remainingRentalAtPickup)}</strong>
                     </div>
                     <div class="payment-row total">
-                      <span>Total Amount:</span>
+                      <span>${isGerman ? "Gesamtbetrag" : "Total Amount"}:</span>
                       <strong style="color: #3b82f6;">${formatCents(data.totalPrice)}</strong>
                     </div>
                     ${
                       data.guaranteeAmount > 0
                         ? `<div class="payment-row">
-                      <span>Refundable Guarantee (${guaranteePercent}%):</span>
+                      <span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span>
                       <strong>${formatCents(data.guaranteeAmount)}</strong>
                     </div>`
                         : ""
@@ -745,21 +782,21 @@ export async function sendManualPaymentEmail(data: {
                   </div>
 
                   <div class="bank-details">
-                    <h5>Bank Details</h5>
+                    <h5>${isGerman ? "Bankdaten" : "Bank Details"}</h5>
                     <div class="bank-detail-row">
-                      <span class="bank-detail-label">Bank Name:</span>
+                      <span class="bank-detail-label">${isGerman ? "Bankname:" : "Bank Name:"}</span>
                       <span class="bank-detail-value">${paymentDetails.bankName}</span>
                     </div>
                     <div class="bank-detail-row">
-                      <span class="bank-detail-label">Account Name:</span>
+                      <span class="bank-detail-label">${isGerman ? "Kontoinhaber:" : "Account Name:"}</span>
                       <span class="bank-detail-value">${paymentDetails.accountName}</span>
                     </div>
                     <div class="bank-detail-row">
-                      <span class="bank-detail-label">Account Number:</span>
+                      <span class="bank-detail-label">${isGerman ? "Kontonummer:" : "Account Number:"}</span>
                       <span class="bank-detail-value">${paymentDetails.accountNumber}</span>
                     </div>
                     <div class="bank-detail-row">
-                      <span class="bank-detail-label">Swift Code:</span>
+                      <span class="bank-detail-label">${isGerman ? "SWIFT-Code:" : "Swift Code:"}</span>
                       <span class="bank-detail-value">${paymentDetails.swiftCode}</span>
                     </div>
                     ${paymentDetails.iban ? `
@@ -769,35 +806,35 @@ export async function sendManualPaymentEmail(data: {
                     </div>
                     ` : ''}
                     <div class="bank-detail-row">
-                      <span class="bank-detail-label">Reference:</span>
+                      <span class="bank-detail-label">${isGerman ? "Verwendungszweck:" : "Reference:"}</span>
                       <span class="reference-code">${data.transferCode}</span>
                     </div>
                   </div>
 
                   <p class="important-note">
-                    <strong>Important:</strong> Include the transfer code <strong>${data.transferCode}</strong> in your payment reference so we can process your booking.
+                    <strong>${isGerman ? "Wichtig:" : "Important:"}</strong> ${isGerman ? `Bitte den Uberweisungscode <strong>${data.transferCode}</strong> im Verwendungszweck angeben, damit wir Ihre Buchung zuordnen konnen.` : `Include the transfer code <strong>${data.transferCode}</strong> in your payment reference so we can process your booking.`}
                   </p>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<p class="important-note"><strong>Guarantee:</strong> This is a temporary security hold and is released after vehicle return if no issues are found.</p>`
+                      ? `<p class="important-note"><strong>${isGerman ? "Garantie:" : "Guarantee:"}</strong> ${isGerman ? "Dies ist eine vorubergehende Sicherheitsreservierung und wird nach der Ruckgabe freigegeben, wenn keine Probleme vorliegen." : "This is a temporary security hold and is released after vehicle return if no issues are found."}</p>`
                       : ""
                   }
                 </div>
 
                 <!-- Next Steps -->
                 <div class="next-steps">
-                  <h4>📋 Next Steps</h4>
+                  <h4>📋 ${isGerman ? "Nachste Schritte" : "Next Steps"}</h4>
                   <ol>
-                    <li>Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours</li>
-                    <li>You will receive a confirmation email with payment instructions</li>
-                    <li>Once payment is verified, your booking will be confirmed</li>
-                    <li>You'll receive a final confirmation email with pickup details</li>
+                    <li>${isGerman ? `Die Bankuberweisung innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden abschliessen` : `Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</li>
+                    <li>${isGerman ? "Sie erhalten eine Bestatigungsmail mit Zahlungsanweisungen" : "You will receive a confirmation email with payment instructions"}</li>
+                    <li>${isGerman ? "Sobald die Zahlung gepruft wurde, wird Ihre Buchung bestatigt" : "Once payment is verified, your booking will be confirmed"}</li>
+                    <li>${isGerman ? "Danach erhalten Sie eine finale Bestatigung mit Abholdetails" : "You'll receive a final confirmation email with pickup details"}</li>
                   </ol>
                 </div>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at ${supportEmail}</p>
-                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+                <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. ${isGerman ? "Alle Rechte vorbehalten." : "All rights reserved."}</p>
               </div>
             </div>
           </body>
@@ -841,6 +878,7 @@ export async function sendPayAtPickupEmail(data: {
   totalPrice: number
   guaranteeAmount: number
   bookingNumber: string
+  locale?: "de" | "en"
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -867,11 +905,13 @@ export async function sendPayAtPickupEmail(data: {
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
     const supportEmail = resolveSupportEmail(companySettings)
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `Booking Confirmed! - ${data.bookingNumber}`,
+      subject: `${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"} - ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -894,52 +934,52 @@ export async function sendPayAtPickupEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>Booking Confirmed!</h1>
-                <p>Your reservation has been created successfully</p>
+                <h1>${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
+                <p>${isGerman ? "Ihre Reservierung wurde erfolgreich erstellt" : "Your reservation has been created successfully"}</p>
               </div>
               <div class="content">
-                <p>Hi ${data.userName},</p>
-                <p>Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method.</p>
+                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
+                <p>${isGerman ? "Ihre Buchung wurde mit <strong>Zahlung bei Abholung</strong> als Zahlungsmethode bestatigt." : "Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method."}</p>
 
                 <div class="box booking-number-box">
-                  <div style="font-size: 14px; color: #6b7280;">Booking Number</div>
+                  <div style="font-size: 14px; color: #6b7280;">${isGerman ? "Buchungsnummer" : "Booking Number"}</div>
                   <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${data.bookingNumber}</div>
                 </div>
 
                 <div class="details">
-                  <h3>Booking Details</h3>
-                  <div class="detail-row"><span>Car:</span><strong>${data.carName}</strong></div>
-                  <div class="detail-row"><span>Pick-up:</span><strong>${data.pickupDate}</strong></div>
-                  <div class="detail-row"><span>Drop-off:</span><strong>${data.dropoffDate}</strong></div>
-                  <div class="detail-row"><span>Location:</span><strong>${data.location}</strong></div>
-                  <div class="detail-row"><span>Total Amount:</span><strong>${formatCents(data.totalPrice)}</strong></div>
+                  <h3>${isGerman ? "Buchungsdetails" : "Booking Details"}</h3>
+                  <div class="detail-row"><span>${isGerman ? "Fahrzeug:" : "Car:"}</span><strong>${data.carName}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${data.pickupDate}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Ruckgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice)}</strong></div>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<div class="detail-row"><span>Refundable Guarantee (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount)}</strong></div>`
+                      ? `<div class="detail-row"><span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount)}</strong></div>`
                       : ""
                   }
                 </div>
 
                 <div class="box pickup-payment-box">
-                  <h3 style="margin: 0 0 8px 0;">Payment at Pickup</h3>
-                  <p style="margin: 0;">Please complete payment at pickup when collecting your vehicle.</p>
+                  <h3 style="margin: 0 0 8px 0;">${isGerman ? "Zahlung bei Abholung" : "Payment at Pickup"}</h3>
+                  <p style="margin: 0;">${isGerman ? "Bitte die Zahlung bei der Fahrzeugabholung abschliessen." : "Please complete payment at pickup when collecting your vehicle."}</p>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<p style="margin-top: 8px;">The guarantee is a temporary security hold and will be released after return if no issues are found.</p>`
+                      ? `<p style="margin-top: 8px;">${isGerman ? "Die Garantie ist eine vorubergehende Sicherheitsreservierung und wird nach der Ruckgabe freigegeben, wenn keine Probleme vorliegen." : "The guarantee is a temporary security hold and will be released after return if no issues are found."}</p>`
                       : ""
                   }
                 </div>
 
-                <p><strong>Next steps:</strong></p>
+                <p><strong>${isGerman ? "Nachste Schritte" : "Next steps"}:</strong></p>
                 <ol>
-                  <li>Arrive at the pickup location on time.</li>
-                  <li>Bring your booking number and a valid ID/driving license.</li>
-                  <li>Complete payment at pickup.</li>
+                  <li>${isGerman ? "Bitte rechtzeitig am Abholort erscheinen." : "Arrive at the pickup location on time."}</li>
+                  <li>${isGerman ? "Buchungsnummer sowie gultigen Ausweis/Fuhrerschein mitbringen." : "Bring your booking number and a valid ID/driving license."}</li>
+                  <li>${isGerman ? "Zahlung bei Abholung abschliessen." : "Complete payment at pickup."}</li>
                 </ol>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at ${supportEmail}</p>
-                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+                <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. ${isGerman ? "Alle Rechte vorbehalten." : "All rights reserved."}</p>
               </div>
             </div>
           </body>

@@ -145,6 +145,7 @@ model Booking {
   id              String        @id @default(cuid())
   bookingNumber   String        @unique @default(cuid())
   transferCode    String        @unique
+  locale          String        @default("de")
   
   userId          String
   user            User          @relation(fields: [userId], references: [id])

@@ -15,11 +15,13 @@ import { CalendarIcon } from "lucide-react"
 import { BookingSuccessModal } from "./booking-success-modal"
 
 export function CheckoutClient({
+  locale,
   car,
   signInUrl,
   paymentDetails,
   companySettings,
 }: {
+  locale: string
   car: {
     id: string
     name: string
@@ -539,6 +541,7 @@ export function CheckoutClient({
         dropoffDate: dropoffISO,
         location,
         paymentMethod,
+        locale: locale === "de" ? "de" : "en",
       })
 
       if (result?.error) {

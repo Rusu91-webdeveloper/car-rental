@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import AdminDashboard from "./admin-client"
 import type { Car, Booking, User } from "@prisma/client"
 
@@ -117,33 +118,38 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
       }
     })
     .filter((reservation): reservation is NonNullable<typeof reservation> => reservation !== null)
+  const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
 
   return (
     <AdminDashboard
       currentUser={{ id: adminUser.id, name: adminUser.name || adminUser.email, email: adminUser.email }}
-      cars={cars.map((car: Car) => ({
-        id: car.id,
-        name: car.name,
-        nameDe: car.nameDe,
-        subtitle: car.subtitle,
-        subtitleDe: car.subtitleDe,
-        category: car.category,
-        price: car.price,
-        image: car.image,
-        images: car.images,
-        status: car.status,
-        specs: {
-          gearbox: car.gearbox,
-          seats: car.seats,
-          fuel: car.fuelType,
-          acceleration: car.acceleration,
-        },
-        year: car.year,
-        rating: car.rating,
-        reviews: car.reviewCount,
-        description: car.description,
-        descriptionDe: car.descriptionDe,
-      }))}
+      cars={cars.map((car: Car) => {
+        const stats = getCarReviewStats(reviewStatsByCar, car.id)
+
+        return {
+          id: car.id,
+          name: car.name,
+          nameDe: car.nameDe,
+          subtitle: car.subtitle,
+          subtitleDe: car.subtitleDe,
+          category: car.category,
+          price: car.price,
+          image: car.image,
+          images: car.images,
+          status: car.status,
+          specs: {
+            gearbox: car.gearbox,
+            seats: car.seats,
+            fuel: car.fuelType,
+            acceleration: car.acceleration,
+          },
+          year: car.year,
+          rating: stats.rating,
+          reviews: stats.reviewCount,
+          description: car.description,
+          descriptionDe: car.descriptionDe,
+        }
+      })}
       bookings={bookings.map((booking: Booking) => ({
         id: booking.id,
         userId: booking.userId,
