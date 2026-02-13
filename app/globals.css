@@ -79,8 +79,8 @@
 }
 
 @theme inline {
-  --font-sans: "Geist", "Geist Fallback";
-  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --font-sans: var(--font-noto-sans), "Noto Sans", "Liberation Sans", "DejaVu Sans", sans-serif;
+  --font-mono: var(--font-fira-mono), "Fira Mono", "Liberation Mono", "DejaVu Sans Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

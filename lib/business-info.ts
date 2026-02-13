@@ -58,9 +58,8 @@ export async function getBusinessInfo() {
       registerCourt: "Amtsgericht Berlin-Charlottenburg",
       vatId: "DE123456789",
       responsiblePerson: "Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland",
-      supportEmail: "support@rentcar.com",
-      adminEmail: "admin@rentcar.com",
+      supportEmail: process.env.SUPPORT_EMAIL || process.env.ADMIN_EMAIL || "",
+      adminEmail: process.env.ADMIN_EMAIL || "",
     }
   }
 }
-

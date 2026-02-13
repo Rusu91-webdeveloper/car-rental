@@ -3,10 +3,11 @@
 import type React from "react"
 
 import Link from "@/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { ClientOnly } from "@/components/client-only"
 import { useTranslations } from "next-intl"
+import { getCompanySettings } from "@/app/actions/settings"
 
 export default function ContactPage() {
   const t = useTranslations()
@@ -17,6 +18,15 @@ export default function ContactPage() {
     message: "",
   })
   const [submitted, setSubmitted] = useState(false)
+  const [supportEmail, setSupportEmail] = useState("")
+
+  useEffect(() => {
+    getCompanySettings().then((result) => {
+      if (result?.success && result.settings) {
+        setSupportEmail(result.settings.supportEmail || result.settings.companyEmail || "")
+      }
+    })
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,7 +79,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <h3 className="font-semibold mb-1">{t("contact.info.emailTitle")}</h3>
-                <p className="text-muted-foreground text-sm">support@rentcar.com</p>
+                <p className="text-muted-foreground text-sm">{supportEmail || "-"}</p>
               </div>
             </div>
 

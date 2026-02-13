@@ -63,6 +63,25 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email)
 }
 
+function extractEmailAddress(value: string | undefined | null): string {
+  if (!value) {
+    return ""
+  }
+  const match = value.match(/<([^>]+)>/)
+  return (match?.[1] || value).trim()
+}
+
+function resolveSupportEmail(settings: { supportEmail?: string | null; companyEmail?: string | null } | null): string {
+  return (
+    settings?.supportEmail ||
+    settings?.companyEmail ||
+    process.env.SUPPORT_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    process.env.EMAIL_USER ||
+    extractEmailAddress(emailFrom)
+  )
+}
+
 async function sendEmail({ to, subject, html }: SendEmailInput) {
   const configStatus = getEmailConfigStatus()
 
@@ -181,6 +200,17 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       return { error: `Invalid email address: ${data.to}` }
     }
 
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: {
+        companyName: true,
+        companyEmail: true,
+        supportEmail: true,
+      },
+    })
+    const companyName = companySettings?.companyName || "RentCar"
+    const supportEmail = resolveSupportEmail(companySettings)
+
     const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
     const paymentMethodLabel = isTransfer ? "Bank Transfer" : data.paymentMethod === "CARD" ? "Card" : "Pay at Pickup"
     const guaranteeAmount = data.guaranteeAmount ?? 0
@@ -288,8 +318,8 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 </ul>
               </div>
               <div class="footer">
-                <p>Questions? Contact us at support@rentcar.com</p>
-                <p>&copy; ${new Date().getFullYear()} RentCar. All rights reserved.</p>
+                <p>Questions? Contact us at ${supportEmail}</p>
+                <p>&copy; ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
               </div>
             </div>
           </body>
@@ -373,6 +403,15 @@ export async function sendBookingStatusEmail(
         return { success: true }
     }
 
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: {
+        companyEmail: true,
+        supportEmail: true,
+      },
+    })
+    const supportEmail = resolveSupportEmail(companySettings)
+
     const { id, error } = await sendEmail({
       to,
       subject,
@@ -387,7 +426,7 @@ export async function sendBookingStatusEmail(
               <p><strong>Booking Number:</strong> ${bookingNumber}</p>
               <p><strong>Vehicle:</strong> ${carName}</p>
               <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-              <p style="color: #666; font-size: 14px;">Questions? Contact us at support@rentcar.com</p>
+              <p style="color: #666; font-size: 14px;">Questions? Contact us at ${supportEmail}</p>
             </div>
           </body>
         </html>
@@ -456,7 +495,7 @@ export async function sendBookingCompletionReviewEmail(data: {
     })
 
     const companyName = companySettings?.companyName || "Car Rental Company"
-    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+    const supportEmail = resolveSupportEmail(companySettings)
 
     const { id, error } = await sendEmail({
       to: data.to,
@@ -577,7 +616,7 @@ export async function sendManualPaymentEmail(data: {
     })
 
     const companyName = companySettings?.companyName || "Car Rental Company"
-    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+    const supportEmail = resolveSupportEmail(companySettings)
     const depositPercentage = companySettings?.depositPercentage ?? 0.2
     const depositPercent = Math.round(depositPercentage * 100)
     const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
@@ -827,7 +866,7 @@ export async function sendPayAtPickupEmail(data: {
       where: { id: "company-settings" },
     })
     const companyName = companySettings?.companyName || "Car Rental Company"
-    const supportEmail = companySettings?.supportEmail || "support@rentcar.com"
+    const supportEmail = resolveSupportEmail(companySettings)
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
 
     const { id, error } = await sendEmail({
