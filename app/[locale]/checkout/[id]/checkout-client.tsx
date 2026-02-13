@@ -1,12 +1,14 @@
 "use client"
 
 import { useRouter, usePathname } from "@/navigation"
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { createBooking } from "@/app/actions/bookings"
+import { getCarAvailability } from "@/app/actions/cars"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Calendar } from "@/components/ui/calendar"
 import { formatCents } from "@/lib/money"
 import { BookingSuccessModal } from "./booking-success-modal"
 
@@ -42,14 +44,21 @@ export function CheckoutClient({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  
+
+  const formatDateKey = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   // Format as datetime-local string (YYYY-MM-DDTHH:mm)
   const formatDatetimeLocal = (date: Date) => {
     const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    const hours = String(date.getHours()).padStart(2, "0")
+    const minutes = String(date.getMinutes()).padStart(2, "0")
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
@@ -79,7 +88,7 @@ export function CheckoutClient({
     
     const threeDaysLater = new Date(tomorrow)
     threeDaysLater.setDate(threeDaysLater.getDate() + 3)
-    
+
     return {
       pickup: formatDatetimeLocal(tomorrow),
       dropoff: formatDatetimeLocal(threeDaysLater),
@@ -97,6 +106,52 @@ export function CheckoutClient({
   }
 
   const [location, setLocation] = useState(getInitialLocation())
+  const [isAvailabilityLoading, setIsAvailabilityLoading] = useState(true)
+  const [unavailableRanges, setUnavailableRanges] = useState<{ start: Date; end: Date }[]>([])
+
+  const unavailableDateSet = useMemo(() => {
+    const blocked = new Set<string>()
+    unavailableRanges.forEach((range) => {
+      const start = new Date(range.start)
+      const end = new Date(range.end)
+      start.setHours(0, 0, 0, 0)
+      end.setHours(0, 0, 0, 0)
+
+      const current = new Date(start)
+      while (current <= end) {
+        blocked.add(formatDateKey(current))
+        current.setDate(current.getDate() + 1)
+      }
+    })
+    return blocked
+  }, [unavailableRanges])
+
+  const isDateInPast = (date: Date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const dateCopy = new Date(date)
+    dateCopy.setHours(0, 0, 0, 0)
+    return dateCopy < today
+  }
+
+  const isUnavailableDate = (date: Date) => unavailableDateSet.has(formatDateKey(date))
+
+  const rangeHasUnavailableDays = (start: Date, end: Date) => {
+    const from = new Date(start)
+    const to = new Date(end)
+    from.setHours(0, 0, 0, 0)
+    to.setHours(0, 0, 0, 0)
+
+    const current = new Date(from)
+    while (current <= to) {
+      if (isUnavailableDate(current)) {
+        return true
+      }
+      current.setDate(current.getDate() + 1)
+    }
+
+    return false
+  }
 
   // Update dates and location when URL params change
   useEffect(() => {
@@ -113,7 +168,50 @@ export function CheckoutClient({
       setLocation(locationParam)
     }
   }, [searchParams])
+
+  useEffect(() => {
+    let mounted = true
+
+    const fetchAvailability = async () => {
+      try {
+        setIsAvailabilityLoading(true)
+        const result = await getCarAvailability(car.id)
+
+        if (!mounted) {
+          return
+        }
+
+        if (result?.error) {
+          setAvailabilityError("Unable to load unavailable dates right now.")
+          return
+        }
+
+        const ranges = (result?.unavailableDates || []).map((range) => ({
+          start: new Date(range.start),
+          end: new Date(range.end),
+        }))
+        setUnavailableRanges(ranges)
+        setAvailabilityError(null)
+      } catch (err) {
+        if (mounted) {
+          console.error("Failed to load car availability:", err)
+          setAvailabilityError("Unable to load unavailable dates right now.")
+        }
+      } finally {
+        if (mounted) {
+          setIsAvailabilityLoading(false)
+        }
+      }
+    }
+
+    fetchAvailability()
+    return () => {
+      mounted = false
+    }
+  }, [car.id])
+
   const [error, setError] = useState<string | null>(null)
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
   const [isPending, startTransition] = useTransition()
   const [bookingSuccess, setBookingSuccess] = useState<{
@@ -127,6 +225,152 @@ export function CheckoutClient({
     location: string
     carName: string
   } | null>(null)
+
+  const updateQueryParams = (updates: Record<string, string>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.entries(updates).forEach(([key, value]) => params.set(key, value))
+    const queryString = params.toString()
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+  }
+
+  const toFriendlyErrorMessage = (rawError: string) => {
+    let normalizedError = rawError
+
+    if (rawError.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(rawError)
+        if (Array.isArray(parsed) && parsed[0]?.message) {
+          normalizedError = parsed[0].message
+        }
+      } catch {
+        // keep original message
+      }
+    }
+
+    const messageMap: Record<string, string> = {
+      "Pickup date must be in the future": "Please select a pickup date and time in the future.",
+      "Drop-off date must be after pickup date": "Drop-off must be after pickup.",
+      "Car is not available for the selected dates": "Those dates are unavailable. Please choose different dates.",
+      "Car is no longer available": "That car is no longer available for the selected period. Please choose different dates.",
+    }
+
+    return messageMap[normalizedError] || normalizedError
+  }
+
+  const combineDateWithCurrentTime = (datePart: Date, currentDateTimeValue: string, fallbackHour = 10) => {
+    const current = new Date(currentDateTimeValue)
+    const merged = new Date(datePart)
+
+    if (Number.isNaN(current.getTime())) {
+      merged.setHours(fallbackHour, 0, 0, 0)
+    } else {
+      merged.setHours(current.getHours(), current.getMinutes(), 0, 0)
+    }
+
+    return merged
+  }
+
+  const selectedRange = useMemo(() => {
+    const from = new Date(pickupDate)
+    const to = new Date(dropoffDate)
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return undefined
+    }
+
+    return { from, to }
+  }, [pickupDate, dropoffDate])
+
+  const handleRangeSelect = (range: { from?: Date; to?: Date } | undefined) => {
+    if (!range?.from) {
+      return
+    }
+
+    const nextPickup = combineDateWithCurrentTime(range.from, pickupDate, 10)
+    const nextDropoffSource = range.to || new Date(range.from)
+    const nextDropoff = combineDateWithCurrentTime(nextDropoffSource, dropoffDate, 10)
+
+    if (nextDropoff <= nextPickup) {
+      nextDropoff.setDate(nextPickup.getDate() + 1)
+    }
+
+    if (rangeHasUnavailableDays(nextPickup, nextDropoff)) {
+      setError("Your selected range includes booked dates. Please choose different dates.")
+      return
+    }
+
+    setPickupDate(formatDatetimeLocal(nextPickup))
+    setDropoffDate(formatDatetimeLocal(nextDropoff))
+    setError(null)
+
+    updateQueryParams({
+      pickupDate: formatDateKey(nextPickup),
+      dropoffDate: formatDateKey(nextDropoff),
+    })
+  }
+
+  const handlePickupChange = (value: string) => {
+    const nextPickup = new Date(value)
+    if (Number.isNaN(nextPickup.getTime())) {
+      return
+    }
+
+    if (isUnavailableDate(nextPickup)) {
+      setError("This pickup date is already booked. Please choose another date.")
+      return
+    }
+
+    if (nextPickup <= new Date()) {
+      setError("Please select a pickup date and time in the future.")
+      return
+    }
+
+    const currentDropoff = new Date(dropoffDate)
+    if (!Number.isNaN(currentDropoff.getTime())) {
+      if (currentDropoff <= nextPickup) {
+        setError("Drop-off must be after pickup.")
+        return
+      }
+
+      if (rangeHasUnavailableDays(nextPickup, currentDropoff)) {
+        setError("Your selected range includes booked dates. Please choose different dates.")
+        return
+      }
+    }
+
+    setPickupDate(value)
+    setError(null)
+    updateQueryParams({ pickupDate: value.split("T")[0] || formatDateKey(nextPickup) })
+  }
+
+  const handleDropoffChange = (value: string) => {
+    const nextDropoff = new Date(value)
+    if (Number.isNaN(nextDropoff.getTime())) {
+      return
+    }
+
+    if (isUnavailableDate(nextDropoff)) {
+      setError("This drop-off date is already booked. Please choose another date.")
+      return
+    }
+
+    const currentPickup = new Date(pickupDate)
+    if (!Number.isNaN(currentPickup.getTime())) {
+      if (nextDropoff <= currentPickup) {
+        setError("Drop-off must be after pickup.")
+        return
+      }
+
+      if (rangeHasUnavailableDays(currentPickup, nextDropoff)) {
+        setError("Your selected range includes booked dates. Please choose different dates.")
+        return
+      }
+    }
+
+    setDropoffDate(value)
+    setError(null)
+    updateQueryParams({ dropoffDate: value.split("T")[0] || formatDateKey(nextDropoff) })
+  }
 
   const calculateDays = () => {
     const pickup = new Date(pickupDate)
@@ -143,10 +387,34 @@ export function CheckoutClient({
 
   const handleConfirmBooking = () => {
     setError(null)
+
+    const pickup = new Date(pickupDate)
+    const dropoff = new Date(dropoffDate)
+
+    if (Number.isNaN(pickup.getTime()) || Number.isNaN(dropoff.getTime())) {
+      setError("Please select valid pickup and drop-off dates.")
+      return
+    }
+
+    if (pickup <= new Date()) {
+      setError("Please select a pickup date and time in the future.")
+      return
+    }
+
+    if (dropoff <= pickup) {
+      setError("Drop-off must be after pickup.")
+      return
+    }
+
+    if (rangeHasUnavailableDays(pickup, dropoff)) {
+      setError("Your selected range includes booked dates. Please choose different dates.")
+      return
+    }
+
     startTransition(async () => {
       // Convert datetime-local format to ISO 8601
-      const pickupISO = new Date(pickupDate).toISOString()
-      const dropoffISO = new Date(dropoffDate).toISOString()
+      const pickupISO = pickup.toISOString()
+      const dropoffISO = dropoff.toISOString()
       
       const result = await createBooking({
         carId: car.id,
@@ -162,7 +430,7 @@ export function CheckoutClient({
           router.push(`${signInUrl}?redirect_url=${encodeURIComponent(returnUrl)}`)
           return
         }
-        setError(result.error)
+        setError(toFriendlyErrorMessage(result.error))
         return
       }
 
@@ -247,15 +515,8 @@ export function CheckoutClient({
               id="pickup"
               type="datetime-local"
               value={pickupDate}
-              onChange={(e) => {
-                setPickupDate(e.target.value)
-                // Update URL params when date changes
-                const params = new URLSearchParams(searchParams.toString())
-                const dateStr = e.target.value.split("T")[0] // Extract YYYY-MM-DD
-                params.set("pickupDate", dateStr)
-                const queryString = params.toString()
-                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
-              }}
+              min={formatDatetimeLocal(new Date())}
+              onChange={(e) => handlePickupChange(e.target.value)}
             />
           </div>
 
@@ -265,16 +526,54 @@ export function CheckoutClient({
               id="dropoff"
               type="datetime-local"
               value={dropoffDate}
-              onChange={(e) => {
-                setDropoffDate(e.target.value)
-                // Update URL params when date changes
-                const params = new URLSearchParams(searchParams.toString())
-                const dateStr = e.target.value.split("T")[0] // Extract YYYY-MM-DD
-                params.set("dropoffDate", dateStr)
-                const queryString = params.toString()
-                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+              min={pickupDate}
+              onChange={(e) => handleDropoffChange(e.target.value)}
+            />
+          </div>
+
+          <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Availability Calendar</p>
+              {isAvailabilityLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
+            </div>
+
+            <Calendar
+              mode="range"
+              numberOfMonths={2}
+              selected={selectedRange}
+              onSelect={handleRangeSelect}
+              disabled={(date) => isDateInPast(date) || isUnavailableDate(date)}
+              modifiers={{
+                unavailable: (date) => isUnavailableDate(date),
+              }}
+              modifiersClassNames={{
+                unavailable:
+                  "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
+              }}
+              className="w-full rounded-md border border-border/50 bg-background p-2 [--cell-size:2rem] sm:[--cell-size:2.2rem]"
+              classNames={{
+                root: "w-full",
+                months: "flex flex-col lg:flex-row gap-3",
+                month: "flex-1",
+                week: "mt-1",
               }}
             />
+
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <div className="h-3 w-3 rounded border border-red-300 bg-red-100" />
+                <span className="text-muted-foreground">Booked (disabled)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-3 w-3 rounded border border-border bg-background" />
+                <span className="text-muted-foreground">Available</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Booked dates are marked in red and cannot be selected.
+            </p>
+            {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
           </div>
 
           <div className="space-y-2">
@@ -284,11 +583,7 @@ export function CheckoutClient({
               value={location} 
               onChange={(e) => {
                 setLocation(e.target.value)
-                // Update URL params when location changes
-                const params = new URLSearchParams(searchParams.toString())
-                params.set("location", e.target.value)
-                const queryString = params.toString()
-                router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+                updateQueryParams({ location: e.target.value })
               }} 
             />
           </div>
@@ -311,7 +606,7 @@ export function CheckoutClient({
               <div>
                 <p className="font-medium">Bank Transfer</p>
                 <p className="text-sm text-muted-foreground">
-                  Pay deposit by transfer after booking confirmation.
+                  Transfer the deposit securely after booking confirmation.
                 </p>
               </div>
               <div
@@ -335,7 +630,7 @@ export function CheckoutClient({
               <div>
                 <p className="font-medium">Pay at Pickup</p>
                 <p className="text-sm text-muted-foreground">
-                  Complete payment in person when you collect the vehicle.
+                  Pay the full amount in person when collecting the vehicle.
                 </p>
               </div>
               <div

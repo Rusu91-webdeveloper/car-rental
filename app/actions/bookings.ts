@@ -18,6 +18,7 @@ import {
 import { cancelExpiredBookings } from "@/lib/booking-expiration"
 import crypto from "crypto"
 import { Prisma } from "@prisma/client"
+import { z } from "zod"
 
 export async function createBooking(data: unknown) {
   try {
@@ -272,6 +273,20 @@ export async function createBooking(data: unknown) {
     }
   } catch (error) {
     console.error("[CREATE_BOOKING_ERROR]", error)
+
+    if (error instanceof z.ZodError) {
+      const firstIssue = error.issues[0]
+      const fallbackMessage = "Please review your booking details and try again."
+      const zodMessage = firstIssue?.message ?? fallbackMessage
+      const messageMap: Record<string, string> = {
+        "Pickup date must be in the future": "Please select a pickup date and time in the future.",
+        "Drop-off date must be after pickup date": "Drop-off must be after pickup.",
+        "Invalid datetime": "Please select valid pickup and drop-off dates.",
+        "Required": "Please fill in all required booking fields.",
+      }
+
+      return { error: messageMap[zodMessage] ?? zodMessage }
+    }
 
     if (error instanceof Error) {
       return { error: error.message }
