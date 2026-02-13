@@ -23,11 +23,11 @@ export function DemoBanner() {
         </Button>
       </AlertTitle>
       <AlertDescription>
-        You're using demo mode with mock data. To enable full functionality, set up your integrations in the Vars
-        section.{" "}
-        <Link href="/about#setup" className="underline">
-          Setup Guide
+        You're using demo mode with mock data. For full setup instructions, visit the{" "}
+        <Link href="/help" className="underline">
+          Help page
         </Link>
+        .
       </AlertDescription>
     </Alert>
   )

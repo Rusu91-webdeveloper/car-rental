@@ -195,22 +195,44 @@ export function HomeClient({
       ),
     },
   ]
+  const trustHeadline =
+    locale === "de" ? "Premium Mobilitat fur Deutschland" : "Premium Mobility for Germany"
+  const trustDescription =
+    locale === "de"
+      ? "Stilvolles Flotten-Design, transparente Preise und schnelle Verfugbarkeit fur Ihre Fahrten."
+      : "Elegant fleet design, transparent pricing, and fast availability for your trips."
+  const curatedLabel = locale === "de" ? "Kuratiertes Fahrerlebnis" : "Curated Driving Experience"
+  const curatedDescription =
+    locale === "de"
+      ? "Entdecken Sie handverlesene Fahrzeuge fur Business, Urlaub und besondere Momente."
+      : "Discover handpicked vehicles for business, holidays, and unforgettable moments."
+  const noFeaturedVehicleText =
+    locale === "de" ? "Neue Fahrzeuge folgen in Kurze." : "New vehicles are arriving soon."
+  const inventoryLabel = locale === "de" ? "Live-Inventar" : "Live Inventory"
+  const availabilityLabel =
+    locale === "de" ? "Verfugbarkeit fur Ihre Reisedaten" : "Availability for your travel dates"
+  const premiumCollectionLabel = locale === "de" ? "Premium Kollektion" : "Premium Collection"
+  const ctaBannerTitle =
+    locale === "de" ? "Bereit fur Ihre nachste Premium-Fahrt?" : "Ready for your next premium drive?"
+  const ctaBannerSubtitle =
+    locale === "de"
+      ? "Wahlen Sie Ihr Fahrzeug, sichern Sie Ihre Daten und starten Sie stressfrei."
+      : "Choose your vehicle, lock your dates, and get on the road with zero friction."
+  const ctaBannerButton = locale === "de" ? "Fahrzeugauswahl starten" : "Start Selecting Cars"
 
   return (
-    <div className="min-h-screen bg-muted pb-24">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex items-center justify-between px-4 py-4 max-w-6xl">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.12),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(14,165,233,0.12),transparent_55%)] pb-24">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-6">
-            <NavigationMenu
-              user={user}
-              isAdmin={user?.role === "ADMIN"}
-              signInUrl={signInUrl}
-            />
-            <Link href="/" className="flex items-center gap-2 text-primary font-semibold">
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
-              </svg>
-              <span className="hidden sm:inline">RentCar</span>
+            <NavigationMenu user={user} isAdmin={user?.role === "ADMIN"} signInUrl={signInUrl} />
+            <Link href="/" className="group flex items-center gap-2 font-semibold text-primary">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
+                </svg>
+              </span>
+              <span className="hidden text-lg tracking-tight sm:inline">RentCar</span>
             </Link>
           </div>
 
@@ -219,13 +241,13 @@ export function HomeClient({
               <LanguageSwitcher />
             </ClientOnly>
             <Link href={user ? "/profile" : signInUrl}>
-              <button className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors">
+              <button className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/70 transition-colors hover:bg-muted">
                 {user ? (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-semibold">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-700 text-sm font-semibold text-white">
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                 ) : (
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                       fill="#4285F4"
@@ -250,44 +272,44 @@ export function HomeClient({
         </div>
       </header>
 
-      <main className="relative">
-        <section className="relative overflow-hidden bg-gradient-to-b from-background via-background to-muted/70">
-          <div
-            className="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-primary/10 blur-3xl"
-            aria-hidden="true"
-          />
-          <div
-            className="pointer-events-none absolute -bottom-20 left-0 h-72 w-72 rounded-full bg-sky-300/20 blur-3xl"
-            aria-hidden="true"
-          />
-          <div className="mx-auto max-w-6xl px-4 pb-10 pt-8">
-            <div className="grid gap-8 lg:grid-cols-[1.1fr,0.9fr]">
+      <main className="relative overflow-hidden">
+        <div
+          className="pointer-events-none absolute right-[-10%] top-[-10%] h-[28rem] w-[28rem] rounded-full bg-primary/15 blur-3xl"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute bottom-[-15%] left-[-12%] h-[30rem] w-[30rem] rounded-full bg-sky-300/20 blur-3xl"
+          aria-hidden="true"
+        />
+
+        <section className="px-4 pb-8 pt-8 sm:pt-10">
+          <div className="mx-auto max-w-6xl space-y-8">
+            <div className="grid gap-7 lg:grid-cols-[1.1fr,0.9fr]">
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-background/75 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.26em] text-primary">
                   <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
                   {t("home.kicker")}
                 </div>
-                <h1 className="text-4xl font-bold leading-tight text-balance sm:text-5xl lg:text-6xl">
+                <h1 className="text-balance text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
                   {t("home.title")}
                 </h1>
-                <p className="text-base text-muted-foreground sm:text-lg max-w-xl">
-                  {t("home.subtitle")}
-                </p>
-                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground sm:text-sm">
-                  {highlightItems.map((item) => (
-                    <div
-                      key={item.key}
-                      className="flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1"
-                    >
-                      <span className="text-primary">{item.icon}</span>
-                      <span>{t(`home.highlights.${item.key}` as any)}</span>
-                    </div>
-                  ))}
+                <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">{t("home.subtitle")}</p>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{trustHeadline}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{trustDescription}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{curatedLabel}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{curatedDescription}</p>
+                  </div>
                 </div>
+
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href="/cars"
-                    className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary-hover"
+                    className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:bg-primary-hover"
                   >
                     {t("home.ctaPrimary")}
                   </Link>
@@ -298,17 +320,18 @@ export function HomeClient({
                     {t("home.ctaSecondary")}
                   </Link>
                 </div>
-                <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                  <div className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
-                    <p className="text-lg font-semibold sm:text-xl">{formattedCarCount}</p>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                    <p className="text-lg font-bold sm:text-2xl">{formattedCarCount}</p>
                     <p className="text-xs text-muted-foreground">{t("home.stats.cars")}</p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
-                    <p className="text-lg font-semibold sm:text-xl">{formattedCategoryCount}</p>
+                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                    <p className="text-lg font-bold sm:text-2xl">{formattedCategoryCount}</p>
                     <p className="text-xs text-muted-foreground">{t("home.stats.categories")}</p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
-                    <div className="flex items-center gap-1 text-lg font-semibold sm:text-xl">
+                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                    <div className="flex items-center gap-1 text-lg font-bold sm:text-2xl">
                       <span>{formattedRating}</span>
                       <svg className="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.448a1 1 0 00-.364 1.118l1.287 3.956c.3.921-.755 1.688-1.54 1.118l-3.37-2.448a1 1 0 00-1.176 0l-3.37 2.448c-.784.57-1.838-.197-1.539-1.118l1.286-3.956a1 1 0 00-.364-1.118L2.02 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z" />
@@ -319,92 +342,105 @@ export function HomeClient({
                 </div>
               </div>
 
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: "120ms" }}>
-                <div className="relative rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-background via-background to-primary/5 p-6 shadow-2xl shadow-primary/10 backdrop-blur-sm transition-all duration-300 hover:shadow-primary/20 hover:border-primary/30">
-                  {/* Subtle glow effect */}
-                  <div className="pointer-events-none absolute -inset-0.5 rounded-3xl bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-50 blur-xl" aria-hidden="true" />
-                  
-                  <div className="relative mb-5 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" aria-hidden="true" />
-                      <p className="text-base font-bold text-foreground">{t("home.searchTitle")}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground pl-3.5">{t("home.searchSubtitle")}</p>
-                  </div>
-                  <ClientOnly>
-                    <DateFilter
-                      pickupDate={pickupDateParam}
-                      dropoffDate={dropoffDateParam}
-                      onPickupDateChange={handlePickupDateChange}
-                      onDropoffDateChange={handleDropoffDateChange}
-                      onClear={handleClearDates}
-                      compact
+              <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4" style={{ animationDelay: "120ms" }}>
+                <div className="relative overflow-hidden rounded-[1.8rem] border border-border/60 bg-card shadow-2xl shadow-primary/15">
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                  {featuredCar ? (
+                    <img
+                      src={featuredCar.image || "/placeholder.jpg"}
+                      alt={featuredName}
+                      className="h-[26rem] w-full object-cover"
                     />
-                  </ClientOnly>
-                  <div className="mt-4">
-                    <ClientOnly>
-                      <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
-                    </ClientOnly>
+                  ) : (
+                    <div className="flex h-[26rem] items-center justify-center bg-muted text-muted-foreground">
+                      {noFeaturedVehicleText}
+                    </div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                    <div className="mb-3 inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] backdrop-blur">
+                      {t("home.featured.badge")}
+                    </div>
+                    <h3 className="text-2xl font-bold">{featuredName}</h3>
+                    {featuredSubtitle ? <p className="mt-1 text-sm text-white/80">{featuredSubtitle}</p> : null}
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-white/70">{featuredCategoryLabel}</p>
+                        <p className="text-xl font-semibold">
+                          {featuredCar ? formatCents(featuredCar.price) : ""}
+                          <span className="ml-1 text-sm text-white/80">/ {t("car.pricePerDay")}</span>
+                        </p>
+                      </div>
+                      {featuredCar ? (
+                        <Link
+                          href={`/cars/${featuredCar.id}`}
+                          className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-white/90"
+                        >
+                          {t("common.viewDetails")}
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {featuredCar ? (
-                  <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card shadow-lg">
-                    <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/15 blur-2xl" aria-hidden="true" />
-                    <div className="relative p-5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                          {t("home.featured.title")}
-                        </p>
-                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                          {t("home.featured.badge")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="h-20 w-28 overflow-hidden rounded-2xl bg-muted">
-                          <img src={featuredCar.image || "/placeholder.jpg"} alt={featuredName} className="h-full w-full object-cover" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                            {featuredCategoryLabel}
-                          </p>
-                          <p className="text-lg font-semibold">{featuredName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatCents(featuredCar.price)}{" "}
-                            <span className="text-xs">/ {t("car.pricePerDay")}</span>
-                          </p>
-                        </div>
-                      </div>
-                      {featuredSubtitle ? (
-                        <p className="text-sm text-muted-foreground">{featuredSubtitle}</p>
-                      ) : null}
-                      <Link
-                        href={`/cars/${featuredCar.id}`}
-                        className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
-                      >
-                        {t("common.viewDetails")}
-                      </Link>
+            <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+              <div className="rounded-3xl border border-border/60 bg-background/85 p-5 shadow-xl backdrop-blur">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{inventoryLabel}</p>
+                  <h2 className="mt-1 text-xl font-bold">{t("home.searchTitle")}</h2>
+                  <p className="text-sm text-muted-foreground">{availabilityLabel}</p>
+                </div>
+                <ClientOnly>
+                  <DateFilter
+                    pickupDate={pickupDateParam}
+                    dropoffDate={dropoffDateParam}
+                    onPickupDateChange={handlePickupDateChange}
+                    onDropoffDateChange={handleDropoffDateChange}
+                    onClear={handleClearDates}
+                    compact
+                  />
+                </ClientOnly>
+                <div className="mt-4">
+                  <ClientOnly>
+                    <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
+                  </ClientOnly>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-border/60 bg-gradient-to-br from-background to-primary/5 p-5 shadow-lg">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{premiumCollectionLabel}</p>
+                <div className="mt-3 space-y-2">
+                  {highlightItems.map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/70 p-3"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        {item.icon}
+                      </span>
+                      <span className="text-sm font-medium">{t(`home.highlights.${item.key}` as any)}</span>
                     </div>
-                  </div>
-                ) : null}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="px-4 pb-2">
-          <div className="mx-auto max-w-6xl">
+        <section className="px-4 pb-4">
+          <div className="mx-auto max-w-6xl rounded-3xl border border-border/60 bg-background/70 p-2 backdrop-blur">
             <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
           </div>
         </section>
 
         <section className="px-4 pb-10">
           <div className="mx-auto max-w-6xl">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold sm:text-xl">{t("home.popularCars")}</h2>
-              <Link href="/cars" className="inline-flex items-center gap-2 text-primary text-sm font-medium">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold sm:text-2xl">{t("home.popularCars")}</h2>
+              <Link href="/cars" className="inline-flex items-center gap-2 text-primary text-sm font-semibold">
                 {t("common.seeAll")}
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Link>
@@ -416,23 +452,36 @@ export function HomeClient({
                   <div
                     key={car.id}
                     className="animate-in fade-in slide-in-from-bottom-4"
-                    style={{ animationDelay: `${index * 60}ms` }}
+                    style={{ animationDelay: `${index * 55}ms` }}
                   >
-                    <CarCard
-                      car={car}
-                      isSaved={savedCarIds.includes(car.id)}
-                      isSignedIn={Boolean(user)}
-                      signInUrl={signInUrl}
-                    />
+                    <CarCard car={car} isSaved={savedCarIds.includes(car.id)} isSignedIn={Boolean(user)} signInUrl={signInUrl} />
                   </div>
                 ))}
               </div>
             ) : (
               <div className="rounded-3xl border border-dashed border-border/70 bg-background/80 p-10 text-center">
-                <p className="text-lg font-semibold mb-2">{t("home.noCarsFound")}</p>
+                <p className="mb-2 text-lg font-semibold">{t("home.noCarsFound")}</p>
                 <p className="text-sm text-muted-foreground">{t("home.tryDifferentSearch")}</p>
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="px-4 pb-10">
+          <div className="mx-auto max-w-6xl rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/10 via-sky-100/40 to-transparent p-6 sm:p-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("home.featured.title")}</p>
+                <h3 className="mt-1 text-2xl font-black sm:text-3xl">{ctaBannerTitle}</h3>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{ctaBannerSubtitle}</p>
+              </div>
+              <Link
+                href="/cars"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-transform hover:-translate-y-0.5 hover:bg-primary-hover"
+              >
+                {ctaBannerButton}
+              </Link>
+            </div>
           </div>
         </section>
       </main>
