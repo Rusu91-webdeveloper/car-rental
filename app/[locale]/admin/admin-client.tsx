@@ -2924,7 +2924,13 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               min="0"
               max="1"
               value={formData.depositPercentage}
-              onChange={(e) => setFormData({ ...formData, depositPercentage: parseFloat(e.target.value) || 0.2 })}
+              onChange={(e) => {
+                const nextValue = Number.parseFloat(e.target.value)
+                setFormData({
+                  ...formData,
+                  depositPercentage: Number.isNaN(nextValue) ? 0 : nextValue,
+                })
+              }}
             />
           </div>
           <div className="space-y-2">
