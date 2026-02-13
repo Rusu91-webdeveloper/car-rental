@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCents } from "@/lib/money"
+import { CalendarIcon } from "lucide-react"
 import { BookingSuccessModal } from "./booking-success-modal"
 
 export function CheckoutClient({
@@ -212,6 +214,8 @@ export function CheckoutClient({
 
   const [error, setError] = useState<string | null>(null)
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
+  const [pickupCalendarOpen, setPickupCalendarOpen] = useState(false)
+  const [dropoffCalendarOpen, setDropoffCalendarOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
   const [isPending, startTransition] = useTransition()
   const [bookingSuccess, setBookingSuccess] = useState<{
@@ -270,106 +274,176 @@ export function CheckoutClient({
     return merged
   }
 
-  const selectedRange = useMemo(() => {
-    const from = new Date(pickupDate)
-    const to = new Date(dropoffDate)
+  const pickupDateValue = useMemo(() => {
+    const nextPickup = new Date(pickupDate)
+    return Number.isNaN(nextPickup.getTime()) ? undefined : nextPickup
+  }, [pickupDate])
 
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-      return undefined
+  const dropoffDateValue = useMemo(() => {
+    const nextDropoff = new Date(dropoffDate)
+    return Number.isNaN(nextDropoff.getTime()) ? undefined : nextDropoff
+  }, [dropoffDate])
+
+  const formatDateLabel = (value: Date | undefined, fallback: string) => {
+    if (!value) {
+      return fallback
     }
 
-    return { from, to }
-  }, [pickupDate, dropoffDate])
-
-  const handleRangeSelect = (range: { from?: Date; to?: Date } | undefined) => {
-    if (!range?.from) {
-      return
-    }
-
-    const nextPickup = combineDateWithCurrentTime(range.from, pickupDate, 10)
-    const nextDropoffSource = range.to || new Date(range.from)
-    const nextDropoff = combineDateWithCurrentTime(nextDropoffSource, dropoffDate, 10)
-
-    if (nextDropoff <= nextPickup) {
-      nextDropoff.setDate(nextPickup.getDate() + 1)
-    }
-
-    if (rangeHasUnavailableDays(nextPickup, nextDropoff)) {
-      setError("Your selected range includes booked dates. Please choose different dates.")
-      return
-    }
-
-    setPickupDate(formatDatetimeLocal(nextPickup))
-    setDropoffDate(formatDatetimeLocal(nextDropoff))
-    setError(null)
-
-    updateQueryParams({
-      pickupDate: formatDateKey(nextPickup),
-      dropoffDate: formatDateKey(nextDropoff),
+    return value.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     })
+  }
+
+  const formatTimeValue = (value: Date | undefined, fallback = "10:00") => {
+    if (!value) {
+      return fallback
+    }
+
+    const hours = String(value.getHours()).padStart(2, "0")
+    const minutes = String(value.getMinutes()).padStart(2, "0")
+    return `${hours}:${minutes}`
+  }
+
+  const applyTimeToDateTime = (dateTimeValue: string, timeValue: string) => {
+    const [hoursRaw, minutesRaw] = timeValue.split(":")
+    const hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw)
+
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+      return null
+    }
+
+    const baseDate = new Date(dateTimeValue)
+    if (Number.isNaN(baseDate.getTime())) {
+      return null
+    }
+
+    baseDate.setHours(hours, minutes, 0, 0)
+    return formatDatetimeLocal(baseDate)
+  }
+
+  const isDropoffDateDisabled = (date: Date) => {
+    if (isDateInPast(date) || isUnavailableDate(date)) {
+      return true
+    }
+
+    if (!pickupDateValue) {
+      return true
+    }
+
+    const pickupDay = new Date(pickupDateValue)
+    pickupDay.setHours(0, 0, 0, 0)
+
+    const selectedDay = new Date(date)
+    selectedDay.setHours(0, 0, 0, 0)
+    return selectedDay < pickupDay
   }
 
   const handlePickupChange = (value: string) => {
     const nextPickup = new Date(value)
     if (Number.isNaN(nextPickup.getTime())) {
-      return
+      return false
     }
 
     if (isUnavailableDate(nextPickup)) {
       setError("This pickup date is already booked. Please choose another date.")
-      return
+      return false
     }
 
     if (nextPickup <= new Date()) {
       setError("Please select a pickup date and time in the future.")
-      return
+      return false
     }
 
     const currentDropoff = new Date(dropoffDate)
     if (!Number.isNaN(currentDropoff.getTime())) {
       if (currentDropoff <= nextPickup) {
         setError("Drop-off must be after pickup.")
-        return
+        return false
       }
 
       if (rangeHasUnavailableDays(nextPickup, currentDropoff)) {
         setError("Your selected range includes booked dates. Please choose different dates.")
-        return
+        return false
       }
     }
 
     setPickupDate(value)
     setError(null)
     updateQueryParams({ pickupDate: value.split("T")[0] || formatDateKey(nextPickup) })
+    return true
   }
 
   const handleDropoffChange = (value: string) => {
     const nextDropoff = new Date(value)
     if (Number.isNaN(nextDropoff.getTime())) {
-      return
+      return false
     }
 
     if (isUnavailableDate(nextDropoff)) {
       setError("This drop-off date is already booked. Please choose another date.")
-      return
+      return false
     }
 
     const currentPickup = new Date(pickupDate)
     if (!Number.isNaN(currentPickup.getTime())) {
       if (nextDropoff <= currentPickup) {
         setError("Drop-off must be after pickup.")
-        return
+        return false
       }
 
       if (rangeHasUnavailableDays(currentPickup, nextDropoff)) {
         setError("Your selected range includes booked dates. Please choose different dates.")
-        return
+        return false
       }
     }
 
     setDropoffDate(value)
     setError(null)
     updateQueryParams({ dropoffDate: value.split("T")[0] || formatDateKey(nextDropoff) })
+    return true
+  }
+
+  const handlePickupDateSelect = (date: Date | undefined) => {
+    if (!date) {
+      return
+    }
+
+    const nextPickup = combineDateWithCurrentTime(date, pickupDate, 10)
+    const updated = handlePickupChange(formatDatetimeLocal(nextPickup))
+    if (updated) {
+      setPickupCalendarOpen(false)
+    }
+  }
+
+  const handleDropoffDateSelect = (date: Date | undefined) => {
+    if (!date) {
+      return
+    }
+
+    const nextDropoff = combineDateWithCurrentTime(date, dropoffDate, 10)
+    const updated = handleDropoffChange(formatDatetimeLocal(nextDropoff))
+    if (updated) {
+      setDropoffCalendarOpen(false)
+    }
+  }
+
+  const handlePickupTimeChange = (timeValue: string) => {
+    const nextValue = applyTimeToDateTime(pickupDate, timeValue)
+    if (!nextValue) {
+      return
+    }
+    handlePickupChange(nextValue)
+  }
+
+  const handleDropoffTimeChange = (timeValue: string) => {
+    const nextValue = applyTimeToDateTime(dropoffDate, timeValue)
+    if (!nextValue) {
+      return
+    }
+    handleDropoffChange(nextValue)
   }
 
   const calculateDays = () => {
@@ -509,72 +583,92 @@ export function CheckoutClient({
         <div className="bg-background rounded-xl p-4 border border-border space-y-4">
           <h3 className="font-semibold text-lg">Booking Details</h3>
 
-          <div className="space-y-2">
-            <Label htmlFor="pickup">Pick-up Date & Time</Label>
-            <Input
-              id="pickup"
-              type="datetime-local"
-              value={pickupDate}
-              min={formatDatetimeLocal(new Date())}
-              onChange={(e) => handlePickupChange(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="dropoff">Drop-off Date & Time</Label>
-            <Input
-              id="dropoff"
-              type="datetime-local"
-              value={dropoffDate}
-              min={pickupDate}
-              onChange={(e) => handleDropoffChange(e.target.value)}
-            />
-          </div>
-
-          <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Availability Calendar</p>
-              {isAvailabilityLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Pick-up Date</Label>
+              <Popover open={pickupCalendarOpen} onOpenChange={setPickupCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                    <span>{formatDateLabel(pickupDateValue, "Select pick-up date")}</span>
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={pickupDateValue}
+                    onSelect={handlePickupDateSelect}
+                    disabled={(date) => isDateInPast(date) || isUnavailableDate(date)}
+                    modifiers={{
+                      unavailable: (date) => isUnavailableDate(date),
+                    }}
+                    modifiersClassNames={{
+                      unavailable:
+                        "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
-            <Calendar
-              mode="range"
-              numberOfMonths={2}
-              selected={selectedRange}
-              onSelect={handleRangeSelect}
-              disabled={(date) => isDateInPast(date) || isUnavailableDate(date)}
-              modifiers={{
-                unavailable: (date) => isUnavailableDate(date),
-              }}
-              modifiersClassNames={{
-                unavailable:
-                  "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
-              }}
-              className="w-full rounded-md border border-border/50 bg-background p-2 [--cell-size:2rem] sm:[--cell-size:2.2rem]"
-              classNames={{
-                root: "w-full",
-                months: "flex flex-col lg:flex-row gap-3",
-                month: "flex-1",
-                week: "mt-1",
-              }}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="pickup-time">Pick-up Time</Label>
+              <Input
+                id="pickup-time"
+                type="time"
+                value={formatTimeValue(pickupDateValue)}
+                onChange={(e) => handlePickupTimeChange(e.target.value)}
+              />
+            </div>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded border border-red-300 bg-red-100" />
-                <span className="text-muted-foreground">Booked (disabled)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded border border-border bg-background" />
-                <span className="text-muted-foreground">Available</span>
-              </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Drop-off Date</Label>
+              <Popover open={dropoffCalendarOpen} onOpenChange={setDropoffCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-between font-normal">
+                    <span>{formatDateLabel(dropoffDateValue, "Select drop-off date")}</span>
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dropoffDateValue}
+                    onSelect={handleDropoffDateSelect}
+                    disabled={isDropoffDateDisabled}
+                    modifiers={{
+                      unavailable: (date) => isUnavailableDate(date),
+                    }}
+                    modifiersClassNames={{
+                      unavailable:
+                        "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Booked dates are marked in red and cannot be selected.
-            </p>
-            {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="dropoff-time">Drop-off Time</Label>
+              <Input
+                id="dropoff-time"
+                type="time"
+                value={formatTimeValue(dropoffDateValue)}
+                onChange={(e) => handleDropoffTimeChange(e.target.value)}
+              />
+            </div>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            {isAvailabilityLoading
+              ? "Loading unavailable dates..."
+              : "Booked dates are red in the date picker and cannot be selected."}
+          </p>
+          {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
 
           <div className="space-y-2">
             <Label htmlFor="location">Pick-up Location</Label>
