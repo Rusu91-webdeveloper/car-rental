@@ -341,6 +341,25 @@ export function CheckoutClient({
     return selectedDay < pickupDay
   }
 
+  const findNextValidDropoff = (pickup: Date, seedDropoff?: Date) => {
+    const base = seedDropoff && !Number.isNaN(seedDropoff.getTime()) ? new Date(seedDropoff) : new Date(pickup)
+    const candidate = new Date(base)
+
+    if (candidate <= pickup) {
+      candidate.setTime(pickup.getTime())
+      candidate.setDate(candidate.getDate() + 1)
+    }
+
+    for (let i = 0; i < 370; i += 1) {
+      if (candidate > pickup && !isUnavailableDate(candidate) && !rangeHasUnavailableDays(pickup, candidate)) {
+        return candidate
+      }
+      candidate.setDate(candidate.getDate() + 1)
+    }
+
+    return null
+  }
+
   const handlePickupChange = (value: string) => {
     const nextPickup = new Date(value)
     if (Number.isNaN(nextPickup.getTime())) {
@@ -358,51 +377,66 @@ export function CheckoutClient({
     }
 
     const currentDropoff = new Date(dropoffDate)
-    if (!Number.isNaN(currentDropoff.getTime())) {
-      if (currentDropoff <= nextPickup) {
-        setError("Drop-off must be after pickup.")
-        return false
-      }
-
-      if (rangeHasUnavailableDays(nextPickup, currentDropoff)) {
-        setError("Your selected range includes booked dates. Please choose different dates.")
-        return false
-      }
+    const nextDropoff = findNextValidDropoff(nextPickup, currentDropoff)
+    if (!nextDropoff) {
+      setError("No available drop-off dates were found after this pick-up date.")
+      return false
     }
 
     setPickupDate(value)
+    setDropoffDate(formatDatetimeLocal(nextDropoff))
     setError(null)
-    updateQueryParams({ pickupDate: value.split("T")[0] || formatDateKey(nextPickup) })
+    updateQueryParams({
+      pickupDate: value.split("T")[0] || formatDateKey(nextPickup),
+      dropoffDate: formatDateKey(nextDropoff),
+    })
     return true
   }
 
   const handleDropoffChange = (value: string) => {
-    const nextDropoff = new Date(value)
-    if (Number.isNaN(nextDropoff.getTime())) {
+    const parsedDropoff = new Date(value)
+    if (Number.isNaN(parsedDropoff.getTime())) {
       return false
     }
 
-    if (isUnavailableDate(nextDropoff)) {
+    if (isUnavailableDate(parsedDropoff)) {
       setError("This drop-off date is already booked. Please choose another date.")
       return false
     }
 
     const currentPickup = new Date(pickupDate)
     if (!Number.isNaN(currentPickup.getTime())) {
+      let nextDropoff = new Date(parsedDropoff)
+
       if (nextDropoff <= currentPickup) {
-        setError("Drop-off must be after pickup.")
-        return false
+        const isSameCalendarDay = formatDateKey(nextDropoff) === formatDateKey(currentPickup)
+        if (!isSameCalendarDay) {
+          setError("Drop-off must be after pickup.")
+          return false
+        }
+
+        nextDropoff = new Date(currentPickup)
+        nextDropoff.setMinutes(nextDropoff.getMinutes() + 60)
       }
 
       if (rangeHasUnavailableDays(currentPickup, nextDropoff)) {
-        setError("Your selected range includes booked dates. Please choose different dates.")
-        return false
+        const nextAvailableDropoff = findNextValidDropoff(currentPickup, nextDropoff)
+        if (!nextAvailableDropoff) {
+          setError("No available drop-off dates were found after this pick-up date.")
+          return false
+        }
+        nextDropoff = nextAvailableDropoff
       }
+
+      setDropoffDate(formatDatetimeLocal(nextDropoff))
+      setError(null)
+      updateQueryParams({ dropoffDate: formatDateKey(nextDropoff) })
+      return true
     }
 
     setDropoffDate(value)
     setError(null)
-    updateQueryParams({ dropoffDate: value.split("T")[0] || formatDateKey(nextDropoff) })
+    updateQueryParams({ dropoffDate: value.split("T")[0] || formatDateKey(parsedDropoff) })
     return true
   }
 
