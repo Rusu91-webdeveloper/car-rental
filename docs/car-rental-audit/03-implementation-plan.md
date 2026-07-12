@@ -1,6 +1,6 @@
 # Business Configuration Implementation Plan
 
-Status: Phase 1, Phase 2A/2B, and the approved Phase 3 centralized pricing engine are complete as of 2026-07-12. The migration chain, compatibility snapshots, rollback, and booking concurrency were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, or personal-data database was contacted. No configuration release was activated. Work is stopped at the Phase 4 approval gate. Evidence is recorded in `07-phase-1-foundation.md`, `08-phase-2-schema-proposal.md`, `09-phase-2b-schema-and-migrations.md`, and `10-phase-3-pricing-engine.md`.
+Status: Phase 1, Phase 2A/2B, Phase 3, and the approved Phase 4 Business Configuration shell and release-workflow infrastructure are complete as of 2026-07-12. The migration chain, compatibility snapshots, rollback, booking concurrency, release validation, activation serialization, supersession, audit, and historical-snapshot preservation were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, or personal-data database was contacted. Synthetic releases were activated only in the disposable verification database. Work is stopped at the Phase 5 approval gate. Evidence is recorded in `07-phase-1-foundation.md` through `11-phase-4-business-configuration-shell.md`.
 
 The current application has one mutable `CompanySettings` singleton, one mutable daily `Car.price`, two roles, and a daily-only booking calculation inside `createBooking()` (`prisma/schema.prisma`, `app/actions/bookings.ts`, `lib/auth.ts`). The Graphify report also places booking/pricing/email concerns in one cluster and identifies the large `AdminDashboard()` boundary (`graphify-out/GRAPH_REPORT.md`, `docs/car-rental-audit/04-architecture-graph-summary.md`). The design below therefore introduces domain services and feature pages instead of adding more behavior to the existing settings action, booking action, or admin client.
 
@@ -42,6 +42,8 @@ Completed within the approved narrower Phase 3 scope: one server-authoritative i
 ### Phase 4 — Business Configuration shell and health overview
 
 Create `/[locale]/admin/business-configuration` with Overview, Pricing, Billing Rules, Insurance, Driver Requirements, Customer Information, Booking Flow, Documents, Payments, Legal, Confirmations, and Advanced pages. Keep secrets/infrastructure under a separate `/[locale]/admin/system-settings` boundary. Implement server-produced health findings and draft/live badges. Risk: High.
+
+Completed within the approved Phase 4 scope. The server-rendered shell and overview use persisted capabilities, repository/service boundaries, configuration health and coverage summaries, exact draft/live comparisons, validation, preview, explicit warning acknowledgement, serialized activation, and append-only audit events. Section routes are honest capability-protected placeholders; Pricing and Billing Rules expose read-only fleet evidence only. No Phase 5 editing forms, rates, mixed-duration controls, or mutable configuration behavior were added. See `11-phase-4-business-configuration-shell.md`.
 
 ### Phase 5 — Pricing, billing, and fleet rates
 

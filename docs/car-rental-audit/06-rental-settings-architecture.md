@@ -1,10 +1,12 @@
 # Business Configuration Architecture Proposal
 
-Status: architecture approved; Phase 1, Phase 2A/2B, and the Phase 3 centralized pricing/runtime compatibility layer are complete as of 2026-07-12. Authorization cutover, configuration management, activation UI, and the Business Configuration dashboard remain unimplemented and require Phase 4 or later approval. This document supersedes the monolithic `RentalSettingsVersion` proposal.
+Status: architecture approved; Phase 1, Phase 2A/2B, Phase 3, and the Phase 4 Business Configuration shell/release-workflow infrastructure are complete as of 2026-07-12. Persisted capability authorization is active only inside the Business Configuration boundary. The dashboard, health/coverage views, validation, preview, explicit activation, supersession, and audit paths are implemented; domain editing begins only after Phase 5 approval. This document supersedes the monolithic `RentalSettingsVersion` proposal.
 
 Implementation evidence and the final authoritative persistence vocabulary are in `09-phase-2b-schema-and-migrations.md`. During the final enum gate, extensible `CustomerDocumentType` and `ConfirmationSectionType` vocabularies became seeded reference tables (`DocumentTypeDefinition` and `ConfirmationSectionDefinition`); all other approved closed lifecycle, technical, and supported business vocabularies remain enums. The final lifecycle names are `DRAFT/VALIDATED/RELEASED/ARCHIVED` for configuration versions and `DRAFT/VALIDATED/ACTIVE/SUPERSEDED/ARCHIVED` for release manifests, superseding illustrative `VALID`/`RETIRED` names below.
 
 Phase 3 implementation evidence is in `10-phase-3-pricing-engine.md`. The runtime source resolver deliberately ignores inactive rate sets, uses legacy `Car.price` while no ACTIVE release exists, and fails closed if an ACTIVE release is invalid. Calendar-month arithmetic remains unsupported.
+
+Phase 4 implementation evidence is in `11-phase-4-business-configuration-shell.md`. The capability cutover is intentionally local to the new shell and its actions; unrelated admin routes retain their legacy authorization. Release activation is serialized, validates the aggregate again inside the transaction, and never mutates historical booking snapshots.
 
 ## 1. Evidence and constraints
 
