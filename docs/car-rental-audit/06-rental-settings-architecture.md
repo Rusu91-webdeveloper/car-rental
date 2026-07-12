@@ -1,12 +1,14 @@
 # Business Configuration Architecture Proposal
 
-Status: architecture approved; Phase 1, Phase 2A/2B, Phase 3, and the Phase 4 Business Configuration shell/release-workflow infrastructure are complete as of 2026-07-12. Persisted capability authorization is active only inside the Business Configuration boundary. The dashboard, health/coverage views, validation, preview, explicit activation, supersession, and audit paths are implemented; domain editing begins only after Phase 5 approval. This document supersedes the monolithic `RentalSettingsVersion` proposal.
+Status: architecture approved; Phase 1 through the Phase 5 Pricing and Billing administration experience are complete as of 2026-07-12. Persisted capability authorization remains scoped to Business Configuration. Pricing policy and immutable fleet-rate drafts now support editing, validation, comparison, preview, release attachment, and explicit atomic activation. Insurance, customer/driver rules, and booking workflow remain at the Phase 6 approval gate. This document supersedes the monolithic `RentalSettingsVersion` proposal.
 
 Implementation evidence and the final authoritative persistence vocabulary are in `09-phase-2b-schema-and-migrations.md`. During the final enum gate, extensible `CustomerDocumentType` and `ConfirmationSectionType` vocabularies became seeded reference tables (`DocumentTypeDefinition` and `ConfirmationSectionDefinition`); all other approved closed lifecycle, technical, and supported business vocabularies remain enums. The final lifecycle names are `DRAFT/VALIDATED/RELEASED/ARCHIVED` for configuration versions and `DRAFT/VALIDATED/ACTIVE/SUPERSEDED/ARCHIVED` for release manifests, superseding illustrative `VALID`/`RETIRED` names below.
 
 Phase 3 implementation evidence is in `10-phase-3-pricing-engine.md`. The runtime source resolver deliberately ignores inactive rate sets, uses legacy `Car.price` while no ACTIVE release exists, and fails closed if an ACTIVE release is invalid. Calendar-month arithmetic remains unsupported.
 
 Phase 4 implementation evidence is in `11-phase-4-business-configuration-shell.md`. The capability cutover is intentionally local to the new shell and its actions; unrelated admin routes retain their legacy authorization. Release activation is serialized, validates the aggregate again inside the transaction, and never mutates historical booking snapshots.
+
+Phase 5 implementation evidence is in `12-phase-5-pricing-and-billing-admin.md`. The admin editor preserves the Phase 3 integer-minor-unit engine and compatibility source precedence. It creates new drafts instead of mutating released rates, blocks calendar-month activation, and uses the Phase 4 release as the sole activation boundary.
 
 ## 1. Evidence and constraints
 

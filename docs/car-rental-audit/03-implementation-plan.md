@@ -1,6 +1,6 @@
 # Business Configuration Implementation Plan
 
-Status: Phase 1, Phase 2A/2B, Phase 3, and the approved Phase 4 Business Configuration shell and release-workflow infrastructure are complete as of 2026-07-12. The migration chain, compatibility snapshots, rollback, booking concurrency, release validation, activation serialization, supersession, audit, and historical-snapshot preservation were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, or personal-data database was contacted. Synthetic releases were activated only in the disposable verification database. Work is stopped at the Phase 5 approval gate. Evidence is recorded in `07-phase-1-foundation.md` through `11-phase-4-business-configuration-shell.md`.
+Status: Phase 1 through the approved Phase 5 Pricing and Billing administration experience are complete as of 2026-07-12. The migration chain, pricing compatibility, booking concurrency, draft concurrency, release activation, audit, runtime pricing, and historical-snapshot preservation were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, repository-configured, or personal-data database was contacted. Synthetic releases were activated only in disposable verification. Work is stopped at the Phase 6 approval gate. Evidence is recorded in `07-phase-1-foundation.md` through `12-phase-5-pricing-and-billing-admin.md`.
 
 The current application has one mutable `CompanySettings` singleton, one mutable daily `Car.price`, two roles, and a daily-only booking calculation inside `createBooking()` (`prisma/schema.prisma`, `app/actions/bookings.ts`, `lib/auth.ts`). The Graphify report also places booking/pricing/email concerns in one cluster and identifies the large `AdminDashboard()` boundary (`graphify-out/GRAPH_REPORT.md`, `docs/car-rental-audit/04-architecture-graph-summary.md`). The design below therefore introduces domain services and feature pages instead of adding more behavior to the existing settings action, booking action, or admin client.
 
@@ -48,6 +48,8 @@ Completed within the approved Phase 4 scope. The server-rendered shell and overv
 ### Phase 5 — Pricing, billing, and fleet rates
 
 Add immutable rate-set drafts, per-vehicle daily/weekly/monthly rates, fleet warnings, mixed-duration radio cards, plain-language examples, and server-generated quote/impact previews. Activation remains release-atomic. Risk: High.
+
+Completed within the approved Phase 5 scope. Administrators can create/resume/discard pricing and fleet drafts, edit exact per-vehicle rates, use bounded bulk actions, configure supported pricing and billable-duration rules, compare live/draft values, generate Phase 3 server quotes, validate fleet-wide coverage, attach the exact drafts to the existing release, and explicitly activate only through the Phase 4 workflow. Calendar months remain hidden and blocked. No customer pricing selector or Phase 6 domain form was added. See `12-phase-5-pricing-and-billing-admin.md`.
 
 ### Phase 6 — Insurance, customer, driver, and booking workflow
 
