@@ -1,8 +1,10 @@
 # Business Configuration Architecture Proposal
 
-Status: architecture approved; Phase 1, Phase 2A, and the additive Phase 2B persistence layer are complete as of 2026-07-12. Runtime pricing, authorization cutover, configuration management, and UI remain unimplemented and require Phase 3 or later approval. This document supersedes the monolithic `RentalSettingsVersion` proposal.
+Status: architecture approved; Phase 1, Phase 2A/2B, and the Phase 3 centralized pricing/runtime compatibility layer are complete as of 2026-07-12. Authorization cutover, configuration management, activation UI, and the Business Configuration dashboard remain unimplemented and require Phase 4 or later approval. This document supersedes the monolithic `RentalSettingsVersion` proposal.
 
 Implementation evidence and the final authoritative persistence vocabulary are in `09-phase-2b-schema-and-migrations.md`. During the final enum gate, extensible `CustomerDocumentType` and `ConfirmationSectionType` vocabularies became seeded reference tables (`DocumentTypeDefinition` and `ConfirmationSectionDefinition`); all other approved closed lifecycle, technical, and supported business vocabularies remain enums. The final lifecycle names are `DRAFT/VALIDATED/RELEASED/ARCHIVED` for configuration versions and `DRAFT/VALIDATED/ACTIVE/SUPERSEDED/ARCHIVED` for release manifests, superseding illustrative `VALID`/`RETIRED` names below.
+
+Phase 3 implementation evidence is in `10-phase-3-pricing-engine.md`. The runtime source resolver deliberately ignores inactive rate sets, uses legacy `Car.price` while no ACTIVE release exists, and fails closed if an ACTIVE release is invalid. Calendar-month arithmetic remains unsupported.
 
 ## 1. Evidence and constraints
 

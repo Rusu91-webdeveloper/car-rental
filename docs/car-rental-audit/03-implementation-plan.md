@@ -1,6 +1,6 @@
 # Business Configuration Implementation Plan
 
-Status: Phase 1, Phase 2A, and the approved Phase 2B additive schema/migration work are complete as of 2026-07-12. The full historical chain and compatibility backfill were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, or personal-data database was contacted. Runtime behavior remains unchanged, and work is stopped at the Phase 3 approval gate. Evidence is recorded in `07-phase-1-foundation.md`, `08-phase-2-schema-proposal.md`, and `09-phase-2b-schema-and-migrations.md`.
+Status: Phase 1, Phase 2A/2B, and the approved Phase 3 centralized pricing engine are complete as of 2026-07-12. The migration chain, compatibility snapshots, rollback, and booking concurrency were verified only on disposable PostgreSQL 16 with synthetic data; no production, staging, shared, or personal-data database was contacted. No configuration release was activated. Work is stopped at the Phase 4 approval gate. Evidence is recorded in `07-phase-1-foundation.md`, `08-phase-2-schema-proposal.md`, `09-phase-2b-schema-and-migrations.md`, and `10-phase-3-pricing-engine.md`.
 
 The current application has one mutable `CompanySettings` singleton, one mutable daily `Car.price`, two roles, and a daily-only booking calculation inside `createBooking()` (`prisma/schema.prisma`, `app/actions/bookings.ts`, `lib/auth.ts`). The Graphify report also places booking/pricing/email concerns in one cluster and identifies the large `AdminDashboard()` boundary (`graphify-out/GRAPH_REPORT.md`, `docs/car-rental-audit/04-architecture-graph-summary.md`). The design below therefore introduces domain services and feature pages instead of adding more behavior to the existing settings action, booking action, or admin client.
 
@@ -36,6 +36,8 @@ Phase 2A produced the exact review proposal. Phase 2B then implemented the appro
 ### Phase 3 — Pricing service and compatibility path
 
 Implement one pure integer-cent pricing engine and server quote service. Seed a daily-only fleet-rate set from `Car.price`, preserve the current started-24-hour/minimum-one-day behavior as the compatibility policy, and dual-read/compare before switching booking creation. Store complete pricing and insurance snapshots. Risk: Critical.
+
+Completed within the approved narrower Phase 3 scope: one server-authoritative integer-minor-unit engine now owns duration, daily/weekly/fixed-month strategies, tax arithmetic, payment amount derivation, source resolution, trace generation, and immutable pricing snapshot mapping. With no ACTIVE release it reads only `Car.price`; an inactive compatibility `FleetRateSet` is ignored. Customer quote display calls the server, and booking creation recalculates after the car lock, then writes Booking and `BookingPricingSnapshot` atomically. Existing bookings without snapshots remain readable. Insurance remains a zero-valued extension point and no release was activated. See `10-phase-3-pricing-engine.md`.
 
 ### Phase 4 — Business Configuration shell and health overview
 

@@ -1,5 +1,7 @@
 # Open Questions Requiring Client or Technical Approval
 
+Phase 3 resolution note (2026-07-12): the approved compatibility engine preserves integer-cent `Car.price`, the current started-24-hour/minimum-one-day duration rule, current effective uppercase EUR currency, round-half-up integer boundaries, daily-only fallback, and the existing 10% unconfigured-tax fallback without treating it as a new tax policy. Fixed 28/30-day month strategies are implemented; calendar months remain deferred. No answer here authorized release activation or Phase 4 UI work. See `10-phase-3-pricing-engine.md`.
+
 Reassessment: questions about rates, mixed-duration strategy, month/day definitions, grace/minimum charges, Vollkasko rules, driver requirements, required fields/documents, payments/deposits and confirmation content are administrator-entered Business Configuration values. They are no longer developer hard-coding blockers. They are independently drafted in cohesive domains and become live only through an atomic release manifest. Hard security/retention bounds, supported integrations, initial permissions and legal publication authority still require owner approval; see `06-rental-settings-architecture.md`.
 
 The questions below remain useful as the choices the admin UI must explain. System-level decisions that cannot safely become dashboard settings are summarized at the end of the architecture proposal.
