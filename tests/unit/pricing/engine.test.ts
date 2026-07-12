@@ -25,7 +25,11 @@ const request = (overrides: Partial<PricingRequest> = {}): PricingRequest => ({
   taxTreatment: "TAX_EXCLUDED",
   taxRateBps: 1_900,
   insuranceSubtotal: money(0, "EUR"),
-  source: { vehicleId: "car-1", rateSourceType: "CAR_PRICE", rateSourceReference: "car-1" },
+  source: {
+    vehicleId: "car-1",
+    rateSourceType: "CAR_PRICE",
+    rateSourceReference: "car-1",
+  },
   compatibilityMode: "LEGACY_CAR_PRICE",
   calculatedAt: new Date("2026-01-01T00:00:00Z"),
   ...overrides,
@@ -52,11 +56,18 @@ describe("pricing engine", () => {
     ])
   })
 
-  it("rejects mixed currencies and nonzero insurance extension input", () => {
+  it("rejects mixed currencies and includes nonzero insurance through the extension point", () => {
     expect(() =>
-      calculatePricing(request({ rates: { ...request().rates, weekly: money(50_000, "USD") } })),
+      calculatePricing(
+        request({
+          rates: { ...request().rates, weekly: money(50_000, "USD") },
+        }),
+      ),
     ).toThrow(/same currency/)
-    expect(() => calculatePricing(request({ insuranceSubtotal: money(1, "EUR") }))).toThrow(/not active/)
+    const result = calculatePricing(request({ insuranceSubtotal: money(1_000, "EUR") }))
+    expect(result.insuranceSubtotal).toBe(1_000)
+    expect(result.taxSubtotal).toBe(14_250)
+    expect(result.grandTotal).toBe(89_250)
   })
 
   it("rejects calendar-month arithmetic when monthly rates are active", () => {

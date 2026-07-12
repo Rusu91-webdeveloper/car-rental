@@ -3,14 +3,9 @@ import {
   CONFIRMATION_SECTIONS,
   CUSTOMER_FIELDS,
   type BusinessConfigurationDomains,
-} from "@/lib/business-configuration/domains";
+} from "@/lib/business-configuration/domains"
 
-const requiredCustomerFields = new Set([
-  "FIRST_NAME",
-  "LAST_NAME",
-  "EMAIL",
-  "DATE_OF_BIRTH",
-]);
+const requiredCustomerFields = new Set(["FIRST_NAME", "LAST_NAME", "EMAIL", "DATE_OF_BIRTH"])
 
 export function validBusinessConfigurationDomains(): BusinessConfigurationDomains {
   return {
@@ -40,22 +35,22 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       availabilityScope: "ALL_VEHICLES",
       vehicleIds: [],
       showInConfirmation: true,
+      showCustomerSelection: false,
+      preselectedByDefault: false,
     },
     "customer-driver-requirements": {
       minimumDriverAge: 18,
       minimumLicenceHeldMonths: 0,
+      licenceMustCoverRentalEnd: true,
       allowedLicenceCountries: [],
       fields: Object.fromEntries(
-        CUSTOMER_FIELDS.map((field) => [
-          field,
-          requiredCustomerFields.has(field) ? "REQUIRED" : "OPTIONAL",
-        ]),
+        CUSTOMER_FIELDS.map((field) => [field, requiredCustomerFields.has(field) ? "REQUIRED" : "OPTIONAL"]),
       ) as BusinessConfigurationDomains["customer-driver-requirements"]["fields"],
     },
     "booking-workflow": {
       steps: BOOKING_STEPS.map((step, displayOrder) => ({
         step,
-        requirement: "REQUIRED",
+        requirement: ["INSURANCE", "DOCUMENTS", "LEGAL_ACCEPTANCE"].includes(step) ? "HIDDEN" : "REQUIRED",
         displayOrder,
       })),
     },
@@ -110,5 +105,5 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       privacyAcknowledgment: "REQUIRED",
       retainRenderedSnapshot: true,
     },
-  };
+  }
 }
