@@ -19,6 +19,12 @@ function readyInputs(): ConfigurationHealthDomainInput[] {
 }
 
 describe("configuration health", () => {
+  it("shows a completely empty setup as not configured", () => {
+    expect(evaluateConfigurationHealth([]).status).toBe(
+      CONFIGURATION_HEALTH_STATUS.NOT_CONFIGURED,
+    );
+  });
+
   it("marks a fully valid configuration ready", () => {
     expect(evaluateConfigurationHealth(readyInputs()).status).toBe(
       CONFIGURATION_HEALTH_STATUS.READY,
@@ -104,5 +110,29 @@ describe("configuration health", () => {
         ({ blockers, warnings }) => blockers.length + warnings.length > 0,
       ),
     ).toHaveLength(2);
+  });
+
+  it("uses deterministic blocker, draft, warning, ready precedence", () => {
+    const inputs = readyInputs();
+    inputs[0].hasDraftChanges = true;
+    inputs[1].validation = configurationValidationResult([
+      {
+        code: "warning",
+        domain: "pricing-billing",
+        adminMessage: "Warning",
+        severity: "WARNING",
+      },
+    ]);
+    inputs[2].validation = configurationValidationResult([
+      {
+        code: "blocker",
+        domain: "insurance",
+        adminMessage: "Blocker",
+        severity: "BLOCKER",
+      },
+    ]);
+    expect(evaluateConfigurationHealth(inputs).status).toBe(
+      CONFIGURATION_HEALTH_STATUS.ACTION_REQUIRED,
+    );
   });
 });
