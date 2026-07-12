@@ -113,12 +113,15 @@ export interface InsuranceConfiguration {
   availabilityScope: "ALL_VEHICLES" | "SELECTED_VEHICLES";
   vehicleIds: string[];
   showInConfirmation: boolean;
+  showCustomerSelection: boolean;
+  preselectedByDefault: boolean;
 }
 
 export interface CustomerDriverRequirementsConfiguration {
   minimumDriverAge: number;
   maximumDriverAge?: number;
   minimumLicenceHeldMonths: number;
+  licenceMustCoverRentalEnd: boolean;
   allowedLicenceCountries: string[];
   fields: Record<CustomerField, CustomerFieldMode>;
 }

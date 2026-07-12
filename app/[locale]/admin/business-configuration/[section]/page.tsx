@@ -7,10 +7,6 @@ import { loadConfigurationOverview } from "@/lib/business-configuration/workflow
 export const dynamic = "force-dynamic"
 
 const sections = {
-  insurance: { label: "Insurance", domain: "insurance", permission: "canView", note: "Insurance configuration is planned for a later phase." },
-  "driver-requirements": { label: "Driver requirements", domain: "customer-driver-requirements", permission: "canView", note: "Driver eligibility forms are planned for a later phase." },
-  "customer-information": { label: "Customer information", domain: "customer-driver-requirements", permission: "canView", note: "Customer-field forms are planned for a later phase." },
-  "booking-flow": { label: "Booking flow", domain: "booking-workflow", permission: "canView", note: "Configurable booking steps are planned for a later phase." },
   documents: { label: "Documents", domain: "document-policy", permission: "canViewDocuments", note: "Document requirements and uploads are planned for a later phase." },
   payments: { label: "Payments", domain: "payments", permission: "canView", note: "Payment configuration and integrations are planned for a later phase." },
   legal: { label: "Legal", domain: "legal-acceptance", permission: "canEditLegal", note: "Legal publication and acceptance forms are planned for a later phase." },

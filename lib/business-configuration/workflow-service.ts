@@ -2,7 +2,12 @@ import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
 import { money } from "@/lib/pricing/money"
-import { CONFIGURATION_DOMAIN_IDS, configurationValidationResult, type ConfigurationDomainId, type ConfigurationValidationIssue } from "./types"
+import {
+  CONFIGURATION_DOMAIN_IDS,
+  configurationValidationResult,
+  type ConfigurationDomainId,
+  type ConfigurationValidationIssue,
+} from "./types"
 import { evaluateConfigurationHealth, type ConfigurationHealthFinding } from "./health"
 import { validateBusinessConfigurationRelease, validateConfigurationDomain } from "./validation"
 import { CONFIGURATION_DOMAIN_METADATA } from "./domain-metadata"
@@ -11,6 +16,9 @@ import type { ReleaseAggregate } from "./repositories"
 import { ConfigurationWorkflowError } from "./workflow-errors"
 import { CAPABILITIES } from "@/lib/authorization/capabilities"
 import { databaseUserHasCapability } from "@/lib/authorization/database-capabilities"
+import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
+import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
+import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 
 const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 
@@ -172,20 +180,22 @@ function staleIssues(release: ReleaseAggregate, active: ReleaseAggregate | null)
     })
   }
   if (!active) return issues
-  issues.push(...CONFIGURATION_DOMAIN_IDS.flatMap((domain) =>
-    release.versions[domain].versionNumber < active.versions[domain].versionNumber
-      ? [
-          {
-            code: "release.stale_domain_version",
-            domain,
-            severity: "BLOCKER" as const,
-            affectedResource: CONFIGURATION_DOMAIN_METADATA[domain].label,
-            adminMessage: "This draft references an older version than the live configuration.",
-            remediation: "Refresh the draft with the latest live version before activation.",
-          },
-        ]
-      : [],
-  ))
+  issues.push(
+    ...CONFIGURATION_DOMAIN_IDS.flatMap((domain) =>
+      release.versions[domain].versionNumber < active.versions[domain].versionNumber
+        ? [
+            {
+              code: "release.stale_domain_version",
+              domain,
+              severity: "BLOCKER" as const,
+              affectedResource: CONFIGURATION_DOMAIN_METADATA[domain].label,
+              adminMessage: "This draft references an older version than the live configuration.",
+              remediation: "Refresh the draft with the latest live version before activation.",
+            },
+          ]
+        : [],
+    ),
+  )
   return issues
 }
 
@@ -207,8 +217,20 @@ export function validateReleaseAggregate(
     })),
     implementedPaymentMethods: [...IMPLEMENTED_PAYMENT_METHODS],
   })
+  const insurance = release.domains.insurance
+  const customerDriver = release.domains["customer-driver-requirements"]
+  const workflow = release.domains["booking-workflow"]
+  const phase6WorkflowIssues =
+    insurance && customerDriver && workflow
+      ? validateBookingWorkflow({
+          workflow,
+          insurance,
+          fields: resolveEffectiveBookingFields(customerDriver),
+        })
+      : []
   return configurationValidationResult([
     ...base.issues.map(issueWithRoute),
+    ...phase6WorkflowIssues,
     ...fleetIssues(release, vehicles),
     ...staleIssues(release, active),
   ])
@@ -220,7 +242,10 @@ function changedDomains(active: ReleaseAggregate | null, draft: ReleaseAggregate
   return CONFIGURATION_DOMAIN_IDS.filter((domain) => active.versions[domain].id !== draft.versions[domain].id)
 }
 
-function coverage(release: ReleaseAggregate | null, vehicles: Array<{ id: string; name: string }>): FleetCoverageSummary {
+function coverage(
+  release: ReleaseAggregate | null,
+  vehicles: Array<{ id: string; name: string }>,
+): FleetCoverageSummary {
   const rates = new Map(release?.fleetRateSet.rates.map((rate) => [rate.vehicleId, rate]) ?? [])
   const pricing = release?.domains["pricing-billing"]
   return {
@@ -242,20 +267,38 @@ export async function loadConfigurationOverview(options?: {
   includeAudit?: boolean
 }): Promise<ConfigurationOverview> {
   const repository = new PrismaBusinessConfigurationRepository(options?.db ?? prisma)
-  const [activeRelease, draftRelease, vehicles, legalEvidence, recentAuditEvents, pricingDraftEvidence] = await Promise.all([
+  const [
+    activeRelease,
+    draftRelease,
+    vehicles,
+    legalEvidence,
+    recentAuditEvents,
+    pricingDraftEvidence,
+    phase6DraftEvidence,
+  ] = await Promise.all([
     repository.findActiveRelease(),
     repository.findLatestDraftRelease(),
     repository.listBookableVehicles(),
     repository.listPublishedLegalEvidence(),
     options?.includeAudit === false ? [] : repository.listRecentConfigurationEvents(20),
     repository.findLatestPricingDraftEvidence(),
+    loadPhase6ConfigurationPage(options?.db ?? prisma),
   ])
   const changed = changedDomains(activeRelease, draftRelease)
   const pricingDraftIsIndependent = Boolean(
-    pricingDraftEvidence &&
-    pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,
+    pricingDraftEvidence && pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,
   )
   if (pricingDraftIsIndependent && !changed.includes("pricing-billing")) changed.push("pricing-billing")
+  const phase6DraftByDomain = {
+    insurance: phase6DraftEvidence.draftInsurance,
+    "customer-driver-requirements": phase6DraftEvidence.draftCustomerDriver,
+    "booking-workflow": phase6DraftEvidence.draftWorkflow,
+  } as const
+  for (const domain of ["insurance", "customer-driver-requirements", "booking-workflow"] as const) {
+    const independent =
+      phase6DraftByDomain[domain] && phase6DraftByDomain[domain]?.id !== draftRelease?.versions[domain].id
+    if (independent && !changed.includes(domain)) changed.push(domain)
+  }
   const candidate = draftRelease ?? activeRelease
   const validation = candidate
     ? validateReleaseAggregate(candidate, draftRelease ? activeRelease : null, vehicles)
@@ -284,15 +327,25 @@ export async function loadConfigurationOverview(options?: {
   const health = evaluateConfigurationHealth(
     CONFIGURATION_DOMAIN_IDS.map((domain) => ({
       domain,
-      configured: domain === "pricing-billing"
-        ? Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain] || pricingDraftEvidence)
-        : Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
+      configured:
+        domain === "pricing-billing"
+          ? Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain] || pricingDraftEvidence)
+          : domain in phase6DraftByDomain
+            ? Boolean(
+                activeRelease?.versions[domain] ||
+                draftRelease?.versions[domain] ||
+                phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain],
+              )
+            : Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
       hasDraftChanges: changed.includes(domain),
-      validation: domain === "pricing-billing" && pricingEvidenceValidation
-        ? pricingEvidenceValidation
-        : validation
-        ? configurationValidationResult(validation.issues.filter((issue) => issue.domain === domain))
-        : undefined,
+      validation:
+        domain === "pricing-billing" && pricingEvidenceValidation
+          ? pricingEvidenceValidation
+          : domain in phase6DraftByDomain && phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain]
+            ? configurationValidationResult(phase6DraftEvidence.issues.filter((issue) => issue.domain === domain))
+            : validation
+              ? configurationValidationResult(validation.issues.filter((issue) => issue.domain === domain))
+              : undefined,
       adminRoute: routeFor(domain),
     })),
   )
@@ -315,13 +368,33 @@ export async function loadConfigurationOverview(options?: {
       label: CONFIGURATION_DOMAIN_METADATA[domainHealth.domain].label,
       route: routeFor(domainHealth.domain),
       liveVersion: activeRelease?.versions[domainHealth.domain].versionNumber,
-      draftVersion: domainHealth.domain === "pricing-billing"
-        ? pricingDraftEvidence?.pricingVersionNumber ?? draftRelease?.versions[domainHealth.domain].versionNumber
-        : draftRelease?.versions[domainHealth.domain].versionNumber,
-      configured: Boolean(activeRelease?.versions[domainHealth.domain] || draftRelease?.versions[domainHealth.domain]),
-      validationStatus: domainHealth.domain === "pricing-billing"
-        ? pricingDraftEvidence?.pricingValidationStatus ?? draftRelease?.versions[domainHealth.domain].validationStatus ?? activeRelease?.versions[domainHealth.domain].validationStatus ?? "NOT_VALIDATED"
-        : draftRelease?.versions[domainHealth.domain].validationStatus ?? activeRelease?.versions[domainHealth.domain].validationStatus ?? "NOT_VALIDATED",
+      draftVersion:
+        domainHealth.domain === "pricing-billing"
+          ? (pricingDraftEvidence?.pricingVersionNumber ?? draftRelease?.versions[domainHealth.domain].versionNumber)
+          : domainHealth.domain in phase6DraftByDomain
+            ? (phase6DraftByDomain[domainHealth.domain as keyof typeof phase6DraftByDomain]?.versionNumber ??
+              draftRelease?.versions[domainHealth.domain].versionNumber)
+            : draftRelease?.versions[domainHealth.domain].versionNumber,
+      configured: Boolean(
+        activeRelease?.versions[domainHealth.domain] ||
+        draftRelease?.versions[domainHealth.domain] ||
+        (domainHealth.domain in phase6DraftByDomain &&
+          phase6DraftByDomain[domainHealth.domain as keyof typeof phase6DraftByDomain]),
+      ),
+      validationStatus:
+        domainHealth.domain === "pricing-billing"
+          ? (pricingDraftEvidence?.pricingValidationStatus ??
+            draftRelease?.versions[domainHealth.domain].validationStatus ??
+            activeRelease?.versions[domainHealth.domain].validationStatus ??
+            "NOT_VALIDATED")
+          : domainHealth.domain in phase6DraftByDomain
+            ? (phase6DraftByDomain[domainHealth.domain as keyof typeof phase6DraftByDomain]?.validationStatus ??
+              draftRelease?.versions[domainHealth.domain].validationStatus ??
+              activeRelease?.versions[domainHealth.domain].validationStatus ??
+              "NOT_VALIDATED")
+            : (draftRelease?.versions[domainHealth.domain].validationStatus ??
+              activeRelease?.versions[domainHealth.domain].validationStatus ??
+              "NOT_VALIDATED"),
       warningCount: domainHealth.warnings.length,
       blockerCount: domainHealth.blockers.length,
       status: domainHealth.status,
@@ -362,99 +435,119 @@ function statusFromOutcome(outcome: "VALID" | "WARNING" | "BLOCKED") {
   return outcome
 }
 
-export async function validateDraftRelease(
-  releaseId: string,
-  actorId: string,
-  db: PrismaClient = prisma,
-) {
-  return db.$transaction(async (tx) => {
-    if (!(await databaseUserHasCapability(tx, actorId, CAPABILITIES.CONFIGURATION_VALIDATE))) {
-      throw new ConfigurationWorkflowError("CAPABILITY_REQUIRED", "Validation capability is required.", "AUTHORIZATION")
-    }
-    await tx.$queryRaw`SELECT id FROM "BusinessConfigurationRelease" WHERE id = ${releaseId} FOR UPDATE`
-    const repository = new PrismaBusinessConfigurationRepository(tx)
-    const [release, active, vehicles] = await Promise.all([
-      repository.findReleaseAggregate(releaseId),
-      repository.findActiveRelease(),
-      repository.listBookableVehicles(),
-    ])
-    if (!release) throw new ConfigurationWorkflowError("RELEASE_NOT_FOUND", "Draft release not found.", "VALIDATION")
-    if (release.status === "ACTIVE") throw new ConfigurationWorkflowError("RELEASE_ALREADY_ACTIVE", "Release is already active.", "CONFLICT")
-    if (!(["DRAFT", "VALIDATED"] as const).includes(release.status as "DRAFT" | "VALIDATED")) {
-      throw new ConfigurationWorkflowError("RELEASE_INVALID", "Only a current draft can be validated.", "VALIDATION")
-    }
-    const result = validateReleaseAggregate(release, active, vehicles)
-    const snapshot = validationSnapshot(result)
-    const now = new Date()
+export async function validateDraftRelease(releaseId: string, actorId: string, db: PrismaClient = prisma) {
+  return db.$transaction(
+    async (tx) => {
+      if (!(await databaseUserHasCapability(tx, actorId, CAPABILITIES.CONFIGURATION_VALIDATE))) {
+        throw new ConfigurationWorkflowError(
+          "CAPABILITY_REQUIRED",
+          "Validation capability is required.",
+          "AUTHORIZATION",
+        )
+      }
+      await tx.$queryRaw`SELECT id FROM "BusinessConfigurationRelease" WHERE id = ${releaseId} FOR UPDATE`
+      const repository = new PrismaBusinessConfigurationRepository(tx)
+      const [release, active, vehicles] = await Promise.all([
+        repository.findReleaseAggregate(releaseId),
+        repository.findActiveRelease(),
+        repository.listBookableVehicles(),
+      ])
+      if (!release) throw new ConfigurationWorkflowError("RELEASE_NOT_FOUND", "Draft release not found.", "VALIDATION")
+      if (release.status === "ACTIVE")
+        throw new ConfigurationWorkflowError("RELEASE_ALREADY_ACTIVE", "Release is already active.", "CONFLICT")
+      if (!(["DRAFT", "VALIDATED"] as const).includes(release.status as "DRAFT" | "VALIDATED")) {
+        throw new ConfigurationWorkflowError("RELEASE_INVALID", "Only a current draft can be validated.", "VALIDATION")
+      }
+      const result = validateReleaseAggregate(release, active, vehicles)
+      const snapshot = validationSnapshot(result)
+      const now = new Date()
 
-    for (const domain of CONFIGURATION_DOMAIN_IDS) {
-      const domainResult = validateConfigurationDomain(domain, release.domains[domain])
-      if (release.versions[domain].status === "RELEASED") continue
-      await tx.configurationVersion.update({
-        where: { id: release.versions[domain].id },
+      for (const domain of CONFIGURATION_DOMAIN_IDS) {
+        const domainResult = validateConfigurationDomain(domain, release.domains[domain])
+        if (release.versions[domain].status === "RELEASED") continue
+        await tx.configurationVersion.update({
+          where: { id: release.versions[domain].id },
+          data: {
+            status: domainResult.outcome === "BLOCKED" ? "DRAFT" : "VALIDATED",
+            validationStatus: statusFromOutcome(domainResult.outcome),
+            validationSnapshot: validationSnapshot(domainResult) as unknown as Prisma.InputJsonValue,
+            validatedById: actorId,
+            validatedAt: now,
+            updatedById: actorId,
+            revision: { increment: 1 },
+          },
+        })
+      }
+
+      const fleetBlockers = result.issues.filter(({ code }) => code.startsWith("fleet."))
+      if (release.fleetRateSet.status !== "RELEASED") {
+        await tx.fleetRateSet.update({
+          where: { id: release.fleetRateSet.id },
+          data: {
+            status: fleetBlockers.length ? "DRAFT" : "VALIDATED",
+            validationStatus: fleetBlockers.length ? "BLOCKED" : "VALID",
+            validationSnapshot: {
+              issues: fleetBlockers,
+            } as unknown as Prisma.InputJsonValue,
+            validatedById: actorId,
+            validatedAt: now,
+            updatedById: actorId,
+            revision: { increment: 1 },
+          },
+        })
+      }
+
+      const updated = await tx.businessConfigurationRelease.update({
+        where: { id: release.id },
         data: {
-          status: domainResult.outcome === "BLOCKED" ? "DRAFT" : "VALIDATED",
-          validationStatus: statusFromOutcome(domainResult.outcome),
-          validationSnapshot: validationSnapshot(domainResult) as unknown as Prisma.InputJsonValue,
+          status: result.outcome === "BLOCKED" ? "DRAFT" : "VALIDATED",
+          validationStatus: statusFromOutcome(result.outcome),
+          validationSnapshot: snapshot as unknown as Prisma.InputJsonValue,
           validatedById: actorId,
           validatedAt: now,
           updatedById: actorId,
           revision: { increment: 1 },
         },
-      })
-    }
-
-    const fleetBlockers = result.issues.filter(({ code }) => code.startsWith("fleet."))
-    await tx.fleetRateSet.update({
-      where: { id: release.fleetRateSet.id },
-      data: {
-        status: fleetBlockers.length ? "DRAFT" : "VALIDATED",
-        validationStatus: fleetBlockers.length ? "BLOCKED" : "VALID",
-        validationSnapshot: { issues: fleetBlockers } as unknown as Prisma.InputJsonValue,
-        validatedById: actorId,
-        validatedAt: now,
-        updatedById: actorId,
-        revision: { increment: 1 },
-      },
-    })
-
-    const updated = await tx.businessConfigurationRelease.update({
-      where: { id: release.id },
-      data: {
-        status: result.outcome === "BLOCKED" ? "DRAFT" : "VALIDATED",
-        validationStatus: statusFromOutcome(result.outcome),
-        validationSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-        validatedById: actorId,
-        validatedAt: now,
-        updatedById: actorId,
-        revision: { increment: 1 },
-      },
-      select: { id: true, revision: true, status: true, validationStatus: true },
-    })
-    try {
-      await tx.auditEvent.create({
-        data: {
-        actorUserId: actorId,
-        category: "CONFIGURATION",
-        action: "configuration.release_validated",
-        targetType: "BusinessConfigurationRelease",
-        targetId: release.id,
-        configurationReleaseId: release.id,
-        beforeSummary: { status: release.status, validationStatus: release.validationStatus },
-        afterSummary: {
-          status: updated.status,
-          validationStatus: updated.validationStatus,
-          changeSummary: release.changeSummary,
-          blockerCount: result.issues.filter(({ severity }) => severity === "BLOCKER").length,
-          warningCount: result.issues.filter(({ severity }) => severity === "WARNING").length,
-        },
+        select: {
+          id: true,
+          revision: true,
+          status: true,
+          validationStatus: true,
         },
       })
-    } catch {
-      throw new ConfigurationWorkflowError("AUDIT_WRITE_FAILED", "Validation audit could not be written.", "OPERATIONAL")
-    }
-    return { release: updated, result, snapshot }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      try {
+        await tx.auditEvent.create({
+          data: {
+            actorUserId: actorId,
+            category: "CONFIGURATION",
+            action: "configuration.release_validated",
+            targetType: "BusinessConfigurationRelease",
+            targetId: release.id,
+            configurationReleaseId: release.id,
+            beforeSummary: {
+              status: release.status,
+              validationStatus: release.validationStatus,
+            },
+            afterSummary: {
+              status: updated.status,
+              validationStatus: updated.validationStatus,
+              changeSummary: release.changeSummary,
+              blockerCount: result.issues.filter(({ severity }) => severity === "BLOCKER").length,
+              warningCount: result.issues.filter(({ severity }) => severity === "WARNING").length,
+            },
+          },
+        })
+      } catch {
+        throw new ConfigurationWorkflowError(
+          "AUDIT_WRITE_FAILED",
+          "Validation audit could not be written.",
+          "OPERATIONAL",
+        )
+      }
+      return { release: updated, result, snapshot }
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  )
 }
 
 export interface ReleasePreview {
@@ -524,7 +617,11 @@ function pricingExamples(release: ReleaseAggregate) {
       gracePeriodMinutes: config.gracePeriodMinutes,
       taxTreatment: config.pricesIncludeTax ? "TAX_INCLUDED" : "TAX_EXCLUDED",
       taxRateBps: config.taxRateBps,
-      source: { vehicleId: rate.vehicleId, rateSourceType: "FLEET_RATE_SET", rateSourceReference: rate.id },
+      source: {
+        vehicleId: rate.vehicleId,
+        rateSourceType: "FLEET_RATE_SET",
+        rateSourceReference: rate.id,
+      },
       compatibilityMode: "ACTIVE_RELEASE",
       calculatedAt: new Date("2030-01-01T00:00:00.000Z"),
     })
@@ -532,7 +629,10 @@ function pricingExamples(release: ReleaseAggregate) {
   })
 }
 
-export async function generateReleasePreview(releaseId: string, db: ConfigurationDbClient = prisma): Promise<ReleasePreview> {
+export async function generateReleasePreview(
+  releaseId: string,
+  db: ConfigurationDbClient = prisma,
+): Promise<ReleasePreview> {
   const repository = new PrismaBusinessConfigurationRepository(db)
   const [draft, active, vehicles] = await Promise.all([
     repository.findReleaseAggregate(releaseId),
@@ -552,7 +652,12 @@ export function buildReleasePreview(
   const changes = changedDomains(active, draft)
   return {
     liveRelease: active ? { number: active.releaseNumber, name: active.name } : undefined,
-    draftRelease: { id: draft.id, number: draft.releaseNumber, name: draft.name, revision: draft.revision },
+    draftRelease: {
+      id: draft.id,
+      number: draft.releaseNumber,
+      name: draft.name,
+      revision: draft.revision,
+    },
     changedDomains: changes.map((domain) => ({
       domain,
       label: CONFIGURATION_DOMAIN_METADATA[domain].label,
@@ -582,7 +687,11 @@ export async function activateDraftRelease(input: {
     return await db.$transaction(
       async (tx) => {
         if (!(await databaseUserHasCapability(tx, input.actorId, CAPABILITIES.CONFIGURATION_ACTIVATE))) {
-          throw new ConfigurationWorkflowError("CAPABILITY_REQUIRED", "Activation capability is required.", "AUTHORIZATION")
+          throw new ConfigurationWorkflowError(
+            "CAPABILITY_REQUIRED",
+            "Activation capability is required.",
+            "AUTHORIZATION",
+          )
         }
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('business-configuration-activation'))::text AS locked`
         await tx.$queryRaw`SELECT id FROM "BusinessConfigurationRelease" WHERE id = ${input.releaseId} FOR UPDATE`
@@ -593,28 +702,45 @@ export async function activateDraftRelease(input: {
           repository.listBookableVehicles(),
         ])
         if (!draft) throw new ConfigurationWorkflowError("RELEASE_NOT_FOUND", "Draft release not found.", "VALIDATION")
-        if (draft.status === "ACTIVE") throw new ConfigurationWorkflowError("RELEASE_ALREADY_ACTIVE", "Release is already active.", "CONFLICT")
+        if (draft.status === "ACTIVE")
+          throw new ConfigurationWorkflowError("RELEASE_ALREADY_ACTIVE", "Release is already active.", "CONFLICT")
         if (!(["DRAFT", "VALIDATED"] as const).includes(draft.status as "DRAFT" | "VALIDATED")) {
-          throw new ConfigurationWorkflowError("RELEASE_INVALID", "Only a current draft can be activated.", "VALIDATION")
+          throw new ConfigurationWorkflowError(
+            "RELEASE_INVALID",
+            "Only a current draft can be activated.",
+            "VALIDATION",
+          )
         }
         if (draft.revision !== input.expectedRevision) {
           throw new ConfigurationWorkflowError("OPTIMISTIC_LOCK_FAILED", "Draft revision changed.", "CONFLICT")
         }
         if ((active && draft.supersedesReleaseId !== active.id) || (!active && draft.supersedesReleaseId)) {
-          throw new ConfigurationWorkflowError("RELEASE_STALE", "Draft was based on a different active release.", "CONFLICT")
+          throw new ConfigurationWorkflowError(
+            "RELEASE_STALE",
+            "Draft was based on a different active release.",
+            "CONFLICT",
+          )
         }
         const result = validateReleaseAggregate(draft, active, vehicles)
         const blockers = result.issues.filter(({ severity }) => severity === "BLOCKER")
         const warnings = result.issues.filter(({ severity }) => severity === "WARNING")
-        if (blockers.length) throw new ConfigurationWorkflowError("RELEASE_INVALID", "Release has blockers.", "VALIDATION")
+        if (blockers.length)
+          throw new ConfigurationWorkflowError("RELEASE_INVALID", "Release has blockers.", "VALIDATION")
         if (warnings.length && !input.warningsAcknowledged) {
-          throw new ConfigurationWorkflowError("RELEASE_INVALID", "Warnings require explicit acknowledgement.", "VALIDATION")
+          throw new ConfigurationWorkflowError(
+            "RELEASE_INVALID",
+            "Warnings require explicit acknowledgement.",
+            "VALIDATION",
+          )
         }
 
         const now = new Date()
         const versionIds = CONFIGURATION_DOMAIN_IDS.map((domain) => draft.versions[domain].id)
         await tx.configurationVersion.updateMany({
-          where: { id: { in: versionIds }, status: { in: ["DRAFT", "VALIDATED"] } },
+          where: {
+            id: { in: versionIds },
+            status: { in: ["DRAFT", "VALIDATED"] },
+          },
           data: {
             status: "RELEASED",
             validationStatus: result.outcome === "WARNING" ? "WARNING" : "VALID",
@@ -669,26 +795,37 @@ export async function activateDraftRelease(input: {
         try {
           await tx.auditEvent.create({
             data: {
-            actorUserId: input.actorId,
-            category: "CONFIGURATION",
-            action: "configuration.release_activated",
-            targetType: "BusinessConfigurationRelease",
-            targetId: draft.id,
-            configurationReleaseId: draft.id,
-            beforeSummary: { status: draft.status, activeReleaseNumber: active?.releaseNumber },
-            afterSummary: {
-              status: "ACTIVE",
-              releaseNumber: draft.releaseNumber,
-              changeSummary: draft.changeSummary,
-              futureBookingsOnly: true,
-              warningCount: warnings.length,
-            },
+              actorUserId: input.actorId,
+              category: "CONFIGURATION",
+              action: "configuration.release_activated",
+              targetType: "BusinessConfigurationRelease",
+              targetId: draft.id,
+              configurationReleaseId: draft.id,
+              beforeSummary: {
+                status: draft.status,
+                activeReleaseNumber: active?.releaseNumber,
+              },
+              afterSummary: {
+                status: "ACTIVE",
+                releaseNumber: draft.releaseNumber,
+                changeSummary: draft.changeSummary,
+                futureBookingsOnly: true,
+                warningCount: warnings.length,
+              },
             },
           })
         } catch {
-          throw new ConfigurationWorkflowError("AUDIT_WRITE_FAILED", "Activation audit could not be written.", "OPERATIONAL")
+          throw new ConfigurationWorkflowError(
+            "AUDIT_WRITE_FAILED",
+            "Activation audit could not be written.",
+            "OPERATIONAL",
+          )
         }
-        return { releaseId: draft.id, releaseNumber: draft.releaseNumber, status: "ACTIVE" as const }
+        return {
+          releaseId: draft.id,
+          releaseNumber: draft.releaseNumber,
+          status: "ACTIVE" as const,
+        }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     )
@@ -697,6 +834,10 @@ export async function activateDraftRelease(input: {
     if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) {
       throw new ConfigurationWorkflowError("ACTIVATION_CONFLICT", "Another activation won the race.", "CONFLICT")
     }
-    throw new ConfigurationWorkflowError("ACTIVATION_CONFLICT", "Activation could not be completed safely.", "OPERATIONAL")
+    throw new ConfigurationWorkflowError(
+      "ACTIVATION_CONFLICT",
+      "Activation could not be completed safely.",
+      "OPERATIONAL",
+    )
   }
 }

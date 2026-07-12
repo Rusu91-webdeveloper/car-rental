@@ -275,22 +275,6 @@ export function validateBusinessConfigurationRelease(
   }
 
   const legal = contract.domains["legal-acceptance"];
-  if (
-    legal &&
-    (legal.termsAcceptance === "REQUIRED" ||
-      legal.privacyAcknowledgment === "REQUIRED") &&
-    workflowRequirement(workflow, "LEGAL_ACCEPTANCE") === "HIDDEN"
-  ) {
-    issues.push({
-      code: "release.legal_step_hidden",
-      domain: "booking-workflow",
-      field: "steps.LEGAL_ACCEPTANCE",
-      adminMessage:
-        "Terms and privacy are hidden while customer acknowledgement is required.",
-      severity: "BLOCKER",
-      remediation: "Show the Terms and privacy step.",
-    });
-  }
 
   const insurance = contract.domains.insurance;
   if (

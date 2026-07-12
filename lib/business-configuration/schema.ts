@@ -86,6 +86,8 @@ export const insuranceConfigurationSchema = z
       .array(z.string().trim().min(1))
       .refine(uniqueStrings, "Vehicles must not be repeated"),
     showInConfirmation: z.boolean(),
+    showCustomerSelection: z.boolean(),
+    preselectedByDefault: z.boolean(),
   })
   .superRefine((configuration, context) => {
     if (configuration.enabled && configuration.pricePerDay <= 0) {
@@ -111,6 +113,27 @@ export const insuranceConfigurationSchema = z
         ),
       });
     }
+    if (configuration.enabled && configuration.selectionMode === "OPTIONAL" && !configuration.showCustomerSelection) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["showCustomerSelection"],
+        message: codeMessage("insurance.optional_selection_hidden", "Optional insurance must show a customer choice"),
+      });
+    }
+    if ((!configuration.enabled || configuration.selectionMode === "MANDATORY") && configuration.showCustomerSelection) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["showCustomerSelection"],
+        message: codeMessage("insurance.selection_not_applicable", "Only optional insurance can show a customer selection"),
+      });
+    }
+    if (configuration.preselectedByDefault && !configuration.showCustomerSelection) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["preselectedByDefault"],
+        message: codeMessage("insurance.preselection_requires_choice", "Preselection requires a visible customer choice"),
+      });
+    }
   });
 
 const requirementSchema = z.enum(REQUIREMENT_LEVELS);
@@ -127,6 +150,7 @@ export const customerDriverRequirementsConfigurationSchema = z
     minimumDriverAge: z.number().int().min(18).max(99),
     maximumDriverAge: z.number().int().min(18).max(120).optional(),
     minimumLicenceHeldMonths: z.number().int().min(0).max(1_200),
+    licenceMustCoverRentalEnd: z.boolean(),
     allowedLicenceCountries: z
       .array(
         z
