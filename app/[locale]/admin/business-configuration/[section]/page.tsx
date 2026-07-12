@@ -7,8 +7,6 @@ import { loadConfigurationOverview } from "@/lib/business-configuration/workflow
 export const dynamic = "force-dynamic"
 
 const sections = {
-  pricing: { label: "Pricing", domain: "pricing-billing", permission: "canManagePricing", note: "Read-only pricing engine and fleet coverage evidence is available now. Editing arrives in Phase 5." },
-  billing: { label: "Billing rules", domain: "pricing-billing", permission: "canManagePricing", note: "Billable duration, tax, and rate-strategy forms arrive in Phase 5." },
   insurance: { label: "Insurance", domain: "insurance", permission: "canView", note: "Insurance configuration is planned for a later phase." },
   "driver-requirements": { label: "Driver requirements", domain: "customer-driver-requirements", permission: "canView", note: "Driver eligibility forms are planned for a later phase." },
   "customer-information": { label: "Customer information", domain: "customer-driver-requirements", permission: "canView", note: "Customer-field forms are planned for a later phase." },
@@ -37,7 +35,6 @@ export default async function ConfigurationSectionPage({ params }: { params: Pro
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">Current status</h2><p className="mt-2 text-sm text-muted-foreground">Live: {status?.liveVersion ? `Version ${status.liveVersion}` : "Not configured"} · Draft: {status?.draftVersion ? `Version ${status.draftVersion}` : "None"}</p></div>{status ? <ConfigurationStatusBadge status={status.status} /> : null}</div>
         <div className="mt-5 rounded-lg border border-dashed bg-muted/20 p-5"><p className="font-medium">Planned</p><p className="mt-1 text-sm text-muted-foreground">No editing controls are available in Phase 4. This page provides status visibility without implying that changes can be saved.</p></div>
       </section>
-      {metadata.domain === "pricing-billing" ? <section className="rounded-xl border bg-background p-6"><h2 className="font-semibold">Read-only fleet evidence</h2><p className="mt-2 text-sm text-muted-foreground">{overview.fleetCoverage.dailyRates} of {overview.fleetCoverage.totalVehicles} bookable vehicles have daily rates in the candidate source. Weekly missing: {overview.fleetCoverage.missingWeeklyRates}. Monthly missing: {overview.fleetCoverage.missingMonthlyRates}.</p></section> : null}
       <Link href="/admin/business-configuration/overview" className="inline-block text-sm font-medium text-primary hover:underline">Back to Overview</Link>
     </div>
   )
