@@ -85,6 +85,13 @@ export interface ConfigurationEvidenceRepository {
   listPublishedLegalEvidence(): Promise<
     Array<{ id: string; type: "RENTAL_TERMS" | "PRIVACY_NOTICE"; status: string; locales: string[] }>
   >
+  findLatestPricingDraftEvidence(): Promise<{
+    pricingVersionId: string
+    pricingVersionNumber: number
+    pricingValidationStatus: ConfigurationValidationStatus
+    configuration: BusinessConfigurationDomains["pricing-billing"]
+    fleetRateSet: ReleaseAggregate["fleetRateSet"]
+  } | null>
 }
 
 export interface AuditEventRepository {

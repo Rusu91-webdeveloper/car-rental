@@ -53,8 +53,8 @@ export const CONFIGURATION_DOMAIN_METADATA: Record<
 
 export const BUSINESS_CONFIGURATION_NAVIGATION = [
   { label: "Overview", segment: "overview", capability: "configuration.view" },
-  { label: "Pricing", segment: "pricing", capability: "pricing.manage" },
-  { label: "Billing rules", segment: "billing", capability: "pricing.manage" },
+  { label: "Pricing", segment: "pricing", capability: "configuration.view" },
+  { label: "Billing rules", segment: "billing", capability: "configuration.view" },
   { label: "Insurance", segment: "insurance", capability: "configuration.view" },
   { label: "Driver requirements", segment: "driver-requirements", capability: "configuration.view" },
   { label: "Customer information", segment: "customer-information", capability: "configuration.view" },

@@ -315,9 +315,61 @@ export class PrismaBusinessConfigurationRepository
     }))
   }
 
+  async findLatestPricingDraftEvidence() {
+    const [pricing, fleet] = await Promise.all([
+      this.db.configurationVersion.findFirst({
+        where: { domain: "PRICING_BILLING", status: { in: ["DRAFT", "VALIDATED"] } },
+        include: { pricingBilling: true },
+        orderBy: { updatedAt: "desc" },
+      }),
+      this.db.fleetRateSet.findFirst({
+        where: { status: { in: ["DRAFT", "VALIDATED"] } },
+        include: { rates: { include: { car: { select: { name: true } } } } },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ])
+    if (!pricing?.pricingBilling || !fleet) return null
+    return {
+      pricingVersionId: pricing.id,
+      pricingVersionNumber: pricing.versionNumber,
+      pricingValidationStatus: pricing.validationStatus,
+      configuration: {
+        weeklyPricingEnabled: pricing.pricingBilling.weeklyPricingEnabled,
+        monthlyPricingEnabled: pricing.pricingBilling.monthlyPricingEnabled,
+        mixedDurationStrategy: pricing.pricingBilling.mixedDurationStrategy,
+        rentalMonthDefinition: pricing.pricingBilling.rentalMonthDefinition,
+        billableDayRule: pricing.pricingBilling.billableDayMethod,
+        gracePeriodMinutes: pricing.pricingBilling.gracePeriodMinutes,
+        minimumRentalMinutes: pricing.pricingBilling.minimumRentalMinutes,
+        minimumChargeDays: pricing.pricingBilling.minimumChargeDays,
+        pricesIncludeTax: pricing.pricingBilling.priceTaxTreatment === "TAX_INCLUDED",
+        taxRateBps: pricing.pricingBilling.taxRateBps,
+      },
+      fleetRateSet: {
+        id: fleet.id,
+        versionNumber: fleet.versionNumber,
+        status: fleet.status,
+        validationStatus: fleet.validationStatus,
+        revision: fleet.revision,
+        currency: fleet.currency,
+        updatedAt: fleet.updatedAt.toISOString(),
+        rates: fleet.rates.map((rate) => ({
+          id: rate.id,
+          vehicleId: rate.carId,
+          vehicleName: rate.car.name,
+          dailyRate: rate.dailyRate,
+          weeklyRate: rate.weeklyRate ?? undefined,
+          monthlyRate: rate.monthlyRate ?? undefined,
+          weeklyRateEnabled: rate.weeklyRateEnabled,
+          monthlyRateEnabled: rate.monthlyRateEnabled,
+        })),
+      },
+    }
+  }
+
   async listRecentConfigurationEvents(limit = 20): Promise<ConfigurationAuditRecord[]> {
     const events = await this.db.auditEvent.findMany({
-      where: { category: { in: ["CONFIGURATION", "AUTHORIZATION"] } },
+      where: { category: { in: ["CONFIGURATION", "PRICING", "AUTHORIZATION"] } },
       include: { actor: { select: { name: true, email: true } } },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(limit, 1), 100),

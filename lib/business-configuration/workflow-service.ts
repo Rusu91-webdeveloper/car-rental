@@ -10,34 +10,9 @@ import { PrismaBusinessConfigurationRepository, type ConfigurationDbClient } fro
 import type { ReleaseAggregate } from "./repositories"
 import { ConfigurationWorkflowError } from "./workflow-errors"
 import { CAPABILITIES } from "@/lib/authorization/capabilities"
+import { databaseUserHasCapability } from "@/lib/authorization/database-capabilities"
 
 const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
-
-async function actorHasCapability(tx: Prisma.TransactionClient, actorId: string, capabilityKey: string) {
-  const actor = await tx.user.findFirst({
-    where: { id: actorId, isActive: true },
-    select: {
-      role: true,
-      accessRoleAssignments: {
-        where: { accessRole: { status: "ACTIVE" } },
-        select: {
-          accessRole: {
-            select: {
-              capabilities: { select: { capability: { select: { key: true } } } },
-            },
-          },
-        },
-      },
-    },
-  })
-  return (
-    actor?.role === "ADMIN" ||
-    actor?.accessRoleAssignments.some(({ accessRole }) =>
-      accessRole.capabilities.some(({ capability }) => capability.key === capabilityKey),
-    ) ||
-    false
-  )
-}
 
 export interface FleetCoverageSummary {
   totalVehicles: number
@@ -96,6 +71,29 @@ function fleetIssues(
   const pricing = release.domains["pricing-billing"]
   const byVehicle = new Map(release.fleetRateSet.rates.map((rate) => [rate.vehicleId, rate]))
   const issues: ConfigurationValidationIssue[] = []
+  if (pricing?.rentalMonthDefinition === "CALENDAR_MONTH") {
+    issues.push({
+      code: "pricing.calendar_month_unsupported",
+      domain: "pricing-billing",
+      severity: "BLOCKER",
+      adminMessage: "Calendar-month pricing is not supported by the current pricing engine.",
+      remediation: "Choose a fixed 28-day or fixed 30-day month.",
+    })
+  }
+  if (
+    pricing &&
+    pricing.mixedDurationStrategy !== "DAILY_ONLY" &&
+    !pricing.weeklyPricingEnabled &&
+    !pricing.monthlyPricingEnabled
+  ) {
+    issues.push({
+      code: "pricing.strategy_period_rate_disabled",
+      domain: "pricing-billing",
+      severity: "BLOCKER",
+      adminMessage: "The selected pricing strategy has no longer-period rates enabled.",
+      remediation: "Enable weekly or monthly pricing, or charge every day separately.",
+    })
+  }
   for (const vehicle of vehicles) {
     const rate = byVehicle.get(vehicle.id)
     if (!rate || rate.dailyRate <= 0) {
@@ -126,6 +124,27 @@ function fleetIssues(
         affectedResource: vehicle.name,
         adminMessage: "Monthly pricing is enabled, but this vehicle has no valid monthly rate.",
         remediation: "Add a monthly rate or disable monthly pricing in the draft.",
+      })
+    }
+    if (rate?.weeklyRateEnabled && rate.weeklyRate && rate.weeklyRate >= rate.dailyRate * 7) {
+      issues.push({
+        code: "rates.no_weekly_saving",
+        domain: "pricing-billing",
+        severity: "WARNING",
+        affectedResource: vehicle.name,
+        adminMessage: "The weekly price is not lower than seven daily prices.",
+        remediation: "Confirm this intentional price structure before activation.",
+      })
+    }
+    const monthDays = pricing?.rentalMonthDefinition === "FIXED_28_DAYS" ? 28 : 30
+    if (rate?.monthlyRateEnabled && rate.monthlyRate && rate.monthlyRate >= rate.dailyRate * monthDays) {
+      issues.push({
+        code: "rates.no_monthly_saving",
+        domain: "pricing-billing",
+        severity: "WARNING",
+        affectedResource: vehicle.name,
+        adminMessage: "The monthly price is not lower than the comparable daily price.",
+        remediation: "Confirm this intentional price structure before activation.",
       })
     }
   }
@@ -223,24 +242,55 @@ export async function loadConfigurationOverview(options?: {
   includeAudit?: boolean
 }): Promise<ConfigurationOverview> {
   const repository = new PrismaBusinessConfigurationRepository(options?.db ?? prisma)
-  const [activeRelease, draftRelease, vehicles, legalEvidence, recentAuditEvents] = await Promise.all([
+  const [activeRelease, draftRelease, vehicles, legalEvidence, recentAuditEvents, pricingDraftEvidence] = await Promise.all([
     repository.findActiveRelease(),
     repository.findLatestDraftRelease(),
     repository.listBookableVehicles(),
     repository.listPublishedLegalEvidence(),
     options?.includeAudit === false ? [] : repository.listRecentConfigurationEvents(20),
+    repository.findLatestPricingDraftEvidence(),
   ])
   const changed = changedDomains(activeRelease, draftRelease)
+  const pricingDraftIsIndependent = Boolean(
+    pricingDraftEvidence &&
+    pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,
+  )
+  if (pricingDraftIsIndependent && !changed.includes("pricing-billing")) changed.push("pricing-billing")
   const candidate = draftRelease ?? activeRelease
   const validation = candidate
     ? validateReleaseAggregate(candidate, draftRelease ? activeRelease : null, vehicles)
     : undefined
+  const pricingEvidenceRelease = pricingDraftEvidence
+    ? ({
+        ...(candidate ?? {}),
+        domains: {
+          ...(candidate?.domains ?? {}),
+          "pricing-billing": pricingDraftEvidence.configuration,
+          "general-rental": candidate?.domains["general-rental"] ?? {
+            businessTimeZone: "UTC",
+            currency: pricingDraftEvidence.fleetRateSet.currency,
+            supportedLocales: ["en"],
+          },
+        },
+        fleetRateSet: pricingDraftEvidence.fleetRateSet,
+      } as ReleaseAggregate)
+    : null
+  const pricingEvidenceValidation = pricingEvidenceRelease
+    ? configurationValidationResult([
+        ...validateConfigurationDomain("pricing-billing", pricingDraftEvidence!.configuration).issues,
+        ...fleetIssues(pricingEvidenceRelease, vehicles),
+      ])
+    : undefined
   const health = evaluateConfigurationHealth(
     CONFIGURATION_DOMAIN_IDS.map((domain) => ({
       domain,
-      configured: Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
+      configured: domain === "pricing-billing"
+        ? Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain] || pricingDraftEvidence)
+        : Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
       hasDraftChanges: changed.includes(domain),
-      validation: validation
+      validation: domain === "pricing-billing" && pricingEvidenceValidation
+        ? pricingEvidenceValidation
+        : validation
         ? configurationValidationResult(validation.issues.filter((issue) => issue.domain === domain))
         : undefined,
       adminRoute: routeFor(domain),
@@ -265,9 +315,13 @@ export async function loadConfigurationOverview(options?: {
       label: CONFIGURATION_DOMAIN_METADATA[domainHealth.domain].label,
       route: routeFor(domainHealth.domain),
       liveVersion: activeRelease?.versions[domainHealth.domain].versionNumber,
-      draftVersion: draftRelease?.versions[domainHealth.domain].versionNumber,
+      draftVersion: domainHealth.domain === "pricing-billing"
+        ? pricingDraftEvidence?.pricingVersionNumber ?? draftRelease?.versions[domainHealth.domain].versionNumber
+        : draftRelease?.versions[domainHealth.domain].versionNumber,
       configured: Boolean(activeRelease?.versions[domainHealth.domain] || draftRelease?.versions[domainHealth.domain]),
-      validationStatus: draftRelease?.versions[domainHealth.domain].validationStatus ?? activeRelease?.versions[domainHealth.domain].validationStatus ?? "NOT_VALIDATED",
+      validationStatus: domainHealth.domain === "pricing-billing"
+        ? pricingDraftEvidence?.pricingValidationStatus ?? draftRelease?.versions[domainHealth.domain].validationStatus ?? activeRelease?.versions[domainHealth.domain].validationStatus ?? "NOT_VALIDATED"
+        : draftRelease?.versions[domainHealth.domain].validationStatus ?? activeRelease?.versions[domainHealth.domain].validationStatus ?? "NOT_VALIDATED",
       warningCount: domainHealth.warnings.length,
       blockerCount: domainHealth.blockers.length,
       status: domainHealth.status,
@@ -275,7 +329,7 @@ export async function loadConfigurationOverview(options?: {
     blockers: health.blockers,
     warnings: health.warnings,
     notices: health.notices,
-    fleetCoverage: coverage(candidate, vehicles),
+    fleetCoverage: coverage(pricingEvidenceRelease ?? candidate, vehicles),
     legalHealth: {
       requiredTypes,
       publishedLanguages: [...new Set(published.flatMap(({ locales }) => locales))].sort(),
@@ -314,7 +368,7 @@ export async function validateDraftRelease(
   db: PrismaClient = prisma,
 ) {
   return db.$transaction(async (tx) => {
-    if (!(await actorHasCapability(tx, actorId, CAPABILITIES.CONFIGURATION_VALIDATE))) {
+    if (!(await databaseUserHasCapability(tx, actorId, CAPABILITIES.CONFIGURATION_VALIDATE))) {
       throw new ConfigurationWorkflowError("CAPABILITY_REQUIRED", "Validation capability is required.", "AUTHORIZATION")
     }
     await tx.$queryRaw`SELECT id FROM "BusinessConfigurationRelease" WHERE id = ${releaseId} FOR UPDATE`
@@ -335,6 +389,7 @@ export async function validateDraftRelease(
 
     for (const domain of CONFIGURATION_DOMAIN_IDS) {
       const domainResult = validateConfigurationDomain(domain, release.domains[domain])
+      if (release.versions[domain].status === "RELEASED") continue
       await tx.configurationVersion.update({
         where: { id: release.versions[domain].id },
         data: {
@@ -526,7 +581,7 @@ export async function activateDraftRelease(input: {
   try {
     return await db.$transaction(
       async (tx) => {
-        if (!(await actorHasCapability(tx, input.actorId, CAPABILITIES.CONFIGURATION_ACTIVATE))) {
+        if (!(await databaseUserHasCapability(tx, input.actorId, CAPABILITIES.CONFIGURATION_ACTIVATE))) {
           throw new ConfigurationWorkflowError("CAPABILITY_REQUIRED", "Activation capability is required.", "AUTHORIZATION")
         }
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('business-configuration-activation'))::text AS locked`
