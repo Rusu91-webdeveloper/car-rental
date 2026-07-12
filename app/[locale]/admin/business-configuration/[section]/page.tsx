@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic"
 const sections = {
   documents: { label: "Documents", domain: "document-policy", permission: "canViewDocuments", note: "Document requirements and uploads are planned for a later phase." },
   payments: { label: "Payments", domain: "payments", permission: "canView", note: "Payment configuration and integrations are planned for a later phase." },
-  legal: { label: "Legal", domain: "legal-acceptance", permission: "canEditLegal", note: "Legal publication and acceptance forms are planned for a later phase." },
   confirmations: { label: "Confirmations", domain: "confirmations", permission: "canView", note: "Confirmation-content forms are planned for a later phase." },
   advanced: { label: "Advanced", domain: "general-rental", permission: "canView", note: "Advanced identifiers and low-level controls remain read-only." },
 } as const

@@ -220,11 +220,13 @@ export function validateReleaseAggregate(
   const insurance = release.domains.insurance
   const customerDriver = release.domains["customer-driver-requirements"]
   const workflow = release.domains["booking-workflow"]
+  const legal = release.domains["legal-acceptance"]
   const phase6WorkflowIssues =
     insurance && customerDriver && workflow
       ? validateBookingWorkflow({
           workflow,
           insurance,
+          legal,
           fields: resolveEffectiveBookingFields(customerDriver),
         })
       : []
