@@ -134,12 +134,13 @@ model Car {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bookings              Booking[]
-  reviews               Review[]
-  savedBy               SavedCar[]
-  blockedDates          BlockedDate[]
-  rentalRates           VehicleRentalRate[]
-  insuranceAvailability InsuranceVehicleAvailability[]
+  bookings                       Booking[]
+  reviews                        Review[]
+  savedBy                        SavedCar[]
+  blockedDates                   BlockedDate[]
+  rentalRates                    VehicleRentalRate[]
+  insuranceAvailability          InsuranceVehicleAvailability[]
+  insuranceAvailabilitySnapshots BookingInsuranceSnapshot[]     @relation("InsuranceAvailabilityVehicle")
 
   @@index([category])
   @@index([status])
@@ -833,6 +834,8 @@ model InsuranceConfigVersion {
   taxTreatment           InsuranceTaxTreatment      @default(INHERIT_RENTAL)
   availabilityScope      InsuranceAvailabilityScope @default(ALL_VEHICLES)
   showInConfirmation     Boolean                    @default(true)
+  showCustomerSelection  Boolean                    @default(true)
+  preselectedByDefault   Boolean                    @default(false)
 
   version             ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
   translations        InsuranceConfigTranslation[]
@@ -874,9 +877,10 @@ model CustomerDriverConfigVersion {
   licenceMustCoverRentalEnd Boolean  @default(true)
   allowedLicenceCountries   String[]
 
-  version    ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
-  fieldRules CustomerFieldRule[]
-  releases   BusinessConfigurationRelease[]
+  version          ConfigurationVersion            @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  fieldRules       CustomerFieldRule[]
+  releases         BusinessConfigurationRelease[]
+  bookingSnapshots BookingCustomerDriverSnapshot[]
 }
 
 model CustomerFieldRule {
@@ -1198,50 +1202,63 @@ model BookingPricingSnapshot {
 }
 
 model BookingCustomerDriverSnapshot {
-  id                    String    @id @default(cuid())
-  bookingId             String    @unique
-  snapshotSchemaVersion Int       @default(1)
-  firstName             String
-  lastName              String
-  email                 String
-  phone                 String?
-  dateOfBirth           DateTime? @db.Date
-  country               String?   @db.VarChar(2)
-  address               String?
-  city                  String?
-  postalCode            String?
-  nationality           String?   @db.VarChar(2)
-  licenceNumber         String?
-  licenceIssueDate      DateTime? @db.Date
-  licenceExpiryDate     DateTime? @db.Date
-  licenceIssuingCountry String?   @db.VarChar(2)
-  licenceHeldSinceDate  DateTime? @db.Date
-  capturedAt            DateTime
-  createdAt             DateTime  @default(now())
+  id                            String    @id @default(cuid())
+  bookingId                     String    @unique
+  customerDriverConfigVersionId String?
+  snapshotSchemaVersion         Int       @default(1)
+  firstName                     String
+  lastName                      String
+  email                         String
+  phone                         String?
+  dateOfBirth                   DateTime? @db.Date
+  country                       String?   @db.VarChar(2)
+  address                       String?
+  city                          String?
+  postalCode                    String?
+  nationality                   String?   @db.VarChar(2)
+  licenceNumber                 String?
+  licenceIssueDate              DateTime? @db.Date
+  licenceExpiryDate             DateTime? @db.Date
+  licenceIssuingCountry         String?   @db.VarChar(2)
+  licenceHeldSinceDate          DateTime? @db.Date
+  capturedAt                    DateTime
+  validatedAt                   DateTime?
+  createdAt                     DateTime  @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  booking              Booking                      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customerDriverConfig CustomerDriverConfigVersion? @relation(fields: [customerDriverConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+
+  @@index([customerDriverConfigVersionId])
 }
 
 model BookingInsuranceSnapshot {
-  id                       String                   @id @default(cuid())
-  bookingId                String                   @unique
+  id                       String                     @id @default(cuid())
+  bookingId                String                     @unique
   insuranceConfigVersionId String
-  snapshotSchemaVersion    Int                      @default(1)
+  availabilityVehicleId    String?
+  snapshotSchemaVersion    Int                        @default(1)
   selected                 Boolean
   requirementMode          InsuranceRequirementMode
   customerFacingName       String
-  description              String?                  @db.Text
+  description              String?                    @db.Text
   unitPrice                Int // Minor currency units per billable day.
   billableDays             Int
   subtotal                 Int // Minor currency units.
+  currency                 String                     @db.VarChar(3)
   taxTreatment             InsuranceTaxTreatment
+  availabilityScope        InsuranceAvailabilityScope
+  customerSelectionShown   Boolean
+  preselected              Boolean
+  showInConfirmation       Boolean
   capturedAt               DateTime
-  createdAt                DateTime                 @default(now())
+  createdAt                DateTime                   @default(now())
 
-  booking         Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  insuranceConfig InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  booking             Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  insuranceConfig     InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  availabilityVehicle Car?                   @relation("InsuranceAvailabilityVehicle", fields: [availabilityVehicleId], references: [id], onDelete: Restrict)
 
   @@index([insuranceConfigVersionId])
+  @@index([availabilityVehicleId])
 }
 
 model BookingLegalAcceptance {
