@@ -77,4 +77,14 @@ describe("capability evaluation", () => {
       checkAllCapabilities(administrator, Object.values(CAPABILITIES)),
     ).toEqual({ allowed: true });
   });
+
+  it.each([
+    CAPABILITIES.CONFIGURATION_EDIT,
+    CAPABILITIES.CONFIGURATION_VALIDATE,
+    CAPABILITIES.CONFIGURATION_ACTIVATE,
+  ])("requires the explicit %s capability for non-admin users", (capability) => {
+    expect(checkCapability(manager, capability).allowed).toBe(
+      capability === CAPABILITIES.CONFIGURATION_EDIT,
+    );
+  });
 });
