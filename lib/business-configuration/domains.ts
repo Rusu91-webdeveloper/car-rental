@@ -189,12 +189,26 @@ export interface PublishedLegalDocumentReference {
   contentHash: string;
 }
 
+export interface LegalAcceptanceLabels {
+  locale: string;
+  termsCheckboxLabel?: string;
+  termsLinkLabel: string;
+  privacyCheckboxLabel?: string;
+  privacyLinkLabel: string;
+}
+
 export interface LegalAcceptanceConfiguration {
   termsDocument: PublishedLegalDocumentReference;
   privacyDocument: PublishedLegalDocumentReference;
-  termsAcceptance: "REQUIRED" | "DISPLAY_ONLY";
-  privacyAcknowledgment: "REQUIRED" | "DISPLAY_ONLY";
+  termsAcceptance: "REQUIRED" | "DISPLAY_ONLY" | "DISABLED";
+  privacyAcknowledgment: "REQUIRED" | "DISPLAY_ONLY" | "DISABLED";
   retainRenderedSnapshot: boolean;
+  bookingEnforcementEnabled: boolean;
+  requiredLocales: string[];
+  termsPresentation: "INLINE" | "DIALOG";
+  privacyPresentation: "INLINE" | "DIALOG";
+  showInConfirmation: boolean;
+  translations: LegalAcceptanceLabels[];
 }
 
 export interface BusinessConfigurationDomains {

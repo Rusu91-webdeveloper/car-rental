@@ -12,6 +12,11 @@ export const CONFIGURATION_WORKFLOW_ERROR_CODES = [
   "LEGAL_PUBLICATION_MISSING",
   "OPTIMISTIC_LOCK_FAILED",
   "AUDIT_WRITE_FAILED",
+  "LEGAL_VERSION_CONFLICT",
+  "LEGAL_PUBLICATION_NOT_FOUND",
+  "LEGAL_ALREADY_PUBLISHED",
+  "LEGAL_ACCEPTANCE_CONFIG_MISSING",
+  "LEGAL_PUBLICATION_IN_USE",
 ] as const
 
 export type ConfigurationWorkflowErrorCode = (typeof CONFIGURATION_WORKFLOW_ERROR_CODES)[number]
@@ -51,5 +56,15 @@ export function publicConfigurationWorkflowMessage(error: ConfigurationWorkflowE
       return "The draft changed while you were working. Refresh and review it again."
     case "AUDIT_WRITE_FAILED":
       return "The action was not completed because its audit record could not be saved."
+    case "LEGAL_VERSION_CONFLICT":
+      return "The legal draft changed while you were working. Refresh and review it again."
+    case "LEGAL_PUBLICATION_NOT_FOUND":
+      return "This legal publication could not be found."
+    case "LEGAL_ALREADY_PUBLISHED":
+      return "This legal version has already been published and is immutable."
+    case "LEGAL_ACCEPTANCE_CONFIG_MISSING":
+      return "Create the legal acceptance policy before continuing."
+    case "LEGAL_PUBLICATION_IN_USE":
+      return "This publication is used by the active release and cannot be archived."
   }
 }

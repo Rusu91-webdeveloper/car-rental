@@ -314,9 +314,20 @@ export function validateBusinessConfigurationRelease(
   }
 
   const general = contract.domains["general-rental"];
-  if (general && legal) {
+  if (general && legal?.bookingEnforcementEnabled) {
     for (const locale of general.supportedLocales) {
-      if (!legal.termsDocument.availableLocales.includes(locale)) {
+      if (!legal.requiredLocales.includes(locale)) {
+        issues.push({
+          code: "LEGAL_LOCALE_UNSUPPORTED",
+          domain: "legal-acceptance",
+          field: "requiredLocales",
+          affectedResource: locale,
+          adminMessage: "The legal policy does not cover a supported booking language.",
+          severity: "BLOCKER",
+          remediation: "Add the language and its labels to the legal policy.",
+        });
+      }
+      if (legal.termsAcceptance !== "DISABLED" && !legal.termsDocument.availableLocales.includes(locale)) {
         issues.push({
           code: "release.terms_translation_missing",
           domain: "legal-acceptance",
@@ -329,7 +340,7 @@ export function validateBusinessConfigurationRelease(
             "Publish the missing translation or remove the language from this release.",
         });
       }
-      if (!legal.privacyDocument.availableLocales.includes(locale)) {
+      if (legal.privacyAcknowledgment !== "DISABLED" && !legal.privacyDocument.availableLocales.includes(locale)) {
         issues.push({
           code: "release.privacy_translation_missing",
           domain: "legal-acceptance",

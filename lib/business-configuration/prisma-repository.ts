@@ -62,6 +62,7 @@ const releaseInclude = {
       version: { include: { updatedBy: { select: { name: true, email: true } } } },
       termsDocument: { include: { translations: true } },
       privacyDocument: { include: { translations: true } },
+      translations: true,
     },
   },
   fleetRateSet: { include: { rates: { include: { car: { select: { name: true } } } } } },
@@ -208,6 +209,12 @@ function mapDomains(row: ReleaseRow): BusinessConfigurationDomains {
       termsAcceptance: row.legalAcceptanceConfig.termsAcceptance,
       privacyAcknowledgment: row.legalAcceptanceConfig.privacyAcknowledgment,
       retainRenderedSnapshot: row.legalAcceptanceConfig.retainContentSnapshot,
+      bookingEnforcementEnabled: row.legalAcceptanceConfig.bookingEnforcementEnabled,
+      requiredLocales: row.legalAcceptanceConfig.requiredLocales,
+      termsPresentation: row.legalAcceptanceConfig.termsPresentation,
+      privacyPresentation: row.legalAcceptanceConfig.privacyPresentation,
+      showInConfirmation: row.legalAcceptanceConfig.showInConfirmation,
+      translations: row.legalAcceptanceConfig.translations.map(({ locale, termsCheckboxLabel, termsLinkLabel, privacyCheckboxLabel, privacyLinkLabel }) => ({ locale, termsCheckboxLabel: termsCheckboxLabel ?? undefined, termsLinkLabel, privacyCheckboxLabel: privacyCheckboxLabel ?? undefined, privacyLinkLabel })),
     },
   }
 }

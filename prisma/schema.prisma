@@ -43,6 +43,7 @@ model User {
   legalDocumentsCreated          LegalDocumentVersion[]         @relation("LegalDocumentCreatedBy")
   legalDocumentsUpdated          LegalDocumentVersion[]         @relation("LegalDocumentUpdatedBy")
   legalDocumentsPublished        LegalDocumentVersion[]         @relation("LegalDocumentPublishedBy")
+  legalDocumentsValidated        LegalDocumentVersion[]         @relation("LegalDocumentValidatedBy")
   legalAcceptances               BookingLegalAcceptance[]       @relation("LegalAcceptanceCustomer")
   ownedCustomerDocuments         CustomerDocument[]             @relation("CustomerDocumentOwner")
   uploadedCustomerDocuments      CustomerDocument[]             @relation("CustomerDocumentUploader")
@@ -603,6 +604,12 @@ enum LegalPublicationStatus {
 enum LegalAcceptanceRequirement {
   REQUIRED
   DISPLAY_ONLY
+  DISABLED
+}
+
+enum LegalContentPresentation {
+  INLINE
+  DIALOG
 }
 
 enum LegalAcceptanceSource {
@@ -679,26 +686,32 @@ model UserAccessRole {
 }
 
 model LegalDocumentVersion {
-  id            String                 @id @default(cuid())
-  type          LegalDocumentType
-  versionNumber Int
-  status        LegalPublicationStatus @default(DRAFT)
-  schemaVersion Int                    @default(1)
-  revision      Int                    @default(1)
-  versionLabel  String
-  changeSummary String                 @db.Text
-  manifestHash  String?                @db.Char(64)
-  createdById   String
-  updatedById   String
-  publishedById String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  publishedAt   DateTime?
-  archivedAt    DateTime?
+  id                 String                        @id @default(cuid())
+  type               LegalDocumentType
+  versionNumber      Int
+  status             LegalPublicationStatus        @default(DRAFT)
+  schemaVersion      Int                           @default(1)
+  revision           Int                           @default(1)
+  versionLabel       String
+  changeSummary      String                        @db.Text
+  manifestHash       String?                       @db.Char(64)
+  primaryLocale      String?                       @db.VarChar(10)
+  validationStatus   ConfigurationValidationStatus @default(NOT_VALIDATED)
+  validationSnapshot Json?
+  createdById        String
+  updatedById        String
+  publishedById      String?
+  validatedById      String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  publishedAt        DateTime?
+  validatedAt        DateTime?
+  archivedAt         DateTime?
 
   createdBy   User  @relation("LegalDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy   User  @relation("LegalDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
   publishedBy User? @relation("LegalDocumentPublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
+  validatedBy User? @relation("LegalDocumentValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict)
 
   translations    LegalDocumentTranslation[]
   termsPolicies   LegalAcceptanceConfigVersion[] @relation("TermsLegalDocument")
@@ -708,18 +721,23 @@ model LegalDocumentVersion {
   @@unique([type, versionLabel])
   @@index([type, status])
   @@index([publishedAt])
+  @@index([validationStatus])
+  @@index([primaryLocale])
+  @@index([validatedById, validatedAt])
 }
 
 model LegalDocumentTranslation {
-  id                     String   @id @default(cuid())
+  id                     String                        @id @default(cuid())
   legalDocumentVersionId String
-  locale                 String   @db.VarChar(10)
+  locale                 String                        @db.VarChar(10)
   title                  String
-  canonicalContent       String   @db.Text
-  sanitizedHtml          String?  @db.Text
-  contentHash            String   @db.Char(64)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  canonicalContent       String                        @db.Text
+  sanitizedHtml          String?                       @db.Text
+  contentHash            String                        @db.Char(64)
+  validationStatus       ConfigurationValidationStatus @default(NOT_VALIDATED)
+  validationSnapshot     Json?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
 
   legalDocumentVersion LegalDocumentVersion     @relation(fields: [legalDocumentVersionId], references: [id], onDelete: Cascade)
   acceptances          BookingLegalAcceptance[]
@@ -1026,20 +1044,42 @@ model ConfirmationContentTranslation {
 }
 
 model LegalAcceptanceConfigVersion {
-  configurationVersionId   String                     @id
-  termsDocumentVersionId   String
-  privacyDocumentVersionId String
-  termsAcceptance          LegalAcceptanceRequirement @default(REQUIRED)
-  privacyAcknowledgment    LegalAcceptanceRequirement @default(REQUIRED)
-  retainContentSnapshot    Boolean                    @default(true)
+  configurationVersionId    String                     @id
+  termsDocumentVersionId    String
+  privacyDocumentVersionId  String
+  termsAcceptance           LegalAcceptanceRequirement @default(REQUIRED)
+  privacyAcknowledgment     LegalAcceptanceRequirement @default(REQUIRED)
+  retainContentSnapshot     Boolean                    @default(true)
+  bookingEnforcementEnabled Boolean                    @default(false)
+  requiredLocales           String[]                   @default([])
+  termsPresentation         LegalContentPresentation   @default(DIALOG)
+  privacyPresentation       LegalContentPresentation   @default(DIALOG)
+  showInConfirmation        Boolean                    @default(true)
 
-  version         ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
-  termsDocument   LegalDocumentVersion           @relation("TermsLegalDocument", fields: [termsDocumentVersionId], references: [id], onDelete: Restrict)
-  privacyDocument LegalDocumentVersion           @relation("PrivacyLegalDocument", fields: [privacyDocumentVersionId], references: [id], onDelete: Restrict)
-  releases        BusinessConfigurationRelease[]
+  version            ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  termsDocument      LegalDocumentVersion           @relation("TermsLegalDocument", fields: [termsDocumentVersionId], references: [id], onDelete: Restrict)
+  privacyDocument    LegalDocumentVersion           @relation("PrivacyLegalDocument", fields: [privacyDocumentVersionId], references: [id], onDelete: Restrict)
+  releases           BusinessConfigurationRelease[]
+  translations       LegalAcceptanceTranslation[]
+  bookingAcceptances BookingLegalAcceptance[]
 
   @@index([termsDocumentVersionId])
   @@index([privacyDocumentVersionId])
+}
+
+model LegalAcceptanceTranslation {
+  id                             String  @id @default(cuid())
+  legalAcceptanceConfigVersionId String
+  locale                         String  @db.VarChar(10)
+  termsCheckboxLabel             String?
+  termsLinkLabel                 String
+  privacyCheckboxLabel           String?
+  privacyLinkLabel               String
+
+  legalAcceptanceConfig LegalAcceptanceConfigVersion @relation(fields: [legalAcceptanceConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@unique([legalAcceptanceConfigVersionId, locale])
+  @@index([locale])
 }
 
 model BusinessConfigurationRelease {
@@ -1091,6 +1131,7 @@ model BusinessConfigurationRelease {
 
   pricingSnapshots BookingPricingSnapshot[]
   auditEvents      AuditEvent[]
+  legalAcceptances BookingLegalAcceptance[]
 
   @@index([status])
   @@index([validationStatus])
@@ -1262,28 +1303,34 @@ model BookingInsuranceSnapshot {
 }
 
 model BookingLegalAcceptance {
-  id                         String                @id @default(cuid())
-  bookingId                  String
-  legalDocumentTranslationId String
-  customerUserId             String?
-  documentType               LegalDocumentType
-  documentVersionNumber      Int
-  locale                     String                @db.VarChar(10)
-  contentHash                String                @db.Char(64)
-  accepted                   Boolean
-  acceptedAt                 DateTime
-  source                     LegalAcceptanceSource
-  contentSnapshot            String?               @db.Text
-  createdAt                  DateTime              @default(now())
+  id                             String                @id @default(cuid())
+  bookingId                      String
+  legalDocumentTranslationId     String
+  customerUserId                 String?
+  configurationReleaseId         String?
+  legalAcceptanceConfigVersionId String?
+  documentType                   LegalDocumentType
+  documentVersionNumber          Int
+  locale                         String                @db.VarChar(10)
+  contentHash                    String                @db.Char(64)
+  accepted                       Boolean
+  acceptedAt                     DateTime
+  source                         LegalAcceptanceSource
+  contentSnapshot                String?               @db.Text
+  createdAt                      DateTime              @default(now())
 
-  booking                  Booking                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  legalDocumentTranslation LegalDocumentTranslation @relation(fields: [legalDocumentTranslationId], references: [id], onDelete: Restrict)
-  customer                 User?                    @relation("LegalAcceptanceCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
+  booking                  Booking                       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  legalDocumentTranslation LegalDocumentTranslation      @relation(fields: [legalDocumentTranslationId], references: [id], onDelete: Restrict)
+  customer                 User?                         @relation("LegalAcceptanceCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
+  configurationRelease     BusinessConfigurationRelease? @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  legalAcceptanceConfig    LegalAcceptanceConfigVersion? @relation(fields: [legalAcceptanceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
 
   @@unique([bookingId, documentType])
   @@index([legalDocumentTranslationId])
   @@index([customerUserId, acceptedAt])
   @@index([documentType, acceptedAt])
+  @@index([configurationReleaseId])
+  @@index([legalAcceptanceConfigVersionId])
 }
 
 model CustomerDocument {

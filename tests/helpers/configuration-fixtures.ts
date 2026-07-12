@@ -104,6 +104,12 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       termsAcceptance: "REQUIRED",
       privacyAcknowledgment: "REQUIRED",
       retainRenderedSnapshot: true,
+      bookingEnforcementEnabled: false,
+      requiredLocales: [],
+      termsPresentation: "DIALOG",
+      privacyPresentation: "DIALOG",
+      showInConfirmation: true,
+      translations: [],
     },
   }
 }

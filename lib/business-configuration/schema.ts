@@ -408,11 +408,26 @@ export const legalAcceptanceConfigurationSchema = z
   .object({
     termsDocument: legalDocumentReferenceSchema,
     privacyDocument: legalDocumentReferenceSchema,
-    termsAcceptance: z.enum(["REQUIRED", "DISPLAY_ONLY"]),
-    privacyAcknowledgment: z.enum(["REQUIRED", "DISPLAY_ONLY"]),
+    termsAcceptance: z.enum(["REQUIRED", "DISPLAY_ONLY", "DISABLED"]),
+    privacyAcknowledgment: z.enum(["REQUIRED", "DISPLAY_ONLY", "DISABLED"]),
     retainRenderedSnapshot: z.boolean(),
+    bookingEnforcementEnabled: z.boolean(),
+    requiredLocales: z.array(localeSchema).refine(uniqueStrings, "Languages must not be repeated"),
+    termsPresentation: z.enum(["INLINE", "DIALOG"]),
+    privacyPresentation: z.enum(["INLINE", "DIALOG"]),
+    showInConfirmation: z.boolean(),
+    translations: z.array(z.object({
+      locale: localeSchema,
+      termsCheckboxLabel: z.string().trim().min(1).max(500).optional(),
+      termsLinkLabel: z.string().trim().min(1).max(200),
+      privacyCheckboxLabel: z.string().trim().min(1).max(500).optional(),
+      privacyLinkLabel: z.string().trim().min(1).max(200),
+    })).refine((items) => uniqueStrings(items.map(({ locale }) => locale)), "Languages must not be repeated"),
   })
   .superRefine((configuration, context) => {
+    if (configuration.bookingEnforcementEnabled && configuration.requiredLocales.length === 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["requiredLocales"], message: codeMessage("LEGAL_PRIMARY_LANGUAGE_MISSING", "Choose at least one required legal language") });
+    }
     if (configuration.termsDocument.type !== "RENTAL_TERMS") {
       context.addIssue({
         code: z.ZodIssueCode.custom,
