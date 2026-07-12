@@ -182,6 +182,7 @@ interface BookingEmailData {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency?: string
   guaranteeAmount?: number
   transferCode?: string
   paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
@@ -323,7 +324,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                   ${guaranteeDetailsHtml}
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>${isGerman ? "Gesamtpreis" : "Total Price"}:</strong></span>
-                    <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice)}</span>
+                    <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice, data.currency)}</span>
                   </div>
                 </div>
                 ${
@@ -618,6 +619,7 @@ export async function sendManualPaymentEmail(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency?: string
   depositAmount: number
   guaranteeAmount: number
   transferCode: string
@@ -761,7 +763,7 @@ export async function sendManualPaymentEmail(data: {
                   <div class="payment-amounts">
                     <div class="payment-row">
                       <span>${isGerman ? "Anzahlung" : "Deposit"} (${depositPercent}%):</span>
-                      <strong>${formatCents(data.depositAmount)}</strong>
+                      <strong>${formatCents(data.depositAmount, data.currency)}</strong>
                     </div>
                     <div class="payment-row">
                       <span>${isGerman ? "Restbetrag bei Abholung:" : "Remaining rental at pickup:"}</span>
@@ -769,13 +771,13 @@ export async function sendManualPaymentEmail(data: {
                     </div>
                     <div class="payment-row total">
                       <span>${isGerman ? "Gesamtbetrag" : "Total Amount"}:</span>
-                      <strong style="color: #3b82f6;">${formatCents(data.totalPrice)}</strong>
+                      <strong style="color: #3b82f6;">${formatCents(data.totalPrice, data.currency)}</strong>
                     </div>
                     ${
                       data.guaranteeAmount > 0
                         ? `<div class="payment-row">
                       <span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span>
-                      <strong>${formatCents(data.guaranteeAmount)}</strong>
+                      <strong>${formatCents(data.guaranteeAmount, data.currency)}</strong>
                     </div>`
                         : ""
                     }
@@ -876,6 +878,7 @@ export async function sendPayAtPickupEmail(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency?: string
   guaranteeAmount: number
   bookingNumber: string
   locale?: "de" | "en"
@@ -952,10 +955,10 @@ export async function sendPayAtPickupEmail(data: {
                   <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${data.pickupDate}</strong></div>
                   <div class="detail-row"><span>${isGerman ? "Ruckgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
                   <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice, data.currency)}</strong></div>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<div class="detail-row"><span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount)}</strong></div>`
+                      ? `<div class="detail-row"><span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount, data.currency)}</strong></div>`
                       : ""
                   }
                 </div>
@@ -1023,6 +1026,7 @@ export async function sendAdminBookingNotification(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency?: string
   depositAmount: number
   guaranteeAmount: number
   transferCode: string
@@ -1095,17 +1099,17 @@ export async function sendAdminBookingNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Deposit (${depositPercent}%):</strong></span>
-                    <span>${formatCents(data.depositAmount)}</span>
+                    <span>${formatCents(data.depositAmount, data.currency)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Amount:</strong></span>
-                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice, data.currency)}</span>
                   </div>
                   ${
                     data.guaranteeAmount > 0
                       ? `<div class="detail-row" style="border-bottom: none;">
                     <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
-                    <span>${formatCents(data.guaranteeAmount)}</span>
+                    <span>${formatCents(data.guaranteeAmount, data.currency)}</span>
                   </div>`
                       : ""
                   }
@@ -1117,13 +1121,13 @@ export async function sendAdminBookingNotification(data: {
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Amount Due at Pickup:</strong></span>
-                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice, data.currency)}</span>
                   </div>
                   ${
                     data.guaranteeAmount > 0
                       ? `<div class="detail-row" style="border-bottom: none;">
                     <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
-                    <span>${formatCents(data.guaranteeAmount)}</span>
+                    <span>${formatCents(data.guaranteeAmount, data.currency)}</span>
                   </div>`
                       : ""
                   }
@@ -1282,6 +1286,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency?: string
   guaranteeAmount: number
   transferCode: string
   bookingNumber: string
@@ -1415,13 +1420,13 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Amount:</strong></span>
-                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice)}</span>
+                    <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice, data.currency)}</span>
                   </div>
                   ${
                     data.guaranteeAmount > 0
                       ? `<div class="detail-row" style="border-bottom: none;">
                     <span><strong>Refundable Guarantee (${guaranteePercent}%):</strong></span>
-                    <span>${formatCents(data.guaranteeAmount)}</span>
+                    <span>${formatCents(data.guaranteeAmount, data.currency)}</span>
                   </div>`
                       : ""
                   }

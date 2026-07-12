@@ -4,7 +4,6 @@ import { BottomNav } from "@/components/bottom-nav"
 import { Badge } from "@/components/ui/badge"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { formatCents } from "@/lib/money"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
@@ -31,6 +30,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     where: { userId: currentUser.id },
     include: {
       car: true,
+      pricingSnapshot: true,
       review: {
         select: {
           id: true,
@@ -171,6 +171,8 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
               const canLeaveReview =
                 booking.status === "COMPLETED" &&
                 (booking.paymentStatus === "PAID" || booking.paymentMethod === "PAY_AT_PICKUP")
+              const displayedTotal = booking.pricingSnapshot?.grandTotal ?? booking.totalPrice
+              const displayedCurrency = booking.pricingSnapshot?.currency ?? "EUR"
 
               return (
                 <div key={booking.id} className="bg-background rounded-xl p-4 border border-border">
@@ -269,7 +271,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <span className="font-semibold">{t("bookings.total")}</span>
-                      <span className="font-bold text-lg">{formatCents(booking.totalPrice)}</span>
+                      <span className="font-bold text-lg">{formatCents(displayedTotal, displayedCurrency)}</span>
                     </div>
                   </div>
 

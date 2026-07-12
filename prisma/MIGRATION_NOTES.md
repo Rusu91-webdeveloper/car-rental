@@ -50,3 +50,19 @@ audited privileged repair path.
 The proposed `btree_gist` booking-overlap exclusion constraint is not part of these
 migrations. Its read-only preflight and exact gated SQL are documented in
 `scripts/phase2b-booking-overlap-preflight.sql` and require separate approval.
+
+## Phase 3 compatibility pricing snapshots (2026-07-12)
+
+`20260712221500_enable_compatibility_pricing_snapshots` makes only the release
+provenance fields on `BookingPricingSnapshot` nullable so a legacy `Car.price`
+quote can be snapshotted while no `BusinessConfigurationRelease` is active. It
+adds explicit compatibility/source/strategy metadata and a consistency CHECK:
+compatibility snapshots must have no release foreign keys and must identify
+`CAR_PRICE`; release-backed snapshots must contain the complete provenance set
+and identify `FLEET_RATE_SET`.
+
+The migration defensively backfills any pre-existing release-backed snapshot's
+new source fields before setting them non-null. It does not create, validate, or
+activate a configuration release, and it does not modify `Car.price` or existing
+Booking scalar values. Full-chain replay and atomic booking/snapshot verification
+use only the disposable scripts documented in `10-phase-3-pricing-engine.md`.

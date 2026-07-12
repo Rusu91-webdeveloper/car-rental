@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from "@/navigation"
 import { useState, useTransition, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-import { createBooking } from "@/app/actions/bookings"
+import { createBooking, getBookingQuote } from "@/app/actions/bookings"
 import { getCarAvailability } from "@/app/actions/cars"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,6 @@ export function CheckoutClient({
   car,
   signInUrl,
   paymentDetails,
-  companySettings,
 }: {
   locale: string
   car: {
@@ -27,7 +26,6 @@ export function CheckoutClient({
     name: string
     subtitle?: string | null
     image: string
-    price: number
     rating: number
     reviews: number
   }
@@ -38,14 +36,6 @@ export function CheckoutClient({
     accountNumber: string
     swiftCode: string
     iban?: string | null
-  }
-  companySettings: {
-    companyName: string
-    supportEmail: string
-    depositPercentage: number
-    guaranteePercentage: number
-    taxRate: number
-    taxIncluded: boolean
   }
 }) {
   const router = useRouter()
@@ -115,6 +105,7 @@ export function CheckoutClient({
   const [location, setLocation] = useState(getInitialLocation())
   const [isAvailabilityLoading, setIsAvailabilityLoading] = useState(true)
   const [unavailableRanges, setUnavailableRanges] = useState<{ start: Date; end: Date }[]>([])
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null)
 
   const unavailableDateSet = useMemo(() => {
     const blocked = new Set<string>()
@@ -161,6 +152,7 @@ export function CheckoutClient({
   }
 
   // Update dates and location when URL params change
+  /* eslint-disable react-hooks/set-state-in-effect -- URL parameters intentionally synchronize controlled form state. */
   useEffect(() => {
     const pickupDateParam = searchParams.get("pickupDate")
     const dropoffDateParam = searchParams.get("dropoffDate")
@@ -175,6 +167,7 @@ export function CheckoutClient({
       setLocation(locationParam)
     }
   }, [searchParams])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     let mounted = true
@@ -218,7 +211,6 @@ export function CheckoutClient({
   }, [car.id])
 
   const [error, setError] = useState<string | null>(null)
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null)
   const [pickupCalendarOpen, setPickupCalendarOpen] = useState(false)
   const [dropoffCalendarOpen, setDropoffCalendarOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
@@ -234,7 +226,15 @@ export function CheckoutClient({
     dropoffDate: Date
     location: string
     carName: string
+    currency: string
+    depositRateBps: number
+    guaranteeRateBps: number
   } | null>(null)
+  const [quote, setQuote] = useState<
+    (Awaited<ReturnType<typeof getBookingQuote>> extends { quote?: infer Quote } ? Quote : never) | null
+  >(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [isQuoteLoading, setIsQuoteLoading] = useState(true)
 
   const updateQueryParams = (updates: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -486,23 +486,50 @@ export function CheckoutClient({
     handleDropoffChange(nextValue)
   }
 
-  const calculateDays = () => {
+  /* eslint-disable react-hooks/set-state-in-effect -- quote state intentionally resets when authoritative inputs change. */
+  useEffect(() => {
     const pickup = new Date(pickupDate)
     const dropoff = new Date(dropoffDate)
-    const diffTime = Math.abs(dropoff.getTime() - pickup.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays || 1
-  }
+    if (Number.isNaN(pickup.getTime()) || Number.isNaN(dropoff.getTime()) || dropoff <= pickup) {
+      setQuote(null)
+      setQuoteError(null)
+      setIsQuoteLoading(false)
+      return
+    }
 
-  const days = calculateDays()
-  const subtotalCents = car.price * days
-  const effectiveTaxRate = companySettings.taxRate > 0 ? companySettings.taxRate : 0.1
-  const taxCents = companySettings.taxIncluded ? 0 : Math.round(subtotalCents * effectiveTaxRate)
-  const totalCents = subtotalCents + taxCents
-  const depositPercent = Math.round(companySettings.depositPercentage * 100)
-  const guaranteePercent = Math.round(companySettings.guaranteePercentage * 100)
-  const depositCents = paymentMethod === "TRANSFER" ? Math.round(totalCents * companySettings.depositPercentage) : 0
-  const guaranteeCents = Math.round(totalCents * companySettings.guaranteePercentage)
+    let current = true
+    setQuote(null)
+    setQuoteError(null)
+    setIsQuoteLoading(true)
+    void getBookingQuote({
+      carId: car.id,
+      pickupDate: pickup.toISOString(),
+      dropoffDate: dropoff.toISOString(),
+      paymentMethod,
+    }).then((result) => {
+      if (!current) return
+      if (result.error || !result.quote) {
+        setQuoteError(result.error ?? "A valid quote could not be calculated.")
+      } else {
+        setQuote(result.quote)
+      }
+      setIsQuoteLoading(false)
+    })
+    return () => {
+      current = false
+    }
+  }, [car.id, dropoffDate, paymentMethod, pickupDate])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const days = quote?.chargeableDays ?? 0
+  const subtotalCents = quote?.baseSubtotal ?? 0
+  const taxCents = quote?.taxSubtotal ?? 0
+  const totalCents = quote?.grandTotal ?? 0
+  const depositPercent = Math.round((quote?.depositRateBps ?? 0) / 100)
+  const guaranteePercent = Math.round((quote?.guaranteeRateBps ?? 0) / 100)
+  const depositCents = quote?.depositAmount ?? 0
+  const guaranteeCents = quote?.guaranteeAmount ?? 0
+  const quoteCurrency = quote?.currency ?? "EUR"
 
   const handleConfirmBooking = () => {
     setError(null)
@@ -584,12 +611,14 @@ export function CheckoutClient({
           totalPrice={bookingSuccess.totalPrice}
           depositAmount={bookingSuccess.depositAmount}
           guaranteeAmount={bookingSuccess.guaranteeAmount}
+          currency={bookingSuccess.currency}
+          depositRateBps={bookingSuccess.depositRateBps}
+          guaranteeRateBps={bookingSuccess.guaranteeRateBps}
           carName={bookingSuccess.carName}
           pickupDate={bookingSuccess.pickupDate}
           dropoffDate={bookingSuccess.dropoffDate}
           location={bookingSuccess.location}
           paymentDetails={paymentDetails}
-          companySettings={companySettings}
           onClose={() => router.push("/bookings")}
         />
       )}
@@ -787,45 +816,51 @@ export function CheckoutClient({
         <div className="bg-background rounded-xl p-4 border border-border space-y-3">
           <h3 className="font-semibold text-lg">Price Summary</h3>
 
+          {isQuoteLoading ? (
+            <p className="text-sm text-muted-foreground">Calculating authoritative server quote…</p>
+          ) : quote ? (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Rental ({days} days)</span>
               <span className="font-medium">
-                {formatCents(car.price)} × {days}
+                {formatCents(quote.sourceDailyRate, quoteCurrency)} × {days}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">{formatCents(subtotalCents)}</span>
+              <span className="font-medium">{formatCents(subtotalCents, quoteCurrency)}</span>
             </div>
-            {companySettings.taxIncluded ? (
+            {quote.taxTreatment === "TAX_INCLUDED" ? (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Tax</span>
                 <span className="font-medium">Included</span>
               </div>
             ) : (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax ({Math.round(effectiveTaxRate * 100)}%)</span>
-                <span className="font-medium">{formatCents(taxCents)}</span>
+                <span className="text-muted-foreground">Tax ({Math.round(quote.taxRateBps / 100)}%)</span>
+                <span className="font-medium">{formatCents(taxCents, quoteCurrency)}</span>
               </div>
             )}
             <div className="border-t border-border pt-2 flex justify-between">
               <span className="font-semibold">Total</span>
-              <span className="font-bold text-xl">{formatCents(totalCents)}</span>
+              <span className="font-bold text-xl">{formatCents(totalCents, quoteCurrency)}</span>
             </div>
             {paymentMethod === "TRANSFER" && (
               <div className="flex justify-between text-sm pt-2 border-t border-border/70">
                 <span className="text-muted-foreground">Deposit due now ({depositPercent}%)</span>
-                <span className="font-medium">{formatCents(depositCents)}</span>
+                <span className="font-medium">{formatCents(depositCents, quoteCurrency)}</span>
               </div>
             )}
             {guaranteeCents > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Refundable guarantee hold ({guaranteePercent}%)</span>
-                <span className="font-medium">{formatCents(guaranteeCents)}</span>
+                <span className="font-medium">{formatCents(guaranteeCents, quoteCurrency)}</span>
               </div>
             )}
           </div>
+          ) : (
+            <p className="text-sm text-red-600">{quoteError ?? "A valid quote could not be calculated."}</p>
+          )}
           {guaranteeCents > 0 && (
             <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 p-2">
               The guarantee is a temporary security hold, not an extra rental charge. It is released after return if
@@ -843,7 +878,7 @@ export function CheckoutClient({
 
       {/* Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
-        <Button onClick={handleConfirmBooking} disabled={isPending} className="w-full h-12 text-base font-semibold">
+        <Button onClick={handleConfirmBooking} disabled={isPending || isQuoteLoading || !quote} className="w-full h-12 text-base font-semibold">
           {isPending ? "Processing..." : "Confirm Booking"}
         </Button>
       </div>

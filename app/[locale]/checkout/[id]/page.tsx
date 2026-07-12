@@ -2,7 +2,6 @@ import { redirect } from "@/navigation"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { getPaymentDetails } from "@/lib/payment-details"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CheckoutClient } from "./checkout-client"
@@ -53,11 +52,8 @@ export default async function CheckoutPage({
   const reviewStatsByCar = await getCarReviewStatsMap([car.id])
   const reviewStats = getCarReviewStats(reviewStatsByCar, car.id)
 
-  // Fetch payment details and company settings
+  // Payment instructions are display-only; pricing is resolved server-side.
   const paymentDetails = await getPaymentDetails()
-  const companySettings = await prisma.companySettings.findUnique({
-    where: { id: "company-settings" },
-  })
 
   return (
     <CheckoutClient
@@ -67,20 +63,11 @@ export default async function CheckoutPage({
         name: displayName,
         subtitle: displaySubtitle,
         image: car.image,
-        price: car.price,
         rating: reviewStats.rating,
         reviews: reviewStats.reviewCount,
       }}
       signInUrl={signInUrl}
       paymentDetails={paymentDetails}
-      companySettings={{
-        companyName: companySettings?.companyName || "Car Rental Company",
-        supportEmail: companySettings?.supportEmail || companySettings?.companyEmail || "",
-        depositPercentage: companySettings?.depositPercentage ?? 0.2,
-        guaranteePercentage: companySettings?.guaranteePercentage ?? 0,
-        taxRate: companySettings?.taxRate ?? 0,
-        taxIncluded: companySettings?.taxIncluded ?? false,
-      }}
     />
   )
 }

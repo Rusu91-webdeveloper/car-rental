@@ -11,6 +11,9 @@ interface BookingSuccessModalProps {
   totalPrice: number
   depositAmount: number
   guaranteeAmount: number
+  currency: string
+  depositRateBps: number
+  guaranteeRateBps: number
   carName: string
   pickupDate: Date
   dropoffDate: Date
@@ -22,12 +25,6 @@ interface BookingSuccessModalProps {
     swiftCode: string
     iban?: string | null
   }
-  companySettings: {
-    companyName: string
-    supportEmail: string
-    depositPercentage: number
-    guaranteePercentage: number
-  }
   onClose: () => void
 }
 
@@ -38,16 +35,18 @@ export function BookingSuccessModal({
   totalPrice,
   depositAmount,
   guaranteeAmount,
+  currency,
+  depositRateBps,
+  guaranteeRateBps,
   carName,
   pickupDate,
   dropoffDate,
   location,
   paymentDetails,
-  companySettings,
   onClose,
 }: BookingSuccessModalProps) {
-  const depositPercent = Math.round(companySettings.depositPercentage * 100)
-  const guaranteePercent = Math.round(companySettings.guaranteePercentage * 100)
+  const depositPercent = Math.round(depositRateBps / 100)
+  const guaranteePercent = Math.round(guaranteeRateBps / 100)
   const remainingAtPickup = Math.max(totalPrice - depositAmount, 0)
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString("en-US", {
@@ -180,20 +179,20 @@ export function BookingSuccessModal({
                     <div className="bg-white rounded-lg p-3 space-y-1 font-mono text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Deposit ({depositPercent}%):</span>
-                        <span className="font-bold">{formatCents(depositAmount)}</span>
+                        <span className="font-bold">{formatCents(depositAmount, currency)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Remaining rental at pickup:</span>
-                        <span className="font-bold">{formatCents(remainingAtPickup)}</span>
+                        <span className="font-bold">{formatCents(remainingAtPickup, currency)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Total Amount:</span>
-                        <span className="font-bold">{formatCents(totalPrice)}</span>
+                        <span className="font-bold">{formatCents(totalPrice, currency)}</span>
                       </div>
                       {guaranteeAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
-                          <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                          <span className="font-bold">{formatCents(guaranteeAmount, currency)}</span>
                         </div>
                       )}
                     </div>
@@ -230,12 +229,12 @@ export function BookingSuccessModal({
               <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount Due at Pickup:</span>
-                  <span className="font-bold">{formatCents(totalPrice)}</span>
+                  <span className="font-bold">{formatCents(totalPrice, currency)}</span>
                 </div>
                 {guaranteeAmount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
-                    <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                    <span className="font-bold">{formatCents(guaranteeAmount, currency)}</span>
                   </div>
                 )}
               </div>
@@ -265,7 +264,7 @@ export function BookingSuccessModal({
                 <li>Complete the bank transfer within {BOOKING_PAYMENT_WINDOW_HOURS} hours</li>
                 <li>You will receive a confirmation email with payment instructions</li>
                 <li>Once payment is verified, your booking will be confirmed</li>
-                <li>You'll receive a final confirmation email with pickup details</li>
+                <li>You&apos;ll receive a final confirmation email with pickup details</li>
               </ol>
             ) : (
               <ol className="text-sm text-blue-800 space-y-1 ml-7 list-decimal">

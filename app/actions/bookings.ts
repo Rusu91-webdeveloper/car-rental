@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { requireAuth, requireAdmin } from "@/lib/auth"
 import { createBookingSchema, updateBookingStatusSchema } from "@/lib/validations"
-import { isCarAvailable, calculateTotalDays } from "@/lib/availability"
 // import { stripe } from "@/lib/stripe"
 import { config } from "@/lib/config"
 import {
@@ -18,8 +17,12 @@ import {
 } from "@/lib/email"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import crypto from "crypto"
-import { Prisma } from "@prisma/client"
 import { z } from "zod"
+import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
+import { quoteVehicleRental } from "@/lib/pricing/quote-service"
+import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
+import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
+import { createAuthoritativeBooking } from "@/lib/pricing/prisma-booking-service"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -32,6 +35,69 @@ const formatDateForLocale = (date: Date, locale: string) =>
     hour: "2-digit",
     minute: "2-digit",
   })
+
+const bookingQuoteSchema = z
+  .object({
+    carId: z.string().min(1),
+    pickupDate: z.string().datetime(),
+    dropoffDate: z.string().datetime(),
+    paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
+  })
+  .refine((value) => new Date(value.dropoffDate) > new Date(value.pickupDate), {
+    message: "Drop-off date must be after pickup date",
+    path: ["dropoffDate"],
+  })
+
+function publicQuote(quote: Awaited<ReturnType<typeof quoteVehicleRental>>) {
+  return {
+    currency: quote.currency,
+    pickupAt: quote.pickupAt,
+    returnAt: quote.returnAt,
+    chargeableDays: quote.chargeableDuration.chargeableDays,
+    durationStrategy: quote.durationStrategy,
+    dailyUnits: quote.units.daily,
+    weeklyUnits: quote.units.weekly,
+    monthlyUnits: quote.units.monthly,
+    sourceDailyRate: quote.sourceDailyRate,
+    sourceWeeklyRate: quote.sourceWeeklyRate,
+    sourceMonthlyRate: quote.sourceMonthlyRate,
+    selectedStrategy: quote.selectedStrategy,
+    baseSubtotal: quote.baseSubtotal,
+    adjustmentTotal: quote.adjustmentTotal,
+    insuranceSubtotal: quote.insuranceSubtotal,
+    taxTreatment: quote.taxTreatment,
+    taxRateBps: quote.taxRateBps,
+    taxSubtotal: quote.taxSubtotal,
+    grandTotal: quote.grandTotal,
+    depositAmount: quote.payment.depositAmount,
+    guaranteeAmount: quote.payment.guaranteeAmount,
+    depositRateBps: quote.payment.depositRateBps,
+    guaranteeRateBps: quote.payment.guaranteeRateBps,
+    pricingEngineVersion: quote.pricingEngineVersion,
+    compatibilityMode: quote.compatibilityMode,
+    trace: quote.trace,
+    warnings: quote.warnings,
+  }
+}
+
+export async function getBookingQuote(data: unknown) {
+  try {
+    await requireAuth()
+    const validated = bookingQuoteSchema.parse(data)
+    const quote = await quoteVehicleRental(new PrismaPricingContextRepository(prisma), {
+      vehicleId: validated.carId,
+      pickupAt: new Date(validated.pickupDate),
+      returnAt: new Date(validated.dropoffDate),
+      paymentMethod: validated.paymentMethod,
+    })
+    return { quote: publicQuote(quote) }
+  } catch (error) {
+    console.error("[GET_BOOKING_QUOTE_ERROR]", error)
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid quote request" }
+    if (error instanceof PricingError) return { error: publicPricingErrorMessage(error), code: error.code }
+    return { error: "A valid price could not be calculated. Please try again or contact support." }
+  }
+}
 
 export async function createBooking(data: unknown) {
   try {
@@ -58,79 +124,22 @@ export async function createBooking(data: unknown) {
       return { error: "Car is not available for booking" }
     }
 
-    // Check availability with a transaction lock to prevent race conditions
-    const available = await isCarAvailable(validated.carId, pickupDate, dropoffDate)
-
-    if (!available) {
-      return { error: "Car is not available for the selected dates" }
-    }
-
-    // Calculate pricing
-    const totalDays = calculateTotalDays(pickupDate, dropoffDate)
-    const subtotalPrice = car.price * totalDays
-    const companySettings = await prisma.companySettings.findUnique({
-      where: { id: "company-settings" },
-      select: {
-        taxRate: true,
-        taxIncluded: true,
-        depositPercentage: true,
-        guaranteePercentage: true,
-      },
-    })
-    const configuredTaxRate = companySettings?.taxRate ?? 0
-    const effectiveTaxRate = configuredTaxRate > 0 ? configuredTaxRate : 0.1
-    const taxAmount = companySettings?.taxIncluded ? 0 : Math.round(subtotalPrice * effectiveTaxRate)
-    const totalPrice = subtotalPrice + taxAmount
-    const depositPercentage = companySettings?.depositPercentage ?? 0.2
-    const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
-    const depositAmount = validated.paymentMethod === "TRANSFER" ? Math.round(totalPrice * depositPercentage) : 0
-    const guaranteeAmount = Math.round(totalPrice * guaranteePercentage)
-
     // Generate unique booking number and transfer code
     const bookingNumber = `BK${Date.now().toString().slice(-8)}`
     const transferCode = crypto.randomBytes(4).toString("hex").toUpperCase()
 
-    // Create booking in transaction
-    const booking = await prisma.$transaction(
-      async (tx) => {
-        // Lock the car row to prevent concurrent bookings
-        await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
-
-        // Double-check availability within transaction
-        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, undefined, tx)
-
-        if (!stillAvailable) {
-          throw new Error("Car is no longer available")
-        }
-
-        // Create booking
-        const newBooking = await tx.booking.create({
-          data: {
-            userId: user.id,
-            carId: validated.carId,
-            locale: bookingLocale,
-            pickupDate,
-            dropoffDate,
-            location: validated.location,
-            pricePerDay: car.price,
-            totalDays,
-            totalPrice,
-            depositAmount,
-            guaranteeAmount,
-            transferCode,
-            bookingNumber,
-            status: "PENDING",
-            paymentStatus: "PENDING",
-            paymentMethod: validated.paymentMethod,
-          },
-        })
-
-        return newBooking
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      },
-    )
+    const transactionResult = await createAuthoritativeBooking(prisma, {
+      userId: user.id,
+      vehicleId: validated.carId,
+      pickupAt: pickupDate,
+      returnAt: dropoffDate,
+      location: validated.location,
+      locale: bookingLocale,
+      paymentMethod: validated.paymentMethod,
+      bookingNumber,
+      transferCode,
+    })
+    const { booking, quote } = transactionResult
 
     // Stripe checkout flow is temporarily disabled.
     // Uncomment this block when you want to re-enable Stripe integration.
@@ -145,10 +154,10 @@ export async function createBooking(data: unknown) {
               currency: "eur",
               product_data: {
                 name: `${car.name} Rental`,
-                description: `${totalDays} day(s) - ${validated.location}`,
+                description: `${quote.chargeableDuration.chargeableDays} day(s) - ${validated.location}`,
                 ...(stripeImages.length > 0 ? { images: stripeImages } : {}),
               },
-              unit_amount: totalPrice,
+              unit_amount: quote.grandTotal,
             },
             quantity: 1,
           },
@@ -210,7 +219,8 @@ export async function createBooking(data: unknown) {
               pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
               dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
               location: booking.location,
-              totalPrice: booking.totalPrice,
+              totalPrice: quote.grandTotal,
+              currency: quote.currency,
               depositAmount: booking.depositAmount,
               guaranteeAmount: booking.guaranteeAmount,
               transferCode: booking.transferCode,
@@ -224,7 +234,8 @@ export async function createBooking(data: unknown) {
               pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
               dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
               location: booking.location,
-              totalPrice: booking.totalPrice,
+              totalPrice: quote.grandTotal,
+              currency: quote.currency,
               guaranteeAmount: booking.guaranteeAmount,
               bookingNumber: booking.bookingNumber,
               locale: userEmailLocale,
@@ -251,7 +262,8 @@ export async function createBooking(data: unknown) {
         pickupDate: formatDateForLocale(booking.pickupDate, "en"),
         dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
         location: booking.location,
-        totalPrice: booking.totalPrice,
+        totalPrice: quote.grandTotal,
+        currency: quote.currency,
         depositAmount: booking.depositAmount,
         guaranteeAmount: booking.guaranteeAmount,
         transferCode: booking.transferCode,
@@ -290,7 +302,8 @@ export async function createBooking(data: unknown) {
         id: booking.id,
         bookingNumber: booking.bookingNumber,
         transferCode: booking.transferCode,
-        totalPrice: booking.totalPrice,
+        totalPrice: quote.grandTotal,
+        currency: quote.currency,
         depositAmount: booking.depositAmount,
         guaranteeAmount: booking.guaranteeAmount,
         pickupDate: booking.pickupDate,
@@ -298,6 +311,8 @@ export async function createBooking(data: unknown) {
         location: booking.location,
         carName: userCarName,
         paymentMethod: booking.paymentMethod,
+        depositRateBps: quote.payment.depositRateBps,
+        guaranteeRateBps: quote.payment.guaranteeRateBps,
       },
       manualPayment: true,
     }
@@ -318,6 +333,10 @@ export async function createBooking(data: unknown) {
       return { error: messageMap[zodMessage] ?? zodMessage }
     }
 
+    if (error instanceof PricingError) {
+      return { error: publicPricingErrorMessage(error), code: error.code }
+    }
+
     if (error instanceof Error) {
       return { error: error.message }
     }
@@ -335,7 +354,7 @@ export async function updateBookingStatus(data: unknown) {
 
     const booking = await prisma.booking.findUnique({
       where: { id: validated.bookingId },
-      include: { car: true, user: true },
+      include: { car: true, user: true, pricingSnapshot: true },
     })
 
     if (!booking) {
@@ -407,7 +426,8 @@ export async function updateBookingStatus(data: unknown) {
           pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
           dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
           location: booking.location,
-          totalPrice: booking.totalPrice,
+          totalPrice: bookingTotalFromSnapshot(booking),
+          currency: booking.pricingSnapshot?.currency,
           guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
           paymentMethod: booking.paymentMethod,
@@ -437,7 +457,8 @@ export async function updateBookingStatus(data: unknown) {
           pickupDate: formatDateForLocale(booking.pickupDate, "en"),
           dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
           location: booking.location,
-          totalPrice: booking.totalPrice,
+          totalPrice: bookingTotalFromSnapshot(booking),
+          currency: booking.pricingSnapshot?.currency,
           guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.transferCode,
           bookingNumber: booking.bookingNumber,
@@ -559,6 +580,7 @@ export async function getUserBookings() {
       where: { userId: user.id },
       include: {
         car: true,
+        pricingSnapshot: true,
       },
       orderBy: { createdAt: "desc" },
     })

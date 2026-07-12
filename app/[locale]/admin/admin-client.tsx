@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { CompanySettings } from "@prisma/client"
 import { useState, useTransition, useEffect } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { useRouter } from "@/navigation"
@@ -91,6 +92,7 @@ interface AdminBooking {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency: string
   guaranteeAmount: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
@@ -149,7 +151,7 @@ export default function AdminDashboard({
   const [editCarId, setEditCarId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
-  const [settings, setSettings] = useState<any>(null)
+  const [settings, setSettings] = useState<CompanySettings | null>(null)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const locale = useLocale()
   const t = useTranslations()
@@ -219,6 +221,8 @@ export default function AdminDashboard({
   // Load settings when settings tab is opened
   useEffect(() => {
     if (activeTab === "settings" && !settings && !isLoadingSettings) {
+      // Loading state synchronizes this effect with the server request lifecycle.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoadingSettings(true)
       getCompanySettings().then((result) => {
         if (result?.success && result.settings) {
@@ -1028,7 +1032,7 @@ export default function AdminDashboard({
                             </div>
                           </div>
                           <div className="flex items-center justify-between sm:block sm:text-right">
-                            <div className="font-bold">{formatCents(booking.totalPrice)}</div>
+                            <div className="font-bold">{formatCents(booking.totalPrice, booking.currency)}</div>
                             <Badge
                               variant={getBookingStatusBadge(booking.status).variant}
                               className={`${getBookingStatusBadge(booking.status).className} sm:mt-1`}
@@ -1398,14 +1402,14 @@ export default function AdminDashboard({
                               {booking.guaranteeAmount > 0 && (
                                 <div>
                                   <span className="text-muted-foreground">Guarantee hold:</span>
-                                  <span className="ml-2 font-medium">{formatCents(booking.guaranteeAmount)}</span>
+                                  <span className="ml-2 font-medium">{formatCents(booking.guaranteeAmount, booking.currency)}</span>
                                 </div>
                               )}
                             </div>
 
                             <div className="flex items-center justify-between pt-2 border-t border-border">
                               <span className="text-muted-foreground text-sm">Total Amount</span>
-                              <span className="text-xl font-bold">{formatCents(booking.totalPrice)}</span>
+                              <span className="text-xl font-bold">{formatCents(booking.totalPrice, booking.currency)}</span>
                             </div>
                           </div>
                         </div>
@@ -1900,6 +1904,8 @@ function ManualReservationForm({
 
   useEffect(() => {
     if (!formData.carId && cars[0]?.id) {
+      // Keep the controlled form aligned when the first async car option arrives.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({ ...prev, carId: cars[0].id }))
     }
   }, [cars, formData.carId])
@@ -2606,7 +2612,15 @@ function CarForm({
 }
 
 // Settings Form Component
-function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any) => Promise<void> }) {
+type CompanySettingsInput = Omit<CompanySettings, "id" | "createdAt" | "updatedAt">
+
+function SettingsForm({
+  settings,
+  onSave,
+}: {
+  settings: CompanySettings | null
+  onSave: (data: CompanySettingsInput) => Promise<void>
+}) {
   const [formData, setFormData] = useState({
     // Company Information
     companyName: settings?.companyName || "",

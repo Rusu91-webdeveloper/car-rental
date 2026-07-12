@@ -1,11 +1,10 @@
 import { redirect } from "@/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import AdminDashboard from "./admin-client"
-import type { Car, Booking, User } from "@prisma/client"
+import type { Car, User } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -67,6 +66,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     }),
     prisma.booking.findMany({
       orderBy: { createdAt: "desc" },
+      include: { pricingSnapshot: true },
     }),
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
@@ -150,14 +150,15 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
           descriptionDe: car.descriptionDe,
         }
       })}
-      bookings={bookings.map((booking: Booking) => ({
+      bookings={bookings.map((booking) => ({
         id: booking.id,
         userId: booking.userId,
         carId: booking.carId,
         pickupDate: booking.pickupDate.toISOString(),
         dropoffDate: booking.dropoffDate.toISOString(),
         location: booking.location,
-        totalPrice: booking.totalPrice,
+        totalPrice: booking.pricingSnapshot?.grandTotal ?? booking.totalPrice,
+        currency: booking.pricingSnapshot?.currency ?? "EUR",
         guaranteeAmount: booking.guaranteeAmount,
         status: booking.status,
         paymentMethod: booking.paymentMethod,

@@ -1148,48 +1148,53 @@ model VehicleRentalRate {
 }
 
 model BookingPricingSnapshot {
-  id                        String                @id @default(cuid())
-  bookingId                 String                @unique
-  configurationReleaseId    String
-  pricingConfigVersionId    String
-  fleetRateSetId            String
-  vehicleRentalRateId       String
-  snapshotSchemaVersion     Int                   @default(1)
-  releaseNumber             Int
-  pricingVersionNumber      Int
-  fleetRateSetVersionNumber Int
+  id                        String                       @id @default(cuid())
+  bookingId                 String                       @unique
+  configurationReleaseId    String?
+  pricingConfigVersionId    String?
+  fleetRateSetId            String?
+  vehicleRentalRateId       String?
+  snapshotSchemaVersion     Int                          @default(1)
+  releaseNumber             Int?
+  pricingVersionNumber      Int?
+  fleetRateSetVersionNumber Int?
   pricingEngineVersion      String
-  currency                  String                @db.VarChar(3)
+  compatibilityMode         Boolean                      @default(false)
+  rateSourceType            String
+  rateSourceReference       String
+  mixedDurationStrategy     MixedDurationPricingStrategy @default(DAILY_ONLY)
+  currency                  String                       @db.VarChar(3)
   chargeableDurationMinutes Int
   chargeableDays            Int
   billableDayMethod         BillableDayMethod
   rentalMonthDefinition     RentalMonthDefinition
-  dailyUnits                Int                   @default(0)
-  weeklyUnits               Int                   @default(0)
-  monthlyUnits              Int                   @default(0)
+  dailyUnits                Int                          @default(0)
+  weeklyUnits               Int                          @default(0)
+  monthlyUnits              Int                          @default(0)
   sourceDailyRate           Int // Minor currency units.
   sourceWeeklyRate          Int? // Minor currency units.
   sourceMonthlyRate         Int? // Minor currency units.
   baseSubtotal              Int // Minor currency units.
-  insuranceSubtotal         Int                   @default(0) // Minor currency units.
-  adjustmentTotal           Int                   @default(0) // Signed minor currency units.
-  taxTotal                  Int                   @default(0) // Minor currency units.
+  insuranceSubtotal         Int                          @default(0) // Minor currency units.
+  adjustmentTotal           Int                          @default(0) // Signed minor currency units.
+  taxTotal                  Int                          @default(0) // Minor currency units.
   grandTotal                Int // Minor currency units.
   calculatedAt              DateTime
   calculationTrace          Json?
-  createdAt                 DateTime              @default(now())
+  createdAt                 DateTime                     @default(now())
 
-  booking              Booking                      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  configurationRelease BusinessConfigurationRelease @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
-  pricingConfig        PricingBillingConfigVersion  @relation(fields: [pricingConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
-  fleetRateSet         FleetRateSet                 @relation(fields: [fleetRateSetId], references: [id], onDelete: Restrict)
-  vehicleRentalRate    VehicleRentalRate            @relation(fields: [vehicleRentalRateId], references: [id], onDelete: Restrict)
+  booking              Booking                       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  configurationRelease BusinessConfigurationRelease? @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  pricingConfig        PricingBillingConfigVersion?  @relation(fields: [pricingConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  fleetRateSet         FleetRateSet?                 @relation(fields: [fleetRateSetId], references: [id], onDelete: Restrict)
+  vehicleRentalRate    VehicleRentalRate?            @relation(fields: [vehicleRentalRateId], references: [id], onDelete: Restrict)
 
   @@index([configurationReleaseId])
   @@index([pricingConfigVersionId])
   @@index([fleetRateSetId])
   @@index([vehicleRentalRateId])
   @@index([calculatedAt])
+  @@index([compatibilityMode, calculatedAt])
 }
 
 model BookingCustomerDriverSnapshot {
