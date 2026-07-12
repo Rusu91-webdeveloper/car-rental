@@ -9,25 +9,45 @@ datasource db {
 
 // User model - synced with NextAuth
 model User {
-  id          String   @id @default(cuid())
-  providerId  String?
-  email       String   @unique
+  id            String    @id @default(cuid())
+  providerId    String?
+  email         String    @unique
   emailVerified DateTime?
-  name        String?
-  image       String?
-  role        Role     @default(USER)
-  isActive    Boolean  @default(true)
+  name          String?
+  image         String?
+  role          Role      @default(USER)
+  isActive      Boolean   @default(true)
   deactivatedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  bookings      Booking[]
-  reviews       Review[]
-  savedCars     SavedCar[]
-  adminActions  AdminAuditLog[]
+  accounts         Account[]
+  sessions         Session[]
+  bookings         Booking[]
+  reviews          Review[]
+  savedCars        SavedCar[]
+  adminActions     AdminAuditLog[]
   stripeCustomerId String?
+
+  configurationVersionsCreated   ConfigurationVersion[]         @relation("ConfigurationVersionCreatedBy")
+  configurationVersionsUpdated   ConfigurationVersion[]         @relation("ConfigurationVersionUpdatedBy")
+  configurationVersionsValidated ConfigurationVersion[]         @relation("ConfigurationVersionValidatedBy")
+  configurationReleasesCreated   BusinessConfigurationRelease[] @relation("ConfigurationReleaseCreatedBy")
+  configurationReleasesUpdated   BusinessConfigurationRelease[] @relation("ConfigurationReleaseUpdatedBy")
+  configurationReleasesValidated BusinessConfigurationRelease[] @relation("ConfigurationReleaseValidatedBy")
+  configurationReleasesActivated BusinessConfigurationRelease[] @relation("ConfigurationReleaseActivatedBy")
+  fleetRateSetsCreated           FleetRateSet[]                 @relation("FleetRateSetCreatedBy")
+  fleetRateSetsUpdated           FleetRateSet[]                 @relation("FleetRateSetUpdatedBy")
+  fleetRateSetsValidated         FleetRateSet[]                 @relation("FleetRateSetValidatedBy")
+  fleetRateSetsActivated         FleetRateSet[]                 @relation("FleetRateSetActivatedBy")
+  legalDocumentsCreated          LegalDocumentVersion[]         @relation("LegalDocumentCreatedBy")
+  legalDocumentsUpdated          LegalDocumentVersion[]         @relation("LegalDocumentUpdatedBy")
+  legalDocumentsPublished        LegalDocumentVersion[]         @relation("LegalDocumentPublishedBy")
+  legalAcceptances               BookingLegalAcceptance[]       @relation("LegalAcceptanceCustomer")
+  ownedCustomerDocuments         CustomerDocument[]             @relation("CustomerDocumentOwner")
+  uploadedCustomerDocuments      CustomerDocument[]             @relation("CustomerDocumentUploader")
+  accessRoleAssignments          UserAccessRole[]
+  auditEvents                    AuditEvent[]                   @relation("AuditEventActor")
 
   @@index([providerId])
   @@index([email])
@@ -82,42 +102,44 @@ enum Role {
 
 // Car model with proper constraints
 model Car {
-  id          String      @id @default(cuid())
-  slug        String      @unique
-  name        String
-  nameDe      String?
-  subtitle    String?
-  subtitleDe  String?
-  description String      @db.Text
-  descriptionDe String?   @db.Text
-  category    CarCategory
-  price       Int // price per day in cents
-  image       String
-  images      String[]  @default([])
-  status      CarStatus   @default(AVAILABLE)
-  
+  id            String      @id @default(cuid())
+  slug          String      @unique
+  name          String
+  nameDe        String?
+  subtitle      String?
+  subtitleDe    String?
+  description   String      @db.Text
+  descriptionDe String?     @db.Text
+  category      CarCategory
+  price         Int // price per day in cents
+  image         String
+  images        String[]    @default([])
+  status        CarStatus   @default(AVAILABLE)
+
   // Specs
   gearbox      String
   seats        Int
   fuelType     String
   acceleration String
   year         Int?
-  
-  // Ratings
-  rating       Float       @default(0)
-  reviewCount  Int         @default(0)
-  
-  // Soft delete
-  isDeleted    Boolean     @default(false)
-  deletedAt    DateTime?
-  
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
 
-  bookings     Booking[]
-  reviews      Review[]
-  savedBy      SavedCar[]
-  blockedDates BlockedDate[]
+  // Ratings
+  rating      Float @default(0)
+  reviewCount Int   @default(0)
+
+  // Soft delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings              Booking[]
+  reviews               Review[]
+  savedBy               SavedCar[]
+  blockedDates          BlockedDate[]
+  rentalRates           VehicleRentalRate[]
+  insuranceAvailability InsuranceVehicleAvailability[]
 
   @@index([category])
   @@index([status])
@@ -142,49 +164,54 @@ enum CarStatus {
 
 // Booking with proper constraints to prevent double-booking
 model Booking {
-  id              String        @id @default(cuid())
-  bookingNumber   String        @unique @default(cuid())
-  transferCode    String        @unique
-  locale          String        @default("de")
-  
-  userId          String
-  user            User          @relation(fields: [userId], references: [id])
-  
-  carId           String
-  car             Car           @relation(fields: [carId], references: [id])
-  
+  id            String @id @default(cuid())
+  bookingNumber String @unique @default(cuid())
+  transferCode  String @unique
+  locale        String @default("de")
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  carId String
+  car   Car    @relation(fields: [carId], references: [id])
+
   // Dates stored in UTC
-  pickupDate      DateTime
-  dropoffDate     DateTime
-  location        String
-  
+  pickupDate  DateTime
+  dropoffDate DateTime
+  location    String
+
   // Pricing
   pricePerDay     Int // in cents, locked at booking time
   totalDays       Int
   totalPrice      Int // in cents
   depositAmount   Int // in cents
   guaranteeAmount Int @default(0) // in cents, refundable security hold
-  
+
   // Status
-  status          BookingStatus @default(PENDING)
-  paymentStatus   PaymentStatus @default(PENDING)
-  paymentMethod   BookingPaymentMethod @default(TRANSFER)
-  
+  status        BookingStatus        @default(PENDING)
+  paymentStatus PaymentStatus        @default(PENDING)
+  paymentMethod BookingPaymentMethod @default(TRANSFER)
+
   // Stripe
-  stripeSessionId    String?   @unique
+  stripeSessionId       String? @unique
   stripePaymentIntentId String? @unique
-  
+
   // Timestamps
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  confirmedAt     DateTime?
-  cancelledAt     DateTime?
-  completedAt     DateTime?
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+  cancelledAt DateTime?
+  completedAt DateTime?
+
   // Relations
-  payments        Payment[]
-  review          Review?
-  adminActions    AdminAuditLog[]
+  payments               Payment[]
+  review                 Review?
+  adminActions           AdminAuditLog[]
+  pricingSnapshot        BookingPricingSnapshot?
+  customerDriverSnapshot BookingCustomerDriverSnapshot?
+  insuranceSnapshot      BookingInsuranceSnapshot?
+  legalAcceptances       BookingLegalAcceptance[]
+  customerDocuments      CustomerDocument[]
 
   @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
   @@index([userId])
@@ -236,21 +263,21 @@ model Review {
 
 // Payment tracking
 model Payment {
-  id                   String   @id @default(cuid())
-  bookingId            String
-  booking              Booking  @relation(fields: [bookingId], references: [id])
-  
-  amount               Int // in cents
-  currency             String   @default("usd")
-  status               PaymentStatus
-  
+  id        String  @id @default(cuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  amount   Int // in cents
+  currency String        @default("usd")
+  status   PaymentStatus
+
   stripePaymentIntentId String?
   stripeChargeId        String?
-  
-  metadata             Json?
-  
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([bookingId])
   @@index([stripePaymentIntentId])
@@ -258,14 +285,14 @@ model Payment {
 
 // Blocked dates for maintenance or other reasons
 model BlockedDate {
-  id        String   @id @default(cuid())
-  carId     String
-  car       Car      @relation(fields: [carId], references: [id])
-  
+  id    String @id @default(cuid())
+  carId String
+  car   Car    @relation(fields: [carId], references: [id])
+
   startDate DateTime
   endDate   DateTime
   reason    String?
-  
+
   createdAt DateTime @default(now())
 
   @@index([carId])
@@ -274,12 +301,12 @@ model BlockedDate {
 
 // Saved cars (favorites)
 model SavedCar {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  carId     String
-  car       Car      @relation(fields: [carId], references: [id])
-  
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  carId  String
+  car    Car    @relation(fields: [carId], references: [id])
+
   createdAt DateTime @default(now())
 
   @@unique([userId, carId])
@@ -288,25 +315,25 @@ model SavedCar {
 
 // Admin audit log for accountability
 model AdminAuditLog {
-  id          String   @id @default(cuid())
-  adminId     String
-  admin       User     @relation(fields: [adminId], references: [id])
-  
-  action      AdminAction
-  targetType  String // "booking", "car", "user"
-  targetId    String
-  
-  bookingId   String?
-  booking     Booking? @relation(fields: [bookingId], references: [id])
-  
-  oldValue    Json?
-  newValue    Json?
-  reason      String?
-  
-  ipAddress   String?
-  userAgent   String?
-  
-  createdAt   DateTime @default(now())
+  id      String @id @default(cuid())
+  adminId String
+  admin   User   @relation(fields: [adminId], references: [id])
+
+  action     AdminAction
+  targetType String // "booking", "car", "user"
+  targetId   String
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  oldValue Json?
+  newValue Json?
+  reason   String?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
 
   @@index([adminId])
   @@index([targetType, targetId])
@@ -328,46 +355,984 @@ enum AdminAction {
 
 // Company settings - single record to store all company configuration
 model CompanySettings {
-  id        String   @id @default("company-settings")
-  
+  id String @id @default("company-settings")
+
   // Company Information
-  companyName       String   @default("RentCar GmbH")
-  companyEmail      String   @default("info@rentcar.de")
-  companyPhone      String?  @default("+49 (0) 30 12345678")
-  companyAddress    String?  @default("Musterstraße 123")
-  companyCity       String?  @default("10115 Berlin")
-  companyState      String?
-  companyZipCode    String?
-  companyCountry    String?  @default("Deutschland")
-  
+  companyName    String  @default("RentCar GmbH")
+  companyEmail   String  @default("info@rentcar.de")
+  companyPhone   String? @default("+49 (0) 30 12345678")
+  companyAddress String? @default("Musterstraße 123")
+  companyCity    String? @default("10115 Berlin")
+  companyState   String?
+  companyZipCode String?
+  companyCountry String? @default("Deutschland")
+
   // Legal Information (for Impressum/Imprint)
-  managingDirector  String?  @default("Max Mustermann")
+  managingDirector   String? @default("Max Mustermann")
   commercialRegister String? @default("HRB 123456 B")
-  registerCourt     String?  @default("Amtsgericht Berlin-Charlottenburg")
-  vatId             String?  @default("DE123456789")
-  responsiblePerson String?  @default("Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland")
-  
+  registerCourt      String? @default("Amtsgericht Berlin-Charlottenburg")
+  vatId              String? @default("DE123456789")
+  responsiblePerson  String? @default("Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland")
+
   // Bank/Payment Details
-  bankName          String   @default("Your Bank Name")
-  accountName       String   @default("Car Rental Company")
-  accountNumber     String   @default("1234567890")
-  swiftCode         String   @default("YOURSWIFT")
-  iban              String?
-  
+  bankName      String  @default("Your Bank Name")
+  accountName   String  @default("Car Rental Company")
+  accountNumber String  @default("1234567890")
+  swiftCode     String  @default("YOURSWIFT")
+  iban          String?
+
   // Tax Configuration
-  taxRate           Float    @default(0.0) // Tax rate as decimal (e.g., 0.19 for 19%)
-  taxIncluded       Boolean  @default(false) // Whether tax is included in displayed prices
-  depositPercentage Float    @default(0.2) // Deposit percentage as decimal (e.g., 0.2 for 20%)
-  guaranteePercentage Float  @default(0.0) // Refundable security hold percentage (e.g., 0.3 for 30%)
-  
+  taxRate             Float   @default(0.0) // Tax rate as decimal (e.g., 0.19 for 19%)
+  taxIncluded         Boolean @default(false) // Whether tax is included in displayed prices
+  depositPercentage   Float   @default(0.2) // Deposit percentage as decimal (e.g., 0.2 for 20%)
+  guaranteePercentage Float   @default(0.0) // Refundable security hold percentage (e.g., 0.3 for 30%)
+
   // Email Configuration
-  supportEmail      String   @default("support@rentcar.com")
-  adminEmail        String   @default("admin@rentcar.com")
-  
+  supportEmail String @default("support@rentcar.com")
+  adminEmail   String @default("admin@rentcar.com")
+
   // Additional Settings
-  currency          String   @default("EUR")
-  currencySymbol    String   @default("€")
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  currency       String @default("EUR")
+  currencySymbol String @default("€")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ConfigurationDomainType {
+  GENERAL_RENTAL
+  PRICING_BILLING
+  INSURANCE
+  CUSTOMER_DRIVER_REQUIREMENTS
+  BOOKING_WORKFLOW
+  DOCUMENT_POLICY
+  PAYMENTS
+  CONFIRMATIONS
+  LEGAL_ACCEPTANCE
+}
+
+enum ConfigurationVersionStatus {
+  DRAFT
+  VALIDATED
+  RELEASED
+  ARCHIVED
+}
+
+enum ConfigurationValidationStatus {
+  NOT_VALIDATED
+  VALID
+  WARNING
+  BLOCKED
+}
+
+enum BusinessConfigurationReleaseStatus {
+  DRAFT
+  VALIDATED
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum MixedDurationPricingStrategy {
+  DAILY_ONLY
+  LONGEST_BLOCKS_THEN_DAYS
+  LOWEST_VALID_TOTAL
+}
+
+enum RentalMonthDefinition {
+  FIXED_28_DAYS
+  FIXED_30_DAYS
+  CALENDAR_MONTH
+}
+
+enum BillableDayMethod {
+  STARTED_24_HOUR_PERIODS
+  CALENDAR_DAYS
+  PICKUP_TIME_BOUNDARY
+}
+
+enum PriceTaxTreatment {
+  TAX_INCLUDED
+  TAX_EXCLUDED
+}
+
+enum InsuranceRequirementMode {
+  DISABLED
+  OPTIONAL
+  MANDATORY
+}
+
+enum InsuranceTaxTreatment {
+  INHERIT_RENTAL
+  TAX_INCLUDED
+  TAX_EXCLUDED
+}
+
+enum InsuranceAvailabilityScope {
+  ALL_VEHICLES
+  SELECTED_VEHICLES
+}
+
+enum CustomerFieldType {
+  FIRST_NAME
+  LAST_NAME
+  EMAIL
+  PHONE
+  DATE_OF_BIRTH
+  COUNTRY
+  ADDRESS
+  CITY
+  POSTAL_CODE
+  NATIONALITY
+  LICENCE_NUMBER
+  LICENCE_ISSUE_DATE
+  LICENCE_EXPIRY_DATE
+  LICENCE_ISSUING_COUNTRY
+}
+
+enum CustomerFieldMode {
+  REQUIRED
+  OPTIONAL
+  DISABLED
+}
+
+enum BookingStepType {
+  VEHICLE_AND_DATES
+  CUSTOMER_INFORMATION
+  DRIVER_INFORMATION
+  INSURANCE
+  DOCUMENTS
+  LEGAL_ACCEPTANCE
+  PAYMENT
+  REVIEW
+  CONFIRMATION
+}
+
+enum BookingStepMode {
+  REQUIRED
+  OPTIONAL
+  HIDDEN
+}
+
+enum DocumentRequirementMode {
+  REQUIRED
+  OPTIONAL
+  DISABLED
+}
+
+enum DocumentSides {
+  SINGLE_FILE
+  FRONT_AND_BACK
+}
+
+enum DocumentSide {
+  SINGLE
+  FRONT
+  BACK
+}
+
+enum DocumentUploadStage {
+  DURING_BOOKING
+  AFTER_REQUEST
+  BEFORE_PICKUP
+}
+
+enum CustomerDocumentUploadStatus {
+  PENDING
+  UPLOADING
+  UPLOADED
+  VERIFYING
+  READY
+  REJECTED
+  FAILED
+}
+
+enum MalwareScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
+  NOT_AVAILABLE
+}
+
+enum DocumentDeletionStatus {
+  RETAINED
+  SCHEDULED
+  DELETED
+  FAILED
+}
+
+enum ConfiguredPaymentMode {
+  BOOKING_REQUEST
+  CASH_ON_PICKUP
+  CARD_ON_PICKUP
+  BANK_TRANSFER
+  ONLINE_DEPOSIT
+  ONLINE_FULL
+}
+
+enum DepositType {
+  NONE
+  FIXED_AMOUNT
+  PERCENTAGE_BPS
+}
+
+enum PaymentConfirmationMode {
+  IMMEDIATE
+  REQUIRES_REVIEW
+}
+
+enum RemainingBalanceRule {
+  NOT_APPLICABLE
+  ON_PICKUP
+  BEFORE_PICKUP
+}
+
+enum LegalDocumentType {
+  RENTAL_TERMS
+  PRIVACY_NOTICE
+}
+
+enum LegalPublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LegalAcceptanceRequirement {
+  REQUIRED
+  DISPLAY_ONLY
+}
+
+enum LegalAcceptanceSource {
+  CUSTOMER_CHECKBOX
+  CUSTOMER_SUBMISSION
+  STAFF_RECORDED
+}
+
+enum AccessRoleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuditCategory {
+  CONFIGURATION
+  PRICING
+  INSURANCE
+  LEGAL
+  DOCUMENT
+  PAYMENT
+  AUTHORIZATION
+  BOOKING
+  SYSTEM
+}
+
+model AccessRole {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  name        String
+  description String?
+  status      AccessRoleStatus @default(ACTIVE)
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  capabilities              RoleCapability[]
+  userAssignments           UserAccessRole[]
+  documentPolicyPermissions DocumentPolicyRolePermission[]
+
+  @@index([status])
+}
+
+model Capability {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String
+  createdAt   DateTime @default(now())
+
+  roles RoleCapability[]
+}
+
+model RoleCapability {
+  accessRoleId String
+  capabilityId String
+  createdAt    DateTime @default(now())
+
+  accessRole AccessRole @relation(fields: [accessRoleId], references: [id], onDelete: Cascade)
+  capability Capability @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+
+  @@id([accessRoleId, capabilityId])
+  @@index([capabilityId])
+}
+
+model UserAccessRole {
+  userId       String
+  accessRoleId String
+  assignedAt   DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRole AccessRole @relation(fields: [accessRoleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, accessRoleId])
+  @@index([accessRoleId])
+}
+
+model LegalDocumentVersion {
+  id            String                 @id @default(cuid())
+  type          LegalDocumentType
+  versionNumber Int
+  status        LegalPublicationStatus @default(DRAFT)
+  schemaVersion Int                    @default(1)
+  revision      Int                    @default(1)
+  versionLabel  String
+  changeSummary String                 @db.Text
+  manifestHash  String?                @db.Char(64)
+  createdById   String
+  updatedById   String
+  publishedById String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  publishedAt   DateTime?
+  archivedAt    DateTime?
+
+  createdBy   User  @relation("LegalDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User  @relation("LegalDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  publishedBy User? @relation("LegalDocumentPublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
+
+  translations    LegalDocumentTranslation[]
+  termsPolicies   LegalAcceptanceConfigVersion[] @relation("TermsLegalDocument")
+  privacyPolicies LegalAcceptanceConfigVersion[] @relation("PrivacyLegalDocument")
+
+  @@unique([type, versionNumber])
+  @@unique([type, versionLabel])
+  @@index([type, status])
+  @@index([publishedAt])
+}
+
+model LegalDocumentTranslation {
+  id                     String   @id @default(cuid())
+  legalDocumentVersionId String
+  locale                 String   @db.VarChar(10)
+  title                  String
+  canonicalContent       String   @db.Text
+  sanitizedHtml          String?  @db.Text
+  contentHash            String   @db.Char(64)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  legalDocumentVersion LegalDocumentVersion     @relation(fields: [legalDocumentVersionId], references: [id], onDelete: Cascade)
+  acceptances          BookingLegalAcceptance[]
+
+  @@unique([legalDocumentVersionId, locale])
+  @@index([locale])
+  @@index([contentHash])
+}
+
+model ConfigurationVersion {
+  id                 String                        @id @default(cuid())
+  domain             ConfigurationDomainType
+  versionNumber      Int
+  status             ConfigurationVersionStatus    @default(DRAFT)
+  validationStatus   ConfigurationValidationStatus @default(NOT_VALIDATED)
+  schemaVersion      Int                           @default(1)
+  revision           Int                           @default(1)
+  changeSummary      String                        @db.Text
+  validationSnapshot Json?
+  createdById        String
+  updatedById        String
+  validatedById      String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  validatedAt        DateTime?
+  activatedAt        DateTime?
+  archivedAt         DateTime?
+
+  createdBy   User  @relation("ConfigurationVersionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User  @relation("ConfigurationVersionUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  validatedBy User? @relation("ConfigurationVersionValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict)
+
+  generalRental              GeneralRentalConfigVersion?
+  pricingBilling             PricingBillingConfigVersion?
+  insurance                  InsuranceConfigVersion?
+  customerDriverRequirements CustomerDriverConfigVersion?
+  bookingWorkflow            BookingWorkflowConfigVersion?
+  documentPolicy             DocumentPolicyConfigVersion?
+  paymentRules               PaymentConfigVersion?
+  confirmation               ConfirmationConfigVersion?
+  legalAcceptance            LegalAcceptanceConfigVersion?
+
+  @@unique([domain, versionNumber])
+  @@index([domain, status])
+  @@index([validationStatus])
+  @@index([createdById, createdAt])
+}
+
+model DocumentTypeDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requirements DocumentRequirementRule[]
+  documents    CustomerDocument[]
+
+  @@index([isActive])
+}
+
+model ConfirmationSectionDefinition {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isSystem    Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sectionRules ConfirmationSectionRule[]
+
+  @@index([isActive])
+}
+
+model GeneralRentalConfigVersion {
+  configurationVersionId String   @id
+  businessTimeZone       String
+  currency               String   @db.VarChar(3)
+  supportedLocales       String[]
+
+  version  ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  releases BusinessConfigurationRelease[]
+}
+
+model PricingBillingConfigVersion {
+  configurationVersionId String                       @id
+  weeklyPricingEnabled   Boolean                      @default(false)
+  monthlyPricingEnabled  Boolean                      @default(false)
+  mixedDurationStrategy  MixedDurationPricingStrategy @default(DAILY_ONLY)
+  rentalMonthDefinition  RentalMonthDefinition        @default(FIXED_30_DAYS)
+  billableDayMethod      BillableDayMethod            @default(STARTED_24_HOUR_PERIODS)
+  gracePeriodMinutes     Int                          @default(0)
+  minimumRentalMinutes   Int                          @default(1)
+  minimumChargeDays      Int                          @default(1)
+  priceTaxTreatment      PriceTaxTreatment            @default(TAX_EXCLUDED)
+  taxRateBps             Int                          @default(0)
+
+  version          ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  releases         BusinessConfigurationRelease[]
+  pricingSnapshots BookingPricingSnapshot[]
+}
+
+model InsuranceConfigVersion {
+  configurationVersionId String                     @id
+  requirementMode        InsuranceRequirementMode   @default(DISABLED)
+  pricePerDay            Int                        @default(0) // Minor currency units per billable day.
+  taxTreatment           InsuranceTaxTreatment      @default(INHERIT_RENTAL)
+  availabilityScope      InsuranceAvailabilityScope @default(ALL_VEHICLES)
+  showInConfirmation     Boolean                    @default(true)
+
+  version             ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  translations        InsuranceConfigTranslation[]
+  vehicleAvailability InsuranceVehicleAvailability[]
+  releases            BusinessConfigurationRelease[]
+  bookingSnapshots    BookingInsuranceSnapshot[]
+}
+
+model InsuranceConfigTranslation {
+  id                       String  @id @default(cuid())
+  insuranceConfigVersionId String
+  locale                   String  @db.VarChar(10)
+  customerFacingName       String
+  shortDescription         String? @db.Text
+
+  insuranceConfig InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@unique([insuranceConfigVersionId, locale])
+  @@index([locale])
+}
+
+model InsuranceVehicleAvailability {
+  insuranceConfigVersionId String
+  carId                    String
+  available                Boolean @default(true)
+
+  insuranceConfig InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+  car             Car                    @relation(fields: [carId], references: [id], onDelete: Restrict)
+
+  @@id([insuranceConfigVersionId, carId])
+  @@index([carId])
+}
+
+model CustomerDriverConfigVersion {
+  configurationVersionId    String   @id
+  minimumDriverAge          Int      @default(18)
+  maximumDriverAge          Int?
+  minimumLicenceHeldMonths  Int      @default(0)
+  licenceMustCoverRentalEnd Boolean  @default(true)
+  allowedLicenceCountries   String[]
+
+  version    ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  fieldRules CustomerFieldRule[]
+  releases   BusinessConfigurationRelease[]
+}
+
+model CustomerFieldRule {
+  customerDriverConfigVersionId String
+  field                         CustomerFieldType
+  mode                          CustomerFieldMode
+
+  customerDriverConfig CustomerDriverConfigVersion @relation(fields: [customerDriverConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@id([customerDriverConfigVersionId, field])
+  @@index([field, mode])
+}
+
+model BookingWorkflowConfigVersion {
+  configurationVersionId String @id
+
+  version   ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  stepRules BookingStepRule[]
+  releases  BusinessConfigurationRelease[]
+}
+
+model BookingStepRule {
+  bookingWorkflowConfigVersionId String
+  step                           BookingStepType
+  mode                           BookingStepMode
+  displayOrder                   Int
+
+  bookingWorkflowConfig BookingWorkflowConfigVersion @relation(fields: [bookingWorkflowConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@id([bookingWorkflowConfigVersionId, step])
+  @@unique([bookingWorkflowConfigVersionId, displayOrder])
+  @@index([step, mode])
+}
+
+model DocumentPolicyConfigVersion {
+  configurationVersionId  String @id
+  retentionPreferenceDays Int
+
+  version         ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  requirements    DocumentRequirementRule[]
+  rolePermissions DocumentPolicyRolePermission[]
+  releases        BusinessConfigurationRelease[]
+}
+
+model DocumentRequirementRule {
+  documentPolicyConfigVersionId String
+  documentTypeId                String
+  mode                          DocumentRequirementMode
+  fileCount                     Int
+  sides                         DocumentSides
+  uploadStage                   DocumentUploadStage
+
+  documentPolicyConfig DocumentPolicyConfigVersion @relation(fields: [documentPolicyConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+  documentType         DocumentTypeDefinition      @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+
+  @@id([documentPolicyConfigVersionId, documentTypeId])
+  @@index([documentTypeId, mode])
+}
+
+model DocumentPolicyRolePermission {
+  documentPolicyConfigVersionId String
+  accessRoleId                  String
+  mayView                       Boolean @default(false)
+  mayDownload                   Boolean @default(false)
+  mayDelete                     Boolean @default(false)
+
+  documentPolicyConfig DocumentPolicyConfigVersion @relation(fields: [documentPolicyConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+  accessRole           AccessRole                  @relation(fields: [accessRoleId], references: [id], onDelete: Restrict)
+
+  @@id([documentPolicyConfigVersionId, accessRoleId])
+  @@index([accessRoleId])
+}
+
+model PaymentConfigVersion {
+  configurationVersionId String                  @id
+  defaultMethod          ConfiguredPaymentMode
+  confirmationMode       PaymentConfirmationMode
+  depositType            DepositType             @default(NONE)
+  depositValue           Int                     @default(0) // Minor units for fixed amounts; basis points for percentages.
+  remainingBalanceRule   RemainingBalanceRule    @default(NOT_APPLICABLE)
+
+  version      ConfigurationVersion            @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  methods      PaymentMethodRule[]
+  instructions PaymentInstructionTranslation[]
+  releases     BusinessConfigurationRelease[]
+}
+
+model PaymentMethodRule {
+  paymentConfigVersionId String
+  method                 ConfiguredPaymentMode
+  enabled                Boolean               @default(false)
+
+  paymentConfig PaymentConfigVersion @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@id([paymentConfigVersionId, method])
+  @@index([method, enabled])
+}
+
+model PaymentInstructionTranslation {
+  id                     String @id @default(cuid())
+  paymentConfigVersionId String
+  locale                 String @db.VarChar(10)
+  instructions           String @db.Text
+
+  paymentConfig PaymentConfigVersion @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@unique([paymentConfigVersionId, locale])
+  @@index([locale])
+}
+
+model ConfirmationConfigVersion {
+  configurationVersionId String @id
+
+  version      ConfigurationVersion             @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  sections     ConfirmationSectionRule[]
+  translations ConfirmationContentTranslation[]
+  releases     BusinessConfigurationRelease[]
+}
+
+model ConfirmationSectionRule {
+  confirmationConfigVersionId String
+  sectionDefinitionId         String
+  enabled                     Boolean @default(true)
+
+  confirmationConfig ConfirmationConfigVersion     @relation(fields: [confirmationConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+  sectionDefinition  ConfirmationSectionDefinition @relation(fields: [sectionDefinitionId], references: [id], onDelete: Restrict)
+
+  @@id([confirmationConfigVersionId, sectionDefinitionId])
+  @@index([sectionDefinitionId, enabled])
+}
+
+model ConfirmationContentTranslation {
+  id                          String  @id @default(cuid())
+  confirmationConfigVersionId String
+  locale                      String  @db.VarChar(10)
+  heading                     String?
+  safeContent                 String? @db.Text
+
+  confirmationConfig ConfirmationConfigVersion @relation(fields: [confirmationConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
+
+  @@unique([confirmationConfigVersionId, locale])
+  @@index([locale])
+}
+
+model LegalAcceptanceConfigVersion {
+  configurationVersionId   String                     @id
+  termsDocumentVersionId   String
+  privacyDocumentVersionId String
+  termsAcceptance          LegalAcceptanceRequirement @default(REQUIRED)
+  privacyAcknowledgment    LegalAcceptanceRequirement @default(REQUIRED)
+  retainContentSnapshot    Boolean                    @default(true)
+
+  version         ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
+  termsDocument   LegalDocumentVersion           @relation("TermsLegalDocument", fields: [termsDocumentVersionId], references: [id], onDelete: Restrict)
+  privacyDocument LegalDocumentVersion           @relation("PrivacyLegalDocument", fields: [privacyDocumentVersionId], references: [id], onDelete: Restrict)
+  releases        BusinessConfigurationRelease[]
+
+  @@index([termsDocumentVersionId])
+  @@index([privacyDocumentVersionId])
+}
+
+model BusinessConfigurationRelease {
+  id                             String                             @id @default(cuid())
+  releaseNumber                  Int                                @unique
+  status                         BusinessConfigurationReleaseStatus @default(DRAFT)
+  validationStatus               ConfigurationValidationStatus      @default(NOT_VALIDATED)
+  revision                       Int                                @default(1)
+  name                           String
+  changeSummary                  String                             @db.Text
+  validationSnapshot             Json?
+  generalRentalConfigVersionId   String
+  pricingBillingConfigVersionId  String
+  fleetRateSetId                 String
+  insuranceConfigVersionId       String
+  customerDriverConfigVersionId  String
+  bookingWorkflowConfigVersionId String
+  documentPolicyConfigVersionId  String
+  paymentConfigVersionId         String
+  confirmationConfigVersionId    String
+  legalAcceptanceConfigVersionId String
+  supersedesReleaseId            String?
+  createdById                    String
+  updatedById                    String
+  validatedById                  String?
+  activatedById                  String?
+  createdAt                      DateTime                           @default(now())
+  updatedAt                      DateTime                           @updatedAt
+  validatedAt                    DateTime?
+  activatedAt                    DateTime?
+  archivedAt                     DateTime?
+
+  generalRentalConfig   GeneralRentalConfigVersion     @relation(fields: [generalRentalConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  pricingBillingConfig  PricingBillingConfigVersion    @relation(fields: [pricingBillingConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  fleetRateSet          FleetRateSet                   @relation(fields: [fleetRateSetId], references: [id], onDelete: Restrict)
+  insuranceConfig       InsuranceConfigVersion         @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  customerDriverConfig  CustomerDriverConfigVersion    @relation(fields: [customerDriverConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  bookingWorkflowConfig BookingWorkflowConfigVersion   @relation(fields: [bookingWorkflowConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  documentPolicyConfig  DocumentPolicyConfigVersion    @relation(fields: [documentPolicyConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  paymentConfig         PaymentConfigVersion           @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  confirmationConfig    ConfirmationConfigVersion      @relation(fields: [confirmationConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  legalAcceptanceConfig LegalAcceptanceConfigVersion   @relation(fields: [legalAcceptanceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  supersedesRelease     BusinessConfigurationRelease?  @relation("ReleaseSupersession", fields: [supersedesReleaseId], references: [id], onDelete: Restrict)
+  supersedingReleases   BusinessConfigurationRelease[] @relation("ReleaseSupersession")
+  createdBy             User                           @relation("ConfigurationReleaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             User                           @relation("ConfigurationReleaseUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  validatedBy           User?                          @relation("ConfigurationReleaseValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict)
+  activatedBy           User?                          @relation("ConfigurationReleaseActivatedBy", fields: [activatedById], references: [id], onDelete: Restrict)
+
+  pricingSnapshots BookingPricingSnapshot[]
+  auditEvents      AuditEvent[]
+
+  @@index([status])
+  @@index([validationStatus])
+  @@index([activatedAt])
+  @@index([supersedesReleaseId])
+}
+
+model FleetRateSet {
+  id                 String                        @id @default(cuid())
+  versionNumber      Int                           @unique
+  status             ConfigurationVersionStatus    @default(DRAFT)
+  validationStatus   ConfigurationValidationStatus @default(NOT_VALIDATED)
+  schemaVersion      Int                           @default(1)
+  revision           Int                           @default(1)
+  currency           String                        @db.VarChar(3)
+  changeSummary      String                        @db.Text
+  validationSnapshot Json?
+  createdById        String
+  updatedById        String
+  validatedById      String?
+  activatedById      String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  validatedAt        DateTime?
+  activatedAt        DateTime?
+  archivedAt         DateTime?
+
+  createdBy   User  @relation("FleetRateSetCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User  @relation("FleetRateSetUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  validatedBy User? @relation("FleetRateSetValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict)
+  activatedBy User? @relation("FleetRateSetActivatedBy", fields: [activatedById], references: [id], onDelete: Restrict)
+
+  rates            VehicleRentalRate[]
+  releases         BusinessConfigurationRelease[]
+  pricingSnapshots BookingPricingSnapshot[]
+
+  @@index([status, validationStatus])
+  @@index([createdById, createdAt])
+}
+
+model VehicleRentalRate {
+  id                 String   @id @default(cuid())
+  fleetRateSetId     String
+  carId              String
+  dailyRate          Int // Minor currency units.
+  weeklyRate         Int? // Minor currency units.
+  monthlyRate        Int? // Minor currency units.
+  weeklyRateEnabled  Boolean  @default(false)
+  monthlyRateEnabled Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  fleetRateSet FleetRateSet @relation(fields: [fleetRateSetId], references: [id], onDelete: Cascade)
+  car          Car          @relation(fields: [carId], references: [id], onDelete: Restrict)
+
+  pricingSnapshots BookingPricingSnapshot[]
+
+  @@unique([fleetRateSetId, carId])
+  @@index([carId])
+}
+
+model BookingPricingSnapshot {
+  id                        String                @id @default(cuid())
+  bookingId                 String                @unique
+  configurationReleaseId    String
+  pricingConfigVersionId    String
+  fleetRateSetId            String
+  vehicleRentalRateId       String
+  snapshotSchemaVersion     Int                   @default(1)
+  releaseNumber             Int
+  pricingVersionNumber      Int
+  fleetRateSetVersionNumber Int
+  pricingEngineVersion      String
+  currency                  String                @db.VarChar(3)
+  chargeableDurationMinutes Int
+  chargeableDays            Int
+  billableDayMethod         BillableDayMethod
+  rentalMonthDefinition     RentalMonthDefinition
+  dailyUnits                Int                   @default(0)
+  weeklyUnits               Int                   @default(0)
+  monthlyUnits              Int                   @default(0)
+  sourceDailyRate           Int // Minor currency units.
+  sourceWeeklyRate          Int? // Minor currency units.
+  sourceMonthlyRate         Int? // Minor currency units.
+  baseSubtotal              Int // Minor currency units.
+  insuranceSubtotal         Int                   @default(0) // Minor currency units.
+  adjustmentTotal           Int                   @default(0) // Signed minor currency units.
+  taxTotal                  Int                   @default(0) // Minor currency units.
+  grandTotal                Int // Minor currency units.
+  calculatedAt              DateTime
+  calculationTrace          Json?
+  createdAt                 DateTime              @default(now())
+
+  booking              Booking                      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  configurationRelease BusinessConfigurationRelease @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  pricingConfig        PricingBillingConfigVersion  @relation(fields: [pricingConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  fleetRateSet         FleetRateSet                 @relation(fields: [fleetRateSetId], references: [id], onDelete: Restrict)
+  vehicleRentalRate    VehicleRentalRate            @relation(fields: [vehicleRentalRateId], references: [id], onDelete: Restrict)
+
+  @@index([configurationReleaseId])
+  @@index([pricingConfigVersionId])
+  @@index([fleetRateSetId])
+  @@index([vehicleRentalRateId])
+  @@index([calculatedAt])
+}
+
+model BookingCustomerDriverSnapshot {
+  id                    String    @id @default(cuid())
+  bookingId             String    @unique
+  snapshotSchemaVersion Int       @default(1)
+  firstName             String
+  lastName              String
+  email                 String
+  phone                 String?
+  dateOfBirth           DateTime? @db.Date
+  country               String?   @db.VarChar(2)
+  address               String?
+  city                  String?
+  postalCode            String?
+  nationality           String?   @db.VarChar(2)
+  licenceNumber         String?
+  licenceIssueDate      DateTime? @db.Date
+  licenceExpiryDate     DateTime? @db.Date
+  licenceIssuingCountry String?   @db.VarChar(2)
+  licenceHeldSinceDate  DateTime? @db.Date
+  capturedAt            DateTime
+  createdAt             DateTime  @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+}
+
+model BookingInsuranceSnapshot {
+  id                       String                   @id @default(cuid())
+  bookingId                String                   @unique
+  insuranceConfigVersionId String
+  snapshotSchemaVersion    Int                      @default(1)
+  selected                 Boolean
+  requirementMode          InsuranceRequirementMode
+  customerFacingName       String
+  description              String?                  @db.Text
+  unitPrice                Int // Minor currency units per billable day.
+  billableDays             Int
+  subtotal                 Int // Minor currency units.
+  taxTreatment             InsuranceTaxTreatment
+  capturedAt               DateTime
+  createdAt                DateTime                 @default(now())
+
+  booking         Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  insuranceConfig InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+
+  @@index([insuranceConfigVersionId])
+}
+
+model BookingLegalAcceptance {
+  id                         String                @id @default(cuid())
+  bookingId                  String
+  legalDocumentTranslationId String
+  customerUserId             String?
+  documentType               LegalDocumentType
+  documentVersionNumber      Int
+  locale                     String                @db.VarChar(10)
+  contentHash                String                @db.Char(64)
+  accepted                   Boolean
+  acceptedAt                 DateTime
+  source                     LegalAcceptanceSource
+  contentSnapshot            String?               @db.Text
+  createdAt                  DateTime              @default(now())
+
+  booking                  Booking                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  legalDocumentTranslation LegalDocumentTranslation @relation(fields: [legalDocumentTranslationId], references: [id], onDelete: Restrict)
+  customer                 User?                    @relation("LegalAcceptanceCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([bookingId, documentType])
+  @@index([legalDocumentTranslationId])
+  @@index([customerUserId, acceptedAt])
+  @@index([documentType, acceptedAt])
+}
+
+model CustomerDocument {
+  id                    String                       @id @default(cuid())
+  bookingId             String?
+  customerUserId        String
+  uploadedById          String
+  documentTypeId        String
+  side                  DocumentSide                 @default(SINGLE)
+  sequence              Int                          @default(1)
+  storageProviderId     String
+  storageRegion         String
+  storageKey            String
+  originalFileName      String?
+  normalizedMimeType    String                       @db.VarChar(127)
+  detectedMimeType      String?                      @db.VarChar(127)
+  detectedFileType      String?
+  fileExtension         String?                      @db.VarChar(16)
+  sizeBytes             Int
+  checksumSha256        String                       @db.Char(64)
+  uploadStatus          CustomerDocumentUploadStatus @default(PENDING)
+  scanStatus            MalwareScanStatus            @default(PENDING)
+  scanProviderReference String?
+  retentionUntil        DateTime
+  legalHold             Boolean                      @default(false)
+  deletionStatus        DocumentDeletionStatus       @default(RETAINED)
+  deletedAt             DateTime?
+  deletionReason        String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  booking      Booking?               @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customer     User                   @relation("CustomerDocumentOwner", fields: [customerUserId], references: [id], onDelete: Restrict)
+  uploadedBy   User                   @relation("CustomerDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  documentType DocumentTypeDefinition @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  auditEvents  AuditEvent[]
+
+  @@unique([storageProviderId, storageKey])
+  @@unique([bookingId, documentTypeId, side, sequence])
+  @@index([bookingId, documentTypeId])
+  @@index([customerUserId, documentTypeId])
+  @@index([retentionUntil, legalHold, deletionStatus])
+  @@index([scanStatus, uploadStatus])
+  @@index([deletionStatus, deletedAt])
+  @@index([documentTypeId])
+}
+
+model AuditEvent {
+  id                     String        @id @default(cuid())
+  actorUserId            String?
+  category               AuditCategory
+  action                 String
+  targetType             String
+  targetId               String
+  configurationReleaseId String?
+  customerDocumentId     String?
+  correlationId          String?
+  beforeSummary          Json?
+  afterSummary           Json?
+  metadata               Json?
+  createdAt              DateTime      @default(now())
+
+  actor                User?                         @relation("AuditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  configurationRelease BusinessConfigurationRelease? @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  customerDocument     CustomerDocument?             @relation(fields: [customerDocumentId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId, createdAt])
+  @@index([category, action, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([configurationReleaseId, createdAt])
+  @@index([customerDocumentId, createdAt])
+  @@index([correlationId])
+  @@index([createdAt])
 }

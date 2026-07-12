@@ -92,12 +92,72 @@ async function backupData() {
       },
     })
 
+    // Phase 2B additive metadata. Customer document files are never stored in
+    // PostgreSQL; this captures database metadata only, with no signed/public URLs.
+    const [
+      configurationVersions,
+      configurationReleases,
+      fleetRateSets,
+      legalDocumentVersions,
+      bookingPricingSnapshots,
+      bookingCustomerDriverSnapshots,
+      bookingInsuranceSnapshots,
+      bookingLegalAcceptances,
+      customerDocuments,
+      accessRoles,
+      capabilities,
+      roleCapabilities,
+      userAccessRoles,
+      auditEvents,
+    ] = await Promise.all([
+      prisma.configurationVersion.findMany({
+        include: {
+          generalRental: true,
+          pricingBilling: true,
+          insurance: { include: { translations: true, vehicleAvailability: true } },
+          customerDriverRequirements: { include: { fieldRules: true } },
+          bookingWorkflow: { include: { stepRules: true } },
+          documentPolicy: { include: { requirements: true, rolePermissions: true } },
+          paymentRules: { include: { methods: true, instructions: true } },
+          confirmation: { include: { sections: true, translations: true } },
+          legalAcceptance: true,
+        },
+      }),
+      prisma.businessConfigurationRelease.findMany(),
+      prisma.fleetRateSet.findMany({ include: { rates: true } }),
+      prisma.legalDocumentVersion.findMany({ include: { translations: true } }),
+      prisma.bookingPricingSnapshot.findMany(),
+      prisma.bookingCustomerDriverSnapshot.findMany(),
+      prisma.bookingInsuranceSnapshot.findMany(),
+      prisma.bookingLegalAcceptance.findMany(),
+      prisma.customerDocument.findMany(),
+      prisma.accessRole.findMany(),
+      prisma.capability.findMany(),
+      prisma.roleCapability.findMany(),
+      prisma.userAccessRole.findMany(),
+      prisma.auditEvent.findMany(),
+    ])
+
     const backup = {
       timestamp: new Date().toISOString(),
       users,
       cars,
       bookings,
       savedCars,
+      configurationVersions,
+      configurationReleases,
+      fleetRateSets,
+      legalDocumentVersions,
+      bookingPricingSnapshots,
+      bookingCustomerDriverSnapshots,
+      bookingInsuranceSnapshots,
+      bookingLegalAcceptances,
+      customerDocuments,
+      accessRoles,
+      capabilities,
+      roleCapabilities,
+      userAccessRoles,
+      auditEvents,
     }
 
     const backupPath = join(process.cwd(), "prisma", "backup.json")
