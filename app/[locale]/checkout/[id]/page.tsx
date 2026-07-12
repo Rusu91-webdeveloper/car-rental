@@ -5,13 +5,14 @@ import { getCurrentUser } from "@/lib/auth"
 import { getPaymentDetails } from "@/lib/payment-details"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CheckoutClient } from "./checkout-client"
+import { resolvePublicBookingConfiguration } from "@/lib/booking-configuration/runtime"
 
 export const dynamic = "force-dynamic"
 
-export default async function CheckoutPage({ 
+export default async function CheckoutPage({
   params,
   searchParams,
-}: { 
+}: {
   params: Promise<{ locale: string; id: string }>
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
@@ -33,7 +34,7 @@ export default async function CheckoutPage({
     // Include locale in the redirect URL path
     const redirectPath = `/${locale}/checkout/${id}`
     const currentUrl = new URL(redirectPath, "http://localhost")
-    
+
     // Add all query params to the redirect URL
     if (queryParams) {
       Object.entries(queryParams).forEach(([key, value]) => {
@@ -42,9 +43,12 @@ export default async function CheckoutPage({
         }
       })
     }
-    
+
     const redirectUrl = `${currentUrl.pathname}${currentUrl.search}`
-    redirect({ href: `${signInUrl}?redirect_url=${encodeURIComponent(redirectUrl)}`, locale })
+    redirect({
+      href: `${signInUrl}?redirect_url=${encodeURIComponent(redirectUrl)}`,
+      locale,
+    })
   }
 
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
@@ -54,6 +58,11 @@ export default async function CheckoutPage({
 
   // Payment instructions are display-only; pricing is resolved server-side.
   const paymentDetails = await getPaymentDetails()
+  const bookingConfiguration = await resolvePublicBookingConfiguration({
+    db: prisma,
+    vehicleId: car.id,
+    locale,
+  })
 
   return (
     <CheckoutClient
@@ -68,6 +77,12 @@ export default async function CheckoutPage({
       }}
       signInUrl={signInUrl}
       paymentDetails={paymentDetails}
+      bookingConfiguration={bookingConfiguration}
+      initialCustomer={{
+        firstName: user!.name?.trim().split(/\s+/)[0] ?? "",
+        lastName: user!.name?.trim().split(/\s+/).slice(1).join(" ") ?? "",
+        email: user!.email,
+      }}
     />
   )
 }

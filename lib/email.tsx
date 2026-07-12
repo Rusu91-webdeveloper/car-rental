@@ -80,7 +80,12 @@ function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
   return locale.toLowerCase().startsWith("de") ? "de" : "en"
 }
 
-function resolveSupportEmail(settings: { supportEmail?: string | null; companyEmail?: string | null } | null): string {
+function resolveSupportEmail(
+  settings: {
+    supportEmail?: string | null
+    companyEmail?: string | null
+  } | null,
+): string {
   return (
     settings?.supportEmail ||
     settings?.companyEmail ||
@@ -96,7 +101,8 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
 
   // Validate email configuration
   if (!configStatus.enabled) {
-    const errorMsg = "Email provider not configured. Please set SMTP credentials (EMAIL_HOST, EMAIL_USER, EMAIL_PASS) or RESEND_API_KEY"
+    const errorMsg =
+      "Email provider not configured. Please set SMTP credentials (EMAIL_HOST, EMAIL_USER, EMAIL_PASS) or RESEND_API_KEY"
     console.error("[EMAIL_ERROR] Configuration:", configStatus)
     console.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
@@ -188,6 +194,8 @@ interface BookingEmailData {
   paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
   bookingNumber: string
   locale?: "de" | "en"
+  insuranceName?: string
+  insuranceSubtotal?: number
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
@@ -425,10 +433,9 @@ export async function sendBookingStatusEmail(
         break
       case "REJECTED":
         subject = `${isGerman ? "Buchungsupdate" : "Booking Update"} - ${carName}`
-        message =
-          isGerman
-            ? "Leider konnen wir Ihre Buchung derzeit nicht bearbeiten. Bitte kontaktieren Sie den Support fur weitere Informationen."
-            : "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
+        message = isGerman
+          ? "Leider konnen wir Ihre Buchung derzeit nicht bearbeiten. Bitte kontaktieren Sie den Support fur weitere Informationen."
+          : "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
         break
       default:
         console.log("[EMAIL] Status email skipped for status:", status)
@@ -622,6 +629,8 @@ export async function sendManualPaymentEmail(data: {
   currency?: string
   depositAmount: number
   guaranteeAmount: number
+  insuranceName?: string
+  insuranceSubtotal?: number
   transferCode: string
   bookingNumber: string
   locale?: "de" | "en"
@@ -750,6 +759,7 @@ export async function sendManualPaymentEmail(data: {
                     <span class="detail-label">${isGerman ? "Standort:" : "Location:"}</span>
                     <span class="detail-value">${data.location}</span>
                   </div>
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
                 </div>
 
                 <!-- Payment Required -->
@@ -801,12 +811,16 @@ export async function sendManualPaymentEmail(data: {
                       <span class="bank-detail-label">${isGerman ? "SWIFT-Code:" : "Swift Code:"}</span>
                       <span class="bank-detail-value">${paymentDetails.swiftCode}</span>
                     </div>
-                    ${paymentDetails.iban ? `
+                    ${
+                      paymentDetails.iban
+                        ? `
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">IBAN:</span>
                       <span class="bank-detail-value">${paymentDetails.iban}</span>
                     </div>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "Verwendungszweck:" : "Reference:"}</span>
                       <span class="reference-code">${data.transferCode}</span>
@@ -882,6 +896,8 @@ export async function sendPayAtPickupEmail(data: {
   guaranteeAmount: number
   bookingNumber: string
   locale?: "de" | "en"
+  insuranceName?: string
+  insuranceSubtotal?: number
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -955,6 +971,7 @@ export async function sendPayAtPickupEmail(data: {
                   <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${data.pickupDate}</strong></div>
                   <div class="detail-row"><span>${isGerman ? "Ruckgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
                   <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
                   <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice, data.currency)}</strong></div>
                   ${
                     data.guaranteeAmount > 0
@@ -1058,8 +1075,8 @@ export async function sendAdminBookingNotification(data: {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
       new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter(
-          (email): email is string => Boolean(email),
+        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
+          Boolean(email),
         ),
       ),
     )
@@ -1077,7 +1094,9 @@ export async function sendAdminBookingNotification(data: {
     const invalidEmails = recipients.filter((email) => !isValidEmail(email))
     if (invalidEmails.length > 0) {
       console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
-      return { error: `Invalid admin email address(es): ${invalidEmails.join(", ")}` }
+      return {
+        error: `Invalid admin email address(es): ${invalidEmails.join(", ")}`,
+      }
     }
 
     console.log("[EMAIL] Sending admin notification to:", recipients.join(", "))
@@ -1315,8 +1334,8 @@ export async function sendAdminBookingConfirmationNotification(data: {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
       new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter(
-          (email): email is string => Boolean(email),
+        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
+          Boolean(email),
         ),
       ),
     )
@@ -1334,7 +1353,9 @@ export async function sendAdminBookingConfirmationNotification(data: {
     const invalidEmails = recipients.filter((email) => !isValidEmail(email))
     if (invalidEmails.length > 0) {
       console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
-      return { error: `Invalid admin email address(es): ${invalidEmails.join(", ")}` }
+      return {
+        error: `Invalid admin email address(es): ${invalidEmails.join(", ")}`,
+      }
     }
 
     console.log("[EMAIL] Sending admin confirmation notification to:", recipients.join(", "))

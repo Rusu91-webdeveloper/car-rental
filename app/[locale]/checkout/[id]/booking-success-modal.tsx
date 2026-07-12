@@ -14,6 +14,11 @@ interface BookingSuccessModalProps {
   currency: string
   depositRateBps: number
   guaranteeRateBps: number
+  insurance?: {
+    customerFacingName: string
+    subtotal: number
+    showInConfirmation: boolean
+  } | null
   carName: string
   pickupDate: Date
   dropoffDate: Date
@@ -38,6 +43,7 @@ export function BookingSuccessModal({
   currency,
   depositRateBps,
   guaranteeRateBps,
+  insurance,
   carName,
   pickupDate,
   dropoffDate,
@@ -160,6 +166,14 @@ export function BookingSuccessModal({
                 <span className="text-muted-foreground">Location</span>
                 <span className="font-medium">{location}</span>
               </div>
+              {insurance?.showInConfirmation && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Insurance</span>
+                  <span className="font-medium">
+                    {insurance.customerFacingName} · {formatCents(insurance.subtotal, currency)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -198,22 +212,36 @@ export function BookingSuccessModal({
                     </div>
                     <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                       <p className="font-semibold text-amber-900">Bank Details:</p>
-                      <p>Bank Name: <span className="font-medium">{paymentDetails.bankName}</span></p>
-                      <p>Account Name: <span className="font-medium">{paymentDetails.accountName}</span></p>
-                      <p>Account Number: <span className="font-medium">{paymentDetails.accountNumber}</span></p>
-                      <p>Swift Code: <span className="font-medium">{paymentDetails.swiftCode}</span></p>
+                      <p>
+                        Bank Name: <span className="font-medium">{paymentDetails.bankName}</span>
+                      </p>
+                      <p>
+                        Account Name: <span className="font-medium">{paymentDetails.accountName}</span>
+                      </p>
+                      <p>
+                        Account Number: <span className="font-medium">{paymentDetails.accountNumber}</span>
+                      </p>
+                      <p>
+                        Swift Code: <span className="font-medium">{paymentDetails.swiftCode}</span>
+                      </p>
                       {paymentDetails.iban && (
-                        <p>IBAN: <span className="font-medium">{paymentDetails.iban}</span></p>
+                        <p>
+                          IBAN: <span className="font-medium">{paymentDetails.iban}</span>
+                        </p>
                       )}
-                      <p>Reference: <span className="font-mono font-bold text-primary">{transferCode}</span></p>
+                      <p>
+                        Reference: <span className="font-mono font-bold text-primary">{transferCode}</span>
+                      </p>
                     </div>
                     <p className="text-xs mt-2">
-                      <strong>Important:</strong> Include the transfer code <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we can process your booking.
+                      <strong>Important:</strong> Include the transfer code{" "}
+                      <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we
+                      can process your booking.
                     </p>
                     {guaranteeAmount > 0 && (
                       <p className="text-xs">
-                        The guarantee is a refundable security hold. It is not an extra rental fee and is released
-                        after return if there are no damages, fines, or policy violations.
+                        The guarantee is a refundable security hold. It is not an extra rental fee and is released after
+                        return if there are no damages, fines, or policy violations.
                       </p>
                     )}
                   </div>
@@ -224,7 +252,8 @@ export function BookingSuccessModal({
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
               <h4 className="font-semibold text-amber-900">Pay at Pickup</h4>
               <p className="text-sm text-amber-800">
-                You selected in-person payment at pickup. Please arrive with a valid payment method to complete the booking.
+                You selected in-person payment at pickup. Please arrive with a valid payment method to complete the
+                booking.
               </p>
               <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                 <div className="flex justify-between">

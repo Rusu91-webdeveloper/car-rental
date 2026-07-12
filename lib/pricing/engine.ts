@@ -1,11 +1,6 @@
 import { calculateChargeableDuration } from "./duration"
 import { PricingError } from "./errors"
-import {
-  assertSafeInteger,
-  checkedAdd,
-  multiplyByBasisPoints,
-  requireSameCurrency,
-} from "./money"
+import { assertSafeInteger, checkedAdd, multiplyByBasisPoints, requireSameCurrency } from "./money"
 import { applyPricingStrategy } from "./strategies"
 import { PRICING_ENGINE_VERSION, type PricingRequest, type PricingResult } from "./types"
 
@@ -48,17 +43,29 @@ export function calculatePricing(request: PricingRequest): PricingResult {
     label: adjustment.label,
     amount: assertSafeInteger(adjustment.amount.amount, "adjustment", true),
   }))
-  const adjustmentTotal = checkedAdd(adjustments.map(({ amount }) => amount), "adjustment total")
+  const adjustmentTotal = checkedAdd(
+    adjustments.map(({ amount }) => amount),
+    "adjustment total",
+  )
   const insuranceSubtotal = request.insuranceSubtotal?.amount ?? 0
-  if (insuranceSubtotal !== 0) {
-    throw new PricingError("ACTIVE_CONFIGURATION_INVALID", "Insurance pricing is not active in Phase 3.")
-  }
-  const taxableSubtotal = checkedAdd([strategy.subtotal, adjustmentTotal, insuranceSubtotal], "taxable subtotal")
-  if (taxableSubtotal < 0) throw new PricingError("INVALID_RATE", "Adjustments cannot make a quote negative.")
+  const beforeTaxSubtotal = checkedAdd([strategy.subtotal, adjustmentTotal, insuranceSubtotal], "pre-tax subtotal")
+  if (beforeTaxSubtotal < 0) throw new PricingError("INVALID_RATE", "Adjustments cannot make a quote negative.")
+  const insuranceTaxTreatment = request.insuranceTaxTreatment ?? "INHERIT_RENTAL"
+  const effectiveInsuranceTaxTreatment =
+    insuranceTaxTreatment === "INHERIT_RENTAL" ? request.taxTreatment : insuranceTaxTreatment
+  const taxableSubtotal = checkedAdd(
+    [
+      request.taxTreatment === "TAX_EXCLUDED"
+        ? checkedAdd([strategy.subtotal, adjustmentTotal], "rental taxable subtotal")
+        : 0,
+      effectiveInsuranceTaxTreatment === "TAX_EXCLUDED" ? insuranceSubtotal : 0,
+    ],
+    "taxable subtotal",
+  )
   const taxRateBps = assertSafeInteger(request.taxRateBps, "tax basis points")
   if (taxRateBps > 10_000) throw new PricingError("INVALID_RATE", "Tax basis points must not exceed 10,000.")
-  const taxSubtotal = request.taxTreatment === "TAX_INCLUDED" ? 0 : multiplyByBasisPoints(taxableSubtotal, taxRateBps)
-  const grandTotal = checkedAdd([taxableSubtotal, taxSubtotal], "grand total")
+  const taxSubtotal = multiplyByBasisPoints(taxableSubtotal, taxRateBps)
+  const grandTotal = checkedAdd([beforeTaxSubtotal, taxSubtotal], "grand total")
   const engineVersion = request.engineVersion ?? PRICING_ENGINE_VERSION
   const calculatedAt = (request.calculatedAt ?? new Date()).toISOString()
 
@@ -79,6 +86,7 @@ export function calculatePricing(request: PricingRequest): PricingResult {
     adjustments,
     adjustmentTotal,
     insuranceSubtotal,
+    insuranceTaxTreatment,
     taxTreatment: request.taxTreatment,
     taxRateBps,
     taxSubtotal,
@@ -97,9 +105,19 @@ export function calculatePricing(request: PricingRequest): PricingResult {
         },
         ...strategy.steps,
         ...(taxSubtotal > 0
-          ? [{ code: "TAX", message: `Applied ${taxRateBps} basis points of compatibility/configured tax.`, subtotal: taxSubtotal }]
+          ? [
+              {
+                code: "TAX",
+                message: `Applied ${taxRateBps} basis points of compatibility/configured tax.`,
+                subtotal: taxSubtotal,
+              },
+            ]
           : []),
-        { code: "GRAND_TOTAL", message: `Grand total: ${grandTotal} minor units.`, subtotal: grandTotal },
+        {
+          code: "GRAND_TOTAL",
+          message: `Grand total: ${grandTotal} minor units.`,
+          subtotal: grandTotal,
+        },
       ],
     },
     warnings: [...(request.warnings ?? [])],

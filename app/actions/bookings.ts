@@ -19,7 +19,7 @@ import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import crypto from "crypto"
 import { z } from "zod"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
-import { quoteVehicleRental } from "@/lib/pricing/quote-service"
+import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
 import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
 import { createAuthoritativeBooking } from "@/lib/pricing/prisma-booking-service"
@@ -42,13 +42,15 @@ const bookingQuoteSchema = z
     pickupDate: z.string().datetime(),
     dropoffDate: z.string().datetime(),
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
+    insuranceSelected: z.boolean().optional().default(false),
   })
   .refine((value) => new Date(value.dropoffDate) > new Date(value.pickupDate), {
     message: "Drop-off date must be after pickup date",
     path: ["dropoffDate"],
   })
 
-function publicQuote(quote: Awaited<ReturnType<typeof quoteVehicleRental>>) {
+function publicQuote(configured: Awaited<ReturnType<typeof quoteConfiguredVehicleRental>>) {
+  const quote = configured.quote
   return {
     currency: quote.currency,
     pickupAt: quote.pickupAt,
@@ -77,6 +79,21 @@ function publicQuote(quote: Awaited<ReturnType<typeof quoteVehicleRental>>) {
     compatibilityMode: quote.compatibilityMode,
     trace: quote.trace,
     warnings: quote.warnings,
+    insurance: configured.insurance
+      ? {
+          enabled: configured.insurance.enabled,
+          selected: configured.insurance.selected,
+          requirementMode: configured.insurance.requirementMode,
+          customerFacingName: configured.insurance.customerFacingName,
+          description: configured.insurance.description,
+          unitPrice: configured.insurance.unitPrice,
+          billableDays: configured.insurance.billableDays,
+          subtotal: configured.insurance.subtotal,
+          currency: configured.insurance.currency,
+          availableForVehicle: configured.insurance.availableForVehicle,
+          showCustomerSelection: configured.insurance.showCustomerSelection,
+        }
+      : undefined,
   }
 }
 
@@ -84,18 +101,26 @@ export async function getBookingQuote(data: unknown) {
   try {
     await requireAuth()
     const validated = bookingQuoteSchema.parse(data)
-    const quote = await quoteVehicleRental(new PrismaPricingContextRepository(prisma), {
-      vehicleId: validated.carId,
-      pickupAt: new Date(validated.pickupDate),
-      returnAt: new Date(validated.dropoffDate),
-      paymentMethod: validated.paymentMethod,
+    const configured = await quoteConfiguredVehicleRental({
+      db: prisma,
+      pricingRepository: new PrismaPricingContextRepository(prisma),
+      locale: "en",
+      insuranceSelected: validated.insuranceSelected,
+      request: {
+        vehicleId: validated.carId,
+        pickupAt: new Date(validated.pickupDate),
+        returnAt: new Date(validated.dropoffDate),
+        paymentMethod: validated.paymentMethod,
+      },
     })
-    return { quote: publicQuote(quote) }
+    return { quote: publicQuote(configured) }
   } catch (error) {
     console.error("[GET_BOOKING_QUOTE_ERROR]", error)
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid quote request" }
     if (error instanceof PricingError) return { error: publicPricingErrorMessage(error), code: error.code }
-    return { error: "A valid price could not be calculated. Please try again or contact support." }
+    return {
+      error: "A valid price could not be calculated. Please try again or contact support.",
+    }
   }
 }
 
@@ -138,8 +163,10 @@ export async function createBooking(data: unknown) {
       paymentMethod: validated.paymentMethod,
       bookingNumber,
       transferCode,
+      customer: validated.customer,
+      insuranceSelected: validated.insuranceSelected,
     })
-    const { booking, quote } = transactionResult
+    const { booking, quote, insurance, customer } = transactionResult
 
     // Stripe checkout flow is temporarily disabled.
     // Uncomment this block when you want to re-enable Stripe integration.
@@ -213,8 +240,8 @@ export async function createBooking(data: unknown) {
       const userEmailResult =
         validated.paymentMethod === "TRANSFER"
           ? await sendManualPaymentEmail({
-              to: user.email,
-              userName: user.name || user.email,
+              to: customer?.email || user.email,
+              userName: customer ? `${customer.firstName} ${customer.lastName}` : user.name || user.email,
               carName: userCarName,
               pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
               dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
@@ -226,10 +253,13 @@ export async function createBooking(data: unknown) {
               transferCode: booking.transferCode,
               bookingNumber: booking.bookingNumber,
               locale: userEmailLocale,
+              insuranceName:
+                insurance?.showInConfirmation && insurance.selected ? insurance.customerFacingName : undefined,
+              insuranceSubtotal: insurance?.showInConfirmation && insurance.selected ? insurance.subtotal : undefined,
             })
           : await sendPayAtPickupEmail({
-              to: user.email,
-              userName: user.name || user.email,
+              to: customer?.email || user.email,
+              userName: customer ? `${customer.firstName} ${customer.lastName}` : user.name || user.email,
               carName: userCarName,
               pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
               dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
@@ -239,6 +269,9 @@ export async function createBooking(data: unknown) {
               guaranteeAmount: booking.guaranteeAmount,
               bookingNumber: booking.bookingNumber,
               locale: userEmailLocale,
+              insuranceName:
+                insurance?.showInConfirmation && insurance.selected ? insurance.customerFacingName : undefined,
+              insuranceSubtotal: insurance?.showInConfirmation && insurance.selected ? insurance.subtotal : undefined,
             })
 
       if (userEmailResult.error) {
@@ -313,6 +346,14 @@ export async function createBooking(data: unknown) {
         paymentMethod: booking.paymentMethod,
         depositRateBps: quote.payment.depositRateBps,
         guaranteeRateBps: quote.payment.guaranteeRateBps,
+        insurance:
+          insurance?.showInConfirmation && insurance.selected
+            ? {
+                customerFacingName: insurance.customerFacingName,
+                subtotal: insurance.subtotal,
+                showInConfirmation: true,
+              }
+            : undefined,
       },
       manualPayment: true,
     }
@@ -327,7 +368,7 @@ export async function createBooking(data: unknown) {
         "Pickup date must be in the future": "Please select a pickup date and time in the future.",
         "Drop-off date must be after pickup date": "Drop-off must be after pickup.",
         "Invalid datetime": "Please select valid pickup and drop-off dates.",
-        "Required": "Please fill in all required booking fields.",
+        Required: "Please fill in all required booking fields.",
       }
 
       return { error: messageMap[zodMessage] ?? zodMessage }
@@ -392,7 +433,10 @@ export async function updateBookingStatus(data: unknown) {
           targetId: validated.bookingId,
           bookingId: validated.bookingId,
           oldValue: { status: oldStatus, paymentStatus: booking.paymentStatus },
-          newValue: { status: validated.status, paymentStatus: nextPaymentStatus },
+          newValue: {
+            status: validated.status,
+            paymentStatus: nextPaymentStatus,
+          },
           reason: validated.reason,
         },
       })

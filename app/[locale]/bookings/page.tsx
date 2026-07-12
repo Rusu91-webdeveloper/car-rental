@@ -31,6 +31,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     include: {
       car: true,
       pricingSnapshot: true,
+      insuranceSnapshot: true,
       review: {
         select: {
           id: true,
@@ -225,7 +226,12 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         {showCancellationDeadline && (
                           <div className="flex items-center justify-between pt-2 border-t border-border">
                             <span className="text-muted-foreground flex items-center gap-1">
-                              <svg className="w-4 h-4 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-4 h-4 text-warning"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -242,6 +248,20 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         )}
                       </div>
                     </div>
+
+                    {booking.insuranceSnapshot?.showInConfirmation && booking.insuranceSnapshot.selected && (
+                      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold">Insurance</p>
+                          <p className="text-xs text-muted-foreground">
+                            {booking.insuranceSnapshot.customerFacingName}
+                          </p>
+                        </div>
+                        <span className="font-medium">
+                          {formatCents(booking.insuranceSnapshot.subtotal, booking.insuranceSnapshot.currency)}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Booking Dates */}
                     <div className="flex items-center gap-2 text-muted-foreground">

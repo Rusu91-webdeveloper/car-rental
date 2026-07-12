@@ -14,6 +14,12 @@ export const createBookingSchema = z
     location: z.string().min(1),
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
     locale: z.enum(["de", "en"]).default("de"),
+    insuranceSelected: z.boolean().optional().default(false),
+    customer: z.object({
+      firstName: z.string().max(100).optional(), lastName: z.string().max(100).optional(), email: z.string().max(254).optional(), phone: z.string().max(40).optional(),
+      dateOfBirth: z.string().max(10).optional(), country: z.string().max(2).optional(), address: z.string().max(200).optional(), city: z.string().max(100).optional(), postalCode: z.string().max(20).optional(), nationality: z.string().max(2).optional(),
+      licenceNumber: z.string().max(100).optional(), licenceIssueDate: z.string().max(10).optional(), licenceExpiryDate: z.string().max(10).optional(), licenceIssuingCountry: z.string().max(2).optional(),
+    }).optional(),
   })
   .refine(
     (data) => {

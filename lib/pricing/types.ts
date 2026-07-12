@@ -8,6 +8,7 @@ export type PersistentPricingStrategy = "DAILY_ONLY" | "LONGEST_BLOCKS_THEN_DAYS
 export type RentalMonthDefinition = "FIXED_28_DAYS" | "FIXED_30_DAYS" | "CALENDAR_MONTH"
 export type BillableDayMethod = "STARTED_24_HOUR_PERIODS" | "CALENDAR_DAYS" | "PICKUP_TIME_BOUNDARY"
 export type PriceTaxTreatment = "TAX_INCLUDED" | "TAX_EXCLUDED"
+export type InsuranceTaxTreatment = "INHERIT_RENTAL" | "TAX_INCLUDED" | "TAX_EXCLUDED"
 export type CompatibilityMode = "LEGACY_CAR_PRICE" | "ACTIVE_RELEASE"
 
 export interface PricingAdjustmentInput {
@@ -54,6 +55,7 @@ export interface PricingRequest {
   taxRateBps: number
   adjustments?: PricingAdjustmentInput[]
   insuranceSubtotal?: Money
+  insuranceTaxTreatment?: InsuranceTaxTreatment
   source: PricingSourceIdentifiers
   compatibilityMode: CompatibilityMode
   configurationVersion?: string
@@ -117,6 +119,7 @@ export interface PricingResult {
   adjustments: AppliedAdjustment[]
   adjustmentTotal: number
   insuranceSubtotal: number
+  insuranceTaxTreatment: InsuranceTaxTreatment
   taxTreatment: PriceTaxTreatment
   taxRateBps: number
   taxSubtotal: number

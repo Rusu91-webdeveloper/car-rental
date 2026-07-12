@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
+import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
+import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
 import type { Car, User } from "@prisma/client"
 
@@ -57,6 +59,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
 
   // At this point, user is guaranteed to be non-null and ADMIN
   const adminUser = user!
+  const capabilities = await getBusinessConfigurationCapabilities()
 
   await runBookingLifecycleMaintenance()
   const [cars, bookings, users, blockedDates, reviews] = await Promise.all([
@@ -66,7 +69,11 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     }),
     prisma.booking.findMany({
       orderBy: { createdAt: "desc" },
-      include: { pricingSnapshot: true },
+      include: {
+        pricingSnapshot: true,
+        insuranceSnapshot: true,
+        customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
+      },
     }),
     prisma.user.findMany({
       orderBy: { createdAt: "desc" },
@@ -122,7 +129,11 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
 
   return (
     <AdminDashboard
-      currentUser={{ id: adminUser.id, name: adminUser.name || adminUser.email, email: adminUser.email }}
+      currentUser={{
+        id: adminUser.id,
+        name: adminUser.name || adminUser.email,
+        email: adminUser.email,
+      }}
       cars={cars.map((car: Car) => {
         const stats = getCarReviewStats(reviewStatsByCar, car.id)
 
@@ -163,6 +174,28 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         status: booking.status,
         paymentMethod: booking.paymentMethod,
         createdAt: booking.createdAt.toISOString(),
+        provenance: {
+          configurationReleaseId: booking.pricingSnapshot?.configurationReleaseId ?? null,
+          insuranceConfigVersionId: booking.insuranceSnapshot?.insuranceConfigVersionId ?? null,
+          customerDriverConfigVersionId: booking.customerDriverSnapshot?.customerDriverConfigVersionId ?? null,
+        },
+        insurance:
+          booking.insuranceSnapshot?.showInConfirmation && booking.insuranceSnapshot.selected
+            ? {
+                name: booking.insuranceSnapshot.customerFacingName,
+                subtotal: booking.insuranceSnapshot.subtotal,
+              }
+            : null,
+        customer: booking.customerDriverSnapshot
+          ? {
+              name: `${booking.customerDriverSnapshot.firstName} ${booking.customerDriverSnapshot.lastName}`.trim(),
+              email: booking.customerDriverSnapshot.email,
+              phone: booking.customerDriverSnapshot.phone,
+              dateOfBirth: booking.customerDriverSnapshot.dateOfBirth?.toISOString() ?? null,
+              licenceNumber: maskLicenceNumber(booking.customerDriverSnapshot.licenceNumber),
+              validatedAt: booking.customerDriverSnapshot.validatedAt?.toISOString() ?? null,
+            }
+          : null,
       }))}
       users={users.map((item: User) => ({
         id: item.id,
