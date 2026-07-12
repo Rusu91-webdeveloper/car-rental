@@ -15,6 +15,7 @@ import { CalendarIcon } from "lucide-react"
 import { BookingSuccessModal } from "./booking-success-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { BookingCustomerDriverInput, PublicBookingConfiguration } from "@/lib/booking-configuration/types"
+import { LegalContent } from "@/components/legal/legal-content"
 
 export function CheckoutClient({
   locale,
@@ -226,6 +227,10 @@ export function CheckoutClient({
       bookingConfiguration.insurance?.preselectedByDefault ||
       false,
   )
+  const [legalAcknowledgements, setLegalAcknowledgements] = useState({
+    rentalTerms: false,
+    privacyNotice: false,
+  })
   const [isPending, startTransition] = useTransition()
   const [bookingSuccess, setBookingSuccess] = useState<{
     bookingNumber: string
@@ -246,6 +251,13 @@ export function CheckoutClient({
       subtotal: number
       showInConfirmation: boolean
     } | null
+    legalAcceptances?: Array<{
+      type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+      title: string
+      versionNumber: number
+      versionLabel: string
+      locale: string
+    }>
   } | null>(null)
   const [quote, setQuote] = useState<
     | (Awaited<ReturnType<typeof getBookingQuote>> extends {
@@ -584,6 +596,17 @@ export function CheckoutClient({
       setError("Your selected range includes booked dates. Please choose different dates.")
       return
     }
+    const missingLegalAcknowledgement = bookingConfiguration.legal?.documents.find(
+      (document) =>
+        document.requirement === "REQUIRED" &&
+        (document.type === "RENTAL_TERMS"
+          ? !legalAcknowledgements.rentalTerms
+          : !legalAcknowledgements.privacyNotice),
+    )
+    if (missingLegalAcknowledgement) {
+      setError(`Please acknowledge ${missingLegalAcknowledgement.title} before booking.`)
+      return
+    }
 
     startTransition(async () => {
       // Convert datetime-local format to ISO 8601
@@ -599,6 +622,7 @@ export function CheckoutClient({
         locale: locale === "de" ? "de" : "en",
         insuranceSelected,
         customer,
+        legalAcknowledgements,
       })
 
       if (result?.error) {
@@ -884,6 +908,54 @@ export function CheckoutClient({
                   </span>
                 </span>
               </label>
+            </div>
+          ) : null}
+
+          {bookingConfiguration.legal ? (
+            <div className="bg-background rounded-xl p-4 border border-border space-y-4">
+              <div>
+                <h3 className="font-semibold text-lg">Terms and privacy</h3>
+                <p className="text-sm text-muted-foreground">
+                  Review the exact published versions that apply to this booking. Required acknowledgements start unchecked.
+                </p>
+              </div>
+              {bookingConfiguration.legal.documents.map((document) => {
+                const key = document.type === "RENTAL_TERMS" ? "rentalTerms" : "privacyNotice"
+                const exactVersionUrl = `/${locale}/legal/${document.legalDocumentTranslationId}`
+                return (
+                  <section key={document.type} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-medium">{document.title}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          Version {document.versionLabel || document.versionNumber} · {document.locale}
+                        </p>
+                      </div>
+                      <a className="text-sm font-medium text-primary underline" href={exactVersionUrl} target="_blank" rel="noreferrer">
+                        {document.linkLabel}
+                      </a>
+                    </div>
+                    {document.presentation === "INLINE" ? (
+                      <div className="max-h-64 overflow-y-auto rounded border bg-muted/30 p-3">
+                        <LegalContent content={document.canonicalContent} />
+                      </div>
+                    ) : null}
+                    {document.requirement === "REQUIRED" ? (
+                      <label className="flex items-start gap-3">
+                        <Checkbox
+                          checked={legalAcknowledgements[key]}
+                          onCheckedChange={(value) =>
+                            setLegalAcknowledgements((current) => ({ ...current, [key]: value === true }))
+                          }
+                        />
+                        <span className="text-sm">{document.checkboxLabel}</span>
+                      </label>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Displayed for your information; no acceptance is recorded.</p>
+                    )}
+                  </section>
+                )
+              })}
             </div>
           ) : null}
 

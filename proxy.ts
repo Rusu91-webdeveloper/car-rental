@@ -43,6 +43,7 @@ const isPublicRoute = (pathname: string) => {
         pathWithoutLocale === "/datenschutz" ||
         pathWithoutLocale === "/agb" ||
         pathWithoutLocale === "/widerruf" ||
+        pathWithoutLocale.startsWith("/legal/") ||
         pathWithoutLocale.startsWith("/login") ||
         pathWithoutLocale.startsWith("/signup") ||
         pathWithoutLocale.startsWith("/sign-in") ||

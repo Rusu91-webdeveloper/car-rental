@@ -1,5 +1,6 @@
 import type { BookingStep, CustomerField } from "@/lib/business-configuration/domains"
 import type { InsuranceTaxTreatment } from "@/lib/pricing/types"
+import type { BookingLegalRequirements } from "@/lib/legal/types"
 
 export const DRIVER_ELIGIBILITY_CODES = [
   "DRIVER_DATE_OF_BIRTH_REQUIRED",
@@ -103,4 +104,5 @@ export interface PublicBookingConfiguration {
   fields: EffectiveBookingField[]
   steps: EffectiveBookingStep[]
   insurance?: ActiveInsuranceOffer
+  legal?: BookingLegalRequirements
 }

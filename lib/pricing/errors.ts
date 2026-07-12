@@ -12,6 +12,7 @@ export const PRICING_ERROR_CODES = [
   "ACTIVE_CONFIGURATION_INVALID",
   "VEHICLE_NOT_IN_RATE_SET",
   "SNAPSHOT_PERSISTENCE_FAILED",
+  "LEGAL_ACKNOWLEDGEMENT_REQUIRED",
 ] as const
 
 export type PricingErrorCode = (typeof PRICING_ERROR_CODES)[number]
@@ -51,5 +52,7 @@ export function publicPricingErrorMessage(error: PricingError): string {
     case "ACTIVE_CONFIGURATION_INVALID":
     case "SNAPSHOT_PERSISTENCE_FAILED":
       return "A valid price could not be calculated. Please try again or contact support."
+    case "LEGAL_ACKNOWLEDGEMENT_REQUIRED":
+      return "Please acknowledge the required legal terms before booking."
   }
 }

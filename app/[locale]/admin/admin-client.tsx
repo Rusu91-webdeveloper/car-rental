@@ -102,6 +102,18 @@ interface AdminBooking {
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   createdAt: string
   insurance: { name: string; subtotal: number } | null
+  legalAcceptances: Array<{
+    id: string
+    type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+    title: string
+    versionNumber: number
+    locale: string
+    translationId: string
+    acceptedAt: string
+    source: "CUSTOMER_CHECKBOX" | "CUSTOMER_SUBMISSION" | "STAFF_RECORDED"
+    hasExactProvenance: boolean
+    hashVerified: boolean
+  }>
   customer: {
     name: string
     email: string
@@ -114,6 +126,7 @@ interface AdminBooking {
     configurationReleaseId: string | null
     insuranceConfigVersionId: string | null
     customerDriverConfigVersionId: string | null
+    legalAcceptanceConfigVersionId: string | null
   }
 }
 
@@ -1471,9 +1484,22 @@ export default function AdminDashboard({
                                   </p>
                                 </div>
                               )}
+                              {booking.legalAcceptances.length > 0 && (
+                                <div className="sm:col-span-2 rounded-md border p-3 space-y-1">
+                                  <p className="font-medium">Legal acceptance evidence</p>
+                                  {booking.legalAcceptances.map((acceptance) => (
+                                    <p key={acceptance.id} className="text-sm">
+                                      <a className="font-medium text-primary underline" href={`/${acceptance.locale}/legal/${acceptance.translationId}`} target="_blank" rel="noreferrer">{acceptance.title} · v{acceptance.versionNumber}</a> · {acceptance.locale} · accepted {new Date(acceptance.acceptedAt).toLocaleString()} · {acceptance.source}
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        {acceptance.hasExactProvenance ? "Exact release provenance" : "Legacy provenance unavailable"} · {acceptance.hashVerified ? "Hash verified" : "Hash mismatch"}
+                                      </span>
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
                               {booking.provenance.configurationReleaseId && (
                                 <div className="sm:col-span-2 text-xs text-muted-foreground">
-                                  Release {booking.provenance.configurationReleaseId} · insurance version {booking.provenance.insuranceConfigVersionId ?? "not captured"} · customer/driver version {booking.provenance.customerDriverConfigVersionId ?? "legacy"}
+                                  Release {booking.provenance.configurationReleaseId} · insurance version {booking.provenance.insuranceConfigVersionId ?? "not captured"} · customer/driver version {booking.provenance.customerDriverConfigVersionId ?? "legacy"} · legal policy version {booking.provenance.legalAcceptanceConfigVersionId ?? "legacy"}
                                 </div>
                               )}
                             </div>

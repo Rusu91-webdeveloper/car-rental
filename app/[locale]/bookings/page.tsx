@@ -32,6 +32,13 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
       car: true,
       pricingSnapshot: true,
       insuranceSnapshot: true,
+      legalAcceptances: {
+        include: {
+          legalDocumentTranslation: { include: { legalDocumentVersion: true } },
+          legalAcceptanceConfig: { select: { showInConfirmation: true } },
+        },
+        orderBy: { acceptedAt: "asc" },
+      },
       review: {
         select: {
           id: true,
@@ -260,6 +267,27 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         <span className="font-medium">
                           {formatCents(booking.insuranceSnapshot.subtotal, booking.insuranceSnapshot.currency)}
                         </span>
+                      </div>
+                    )}
+
+                    {booking.legalAcceptances.some(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation) && (
+                      <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                        <p className="font-semibold">Accepted legal versions</p>
+                        {booking.legalAcceptances
+                          .filter(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation)
+                          .map((acceptance) => (
+                            <div key={acceptance.id} className="text-xs text-muted-foreground">
+                              <a
+                                className="font-medium text-primary underline"
+                                href={`/${acceptance.locale}/legal/${acceptance.legalDocumentTranslationId}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {acceptance.legalDocumentTranslation.title} · version {acceptance.documentVersionNumber}
+                              </a>
+                              <span> · accepted {formatDateTime(acceptance.acceptedAt, locale)}</span>
+                            </div>
+                          ))}
                       </div>
                     )}
 

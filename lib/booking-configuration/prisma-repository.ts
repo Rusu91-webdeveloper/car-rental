@@ -1,10 +1,28 @@
-import type { Prisma, PrismaClient } from "@prisma/client"
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import type {
   BookingWorkflowConfiguration,
   CustomerDriverRequirementsConfiguration,
   InsuranceConfiguration,
+  LegalAcceptanceConfiguration,
 } from "@/lib/business-configuration/domains"
+
+export interface ActiveLegalDocumentRecord {
+  id: string
+  type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+  versionNumber: number
+  versionLabel: string
+  status: string
+  validationStatus: string
+  translations: Array<{
+    id: string
+    locale: string
+    title: string
+    canonicalContent: string
+    sanitizedHtml: string
+    contentHash: string
+    validationStatus: string
+  }>
+}
 
 export interface ActivePhase6Record {
   releaseId: string
@@ -24,6 +42,14 @@ export interface ActivePhase6Record {
   workflowVersionStatus: string
   workflowValidationStatus: string
   workflow: BookingWorkflowConfiguration
+  legalVersionId: string
+  legalVersionStatus: string
+  legalValidationStatus: string
+  legal: LegalAcceptanceConfiguration
+  legalDocuments: {
+    terms: ActiveLegalDocumentRecord
+    privacy: ActiveLegalDocumentRecord
+  }
 }
 
 export class PrismaBookingConfigurationRepository {
@@ -45,6 +71,14 @@ export class PrismaBookingConfigurationRepository {
         },
         customerDriverConfig: { include: { version: true, fieldRules: true } },
         bookingWorkflowConfig: { include: { version: true, stepRules: true } },
+        legalAcceptanceConfig: {
+          include: {
+            version: true,
+            translations: true,
+            termsDocument: { include: { translations: true } },
+            privacyDocument: { include: { translations: true } },
+          },
+        },
       },
     })
     if (!release) return null
@@ -52,7 +86,6 @@ export class PrismaBookingConfigurationRepository {
       release.insuranceConfig.translations.find((item) => item.locale === locale) ??
       release.insuranceConfig.translations.find((item) => item.locale === "en") ??
       release.insuranceConfig.translations[0]
-    const modes = new Map(release.customerDriverConfig.fieldRules.map(({ field, mode }) => [field, mode]))
     return {
       releaseId: release.id,
       releaseNumber: release.releaseNumber,
@@ -98,6 +131,70 @@ export class PrismaBookingConfigurationRepository {
           displayOrder,
         })),
       },
+      legalVersionId: release.legalAcceptanceConfigVersionId,
+      legalVersionStatus: release.legalAcceptanceConfig.version.status,
+      legalValidationStatus: release.legalAcceptanceConfig.version.validationStatus,
+      legal: {
+        termsDocument: {
+          id: release.legalAcceptanceConfig.termsDocument.id,
+          type: release.legalAcceptanceConfig.termsDocument.type,
+          publicationStatus: release.legalAcceptanceConfig.termsDocument.status as "PUBLISHED" | "ARCHIVED",
+          availableLocales: release.legalAcceptanceConfig.termsDocument.translations.map(({ locale }) => locale),
+          contentHash: release.legalAcceptanceConfig.termsDocument.manifestHash ?? "",
+        },
+        privacyDocument: {
+          id: release.legalAcceptanceConfig.privacyDocument.id,
+          type: release.legalAcceptanceConfig.privacyDocument.type,
+          publicationStatus: release.legalAcceptanceConfig.privacyDocument.status as "PUBLISHED" | "ARCHIVED",
+          availableLocales: release.legalAcceptanceConfig.privacyDocument.translations.map(({ locale }) => locale),
+          contentHash: release.legalAcceptanceConfig.privacyDocument.manifestHash ?? "",
+        },
+        termsAcceptance: release.legalAcceptanceConfig.termsAcceptance,
+        privacyAcknowledgment: release.legalAcceptanceConfig.privacyAcknowledgment,
+        retainRenderedSnapshot: release.legalAcceptanceConfig.retainContentSnapshot,
+        bookingEnforcementEnabled: release.legalAcceptanceConfig.bookingEnforcementEnabled,
+        requiredLocales: release.legalAcceptanceConfig.requiredLocales,
+        termsPresentation: release.legalAcceptanceConfig.termsPresentation,
+        privacyPresentation: release.legalAcceptanceConfig.privacyPresentation,
+        showInConfirmation: release.legalAcceptanceConfig.showInConfirmation,
+        translations: release.legalAcceptanceConfig.translations.map((labels) => ({
+          locale: labels.locale,
+          termsCheckboxLabel: labels.termsCheckboxLabel ?? undefined,
+          termsLinkLabel: labels.termsLinkLabel,
+          privacyCheckboxLabel: labels.privacyCheckboxLabel ?? undefined,
+          privacyLinkLabel: labels.privacyLinkLabel,
+        })),
+      },
+      legalDocuments: {
+        terms: mapLegalDocument(release.legalAcceptanceConfig.termsDocument),
+        privacy: mapLegalDocument(release.legalAcceptanceConfig.privacyDocument),
+      },
     }
+  }
+}
+
+function mapLegalDocument(document: {
+  id: string
+  type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+  versionNumber: number
+  versionLabel: string
+  status: string
+  validationStatus: string
+  translations: Array<{
+    id: string
+    locale: string
+    title: string
+    canonicalContent: string
+    sanitizedHtml: string | null
+    contentHash: string
+    validationStatus: string
+  }>
+}): ActiveLegalDocumentRecord {
+  return {
+    ...document,
+    translations: document.translations.map((translation) => ({
+      ...translation,
+      sanitizedHtml: translation.sanitizedHtml ?? "",
+    })),
   }
 }

@@ -73,6 +73,26 @@ function extractEmailAddress(value: string | undefined | null): string {
 
 type EmailLocale = "de" | "en"
 
+type LegalAcceptanceEmailReference = {
+  type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+  versionNumber: number
+  acceptedAt: Date
+}
+
+function legalAcceptanceReferencesHtml(
+  references: LegalAcceptanceEmailReference[] | undefined,
+  locale: EmailLocale,
+) {
+  if (!references?.length) return ""
+  const language = locale === "de" ? "de-DE" : "en-US"
+  return references
+    .map(
+      (reference) =>
+        `<div class="detail-row"><span class="detail-label">${reference.type === "RENTAL_TERMS" ? (locale === "de" ? "Mietbedingungen" : "Rental Terms") : locale === "de" ? "Datenschutzhinweis" : "Privacy Notice"}:</span><span class="detail-value">v${reference.versionNumber} · ${reference.acceptedAt.toLocaleString(language)}</span></div>`,
+    )
+    .join("")
+}
+
 function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
   if (!locale) {
     return "de"
@@ -196,6 +216,7 @@ interface BookingEmailData {
   locale?: "de" | "en"
   insuranceName?: string
   insuranceSubtotal?: number
+  legalReferences?: LegalAcceptanceEmailReference[]
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
@@ -631,6 +652,7 @@ export async function sendManualPaymentEmail(data: {
   guaranteeAmount: number
   insuranceName?: string
   insuranceSubtotal?: number
+  legalReferences?: LegalAcceptanceEmailReference[]
   transferCode: string
   bookingNumber: string
   locale?: "de" | "en"
@@ -760,6 +782,7 @@ export async function sendManualPaymentEmail(data: {
                     <span class="detail-value">${data.location}</span>
                   </div>
                   ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
+                  ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
                 </div>
 
                 <!-- Payment Required -->
@@ -898,6 +921,7 @@ export async function sendPayAtPickupEmail(data: {
   locale?: "de" | "en"
   insuranceName?: string
   insuranceSubtotal?: number
+  legalReferences?: LegalAcceptanceEmailReference[]
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -972,6 +996,7 @@ export async function sendPayAtPickupEmail(data: {
                   <div class="detail-row"><span>${isGerman ? "Ruckgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
                   <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
                   ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
+                  ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
                   <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice, data.currency)}</strong></div>
                   ${
                     data.guaranteeAmount > 0

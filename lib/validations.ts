@@ -15,6 +15,10 @@ export const createBookingSchema = z
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
     locale: z.enum(["de", "en"]).default("de"),
     insuranceSelected: z.boolean().optional().default(false),
+    legalAcknowledgements: z.object({
+      rentalTerms: z.boolean().optional(),
+      privacyNotice: z.boolean().optional(),
+    }).optional(),
     customer: z.object({
       firstName: z.string().max(100).optional(), lastName: z.string().max(100).optional(), email: z.string().max(254).optional(), phone: z.string().max(40).optional(),
       dateOfBirth: z.string().max(10).optional(), country: z.string().max(2).optional(), address: z.string().max(200).optional(), city: z.string().max(100).optional(), postalCode: z.string().max(20).optional(), nationality: z.string().max(2).optional(),

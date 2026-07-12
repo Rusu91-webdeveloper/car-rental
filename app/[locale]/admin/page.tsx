@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
+import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
 import type { Car, User } from "@prisma/client"
@@ -73,6 +74,10 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
         pricingSnapshot: true,
         insuranceSnapshot: true,
         customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
+        legalAcceptances: {
+          include: { legalDocumentTranslation: { include: { legalDocumentVersion: true } } },
+          orderBy: { acceptedAt: "asc" },
+        },
       },
     }),
     prisma.user.findMany({
@@ -178,6 +183,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
           configurationReleaseId: booking.pricingSnapshot?.configurationReleaseId ?? null,
           insuranceConfigVersionId: booking.insuranceSnapshot?.insuranceConfigVersionId ?? null,
           customerDriverConfigVersionId: booking.customerDriverSnapshot?.customerDriverConfigVersionId ?? null,
+          legalAcceptanceConfigVersionId: booking.legalAcceptances[0]?.legalAcceptanceConfigVersionId ?? null,
         },
         insurance:
           booking.insuranceSnapshot?.showInConfirmation && booking.insuranceSnapshot.selected
@@ -196,6 +202,21 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
               validatedAt: booking.customerDriverSnapshot.validatedAt?.toISOString() ?? null,
             }
           : null,
+        legalAcceptances: booking.legalAcceptances.map((acceptance) => ({
+          id: acceptance.id,
+          type: acceptance.documentType,
+          title: acceptance.legalDocumentTranslation.title,
+          versionNumber: acceptance.documentVersionNumber,
+          locale: acceptance.locale,
+          translationId: acceptance.legalDocumentTranslationId,
+          acceptedAt: acceptance.acceptedAt.toISOString(),
+          source: acceptance.source,
+          hasExactProvenance: Boolean(
+            acceptance.configurationReleaseId && acceptance.legalAcceptanceConfigVersionId,
+          ),
+          hashVerified:
+            acceptance.contentHash === legalContentHash(acceptance.legalDocumentTranslation.canonicalContent),
+        })),
       }))}
       users={users.map((item: User) => ({
         id: item.id,

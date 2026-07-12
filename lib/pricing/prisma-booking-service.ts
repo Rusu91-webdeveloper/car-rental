@@ -8,6 +8,7 @@ import { normalizeAndValidateBookingFields } from "@/lib/booking-configuration/f
 import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-eligibility"
 import type { BookingCustomerDriverInput } from "@/lib/booking-configuration/types"
 import { PrismaBookingConfigurationRepository } from "@/lib/booking-configuration/prisma-repository"
+import type { SubmittedLegalAcknowledgements } from "@/lib/legal/types"
 
 export interface AuthoritativeBookingInput {
   userId: string
@@ -21,6 +22,25 @@ export interface AuthoritativeBookingInput {
   transferCode: string
   customer?: BookingCustomerDriverInput
   insuranceSelected?: boolean
+  legalAcknowledgements?: SubmittedLegalAcknowledgements
+}
+
+function assertRequiredLegalAcknowledgements(
+  legal: Awaited<ReturnType<typeof quoteConfiguredVehicleRental>>["configuration"]["legal"],
+  submitted: SubmittedLegalAcknowledgements | undefined,
+) {
+  if (!legal) return
+  for (const document of legal.documents) {
+    if (document.requirement !== "REQUIRED") continue
+    const acknowledged =
+      document.type === "RENTAL_TERMS" ? submitted?.rentalTerms : submitted?.privacyNotice
+    if (acknowledged !== true)
+      throw new PricingError(
+        "LEGAL_ACKNOWLEDGEMENT_REQUIRED",
+        `You must acknowledge the ${document.title} before booking.`,
+        "VALIDATION",
+      )
+  }
 }
 
 export async function createAuthoritativeBooking(db: PrismaClient, input: AuthoritativeBookingInput) {
@@ -50,6 +70,7 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
           },
         })
         const { quote } = configured
+        assertRequiredLegalAcknowledgements(configured.configuration.legal, input.legalAcknowledgements)
         let normalizedCustomer: BookingCustomerDriverInput | undefined
         let validatedAt: Date | undefined
         if (configured.configuration.mode === "ACTIVE_RELEASE") {
@@ -99,6 +120,7 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
         })
 
         const snapshot = toBookingPricingSnapshotData(booking.id, quote)
+        let legalAcceptedAt: Date | undefined
         try {
           await tx.bookingPricingSnapshot.create({
             data: {
@@ -156,6 +178,34 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
                   capturedAt: new Date(configured.insurance.capturedAt),
                 },
               })
+            if (configured.configuration.legal) {
+              const acceptedAt = new Date()
+              legalAcceptedAt = acceptedAt
+              const requiredDocuments = configured.configuration.legal.documents.filter(
+                ({ requirement }) => requirement === "REQUIRED",
+              )
+              if (requiredDocuments.length)
+                await tx.bookingLegalAcceptance.createMany({
+                  data: requiredDocuments.map((document) => ({
+                    bookingId: booking.id,
+                    legalDocumentTranslationId: document.legalDocumentTranslationId,
+                    customerUserId: input.userId,
+                    configurationReleaseId: configured.configuration.legal!.configurationReleaseId,
+                    legalAcceptanceConfigVersionId:
+                      configured.configuration.legal!.legalAcceptanceConfigVersionId,
+                    documentType: document.type,
+                    documentVersionNumber: document.versionNumber,
+                    locale: document.locale,
+                    contentHash: document.contentHash,
+                    accepted: true,
+                    acceptedAt,
+                    source: "CUSTOMER_CHECKBOX",
+                    contentSnapshot: configured.configuration.legal!.retainContentSnapshot
+                      ? document.canonicalContent
+                      : undefined,
+                  })),
+                })
+            }
           }
         } catch {
           console.error("[BOOKING_SNAPSHOT_ERROR]", {
@@ -175,6 +225,19 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
           configuration: configured.configuration,
           insurance: configured.insurance,
           customer: normalizedCustomer,
+          legalAcceptances:
+            configured.configuration.legal?.showInConfirmation
+              ? configured.configuration.legal.documents
+                  .filter(({ requirement }) => requirement === "REQUIRED")
+                  .map(({ type, title, versionNumber, versionLabel, locale }) => ({
+                    type,
+                    title,
+                    versionNumber,
+                    versionLabel,
+                    locale,
+                    acceptedAt: legalAcceptedAt!,
+                  }))
+              : [],
         }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

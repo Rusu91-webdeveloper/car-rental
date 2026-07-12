@@ -165,8 +165,9 @@ export async function createBooking(data: unknown) {
       transferCode,
       customer: validated.customer,
       insuranceSelected: validated.insuranceSelected,
+      legalAcknowledgements: validated.legalAcknowledgements,
     })
-    const { booking, quote, insurance, customer } = transactionResult
+    const { booking, quote, insurance, customer, legalAcceptances } = transactionResult
 
     // Stripe checkout flow is temporarily disabled.
     // Uncomment this block when you want to re-enable Stripe integration.
@@ -256,6 +257,7 @@ export async function createBooking(data: unknown) {
               insuranceName:
                 insurance?.showInConfirmation && insurance.selected ? insurance.customerFacingName : undefined,
               insuranceSubtotal: insurance?.showInConfirmation && insurance.selected ? insurance.subtotal : undefined,
+              legalReferences: legalAcceptances,
             })
           : await sendPayAtPickupEmail({
               to: customer?.email || user.email,
@@ -272,6 +274,7 @@ export async function createBooking(data: unknown) {
               insuranceName:
                 insurance?.showInConfirmation && insurance.selected ? insurance.customerFacingName : undefined,
               insuranceSubtotal: insurance?.showInConfirmation && insurance.selected ? insurance.subtotal : undefined,
+              legalReferences: legalAcceptances,
             })
 
       if (userEmailResult.error) {
@@ -354,6 +357,7 @@ export async function createBooking(data: unknown) {
                 showInConfirmation: true,
               }
             : undefined,
+        legalAcceptances,
       },
       manualPayment: true,
     }
