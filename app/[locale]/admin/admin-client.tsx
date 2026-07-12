@@ -4,7 +4,7 @@ import type React from "react"
 import type { CompanySettings } from "@prisma/client"
 import { useState, useTransition, useEffect } from "react"
 import { useLocale, useTranslations } from "next-intl"
-import { useRouter } from "@/navigation"
+import { Link, useRouter } from "@/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -754,6 +754,10 @@ export default function AdminDashboard({
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 p-4">
+          <Link href="/admin/business-configuration" className="mb-3 flex w-full items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10">
+            <Settings className="h-5 w-5" />
+            <span>Business Configuration</span>
+          </Link>
           {adminTabs.map((tab) => {
             const TabIcon = tab.icon
             const badgeValue = getTabBadgeValue(tab.id)
@@ -814,6 +818,9 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Link href="/admin/business-configuration" className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary">
+                <Settings className="h-4 w-4" /> Business Configuration
+              </Link>
               {adminTabs.map((tab) => {
                 const TabIcon = tab.icon
                 const badgeValue = getTabBadgeValue(tab.id)
