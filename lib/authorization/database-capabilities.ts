@@ -1,5 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client"
-import type { Capability } from "./capabilities"
+import {
+  RESTRICTED_DOCUMENT_CAPABILITIES,
+  type Capability,
+} from "./capabilities"
 
 type DbClient = PrismaClient | Prisma.TransactionClient
 
@@ -17,6 +20,7 @@ export async function databaseUserHasCapability(
         select: {
           accessRole: {
             select: {
+              key: true,
               capabilities: {
                 select: { capability: { select: { key: true } } },
               },
@@ -27,11 +31,15 @@ export async function databaseUserHasCapability(
     },
   })
   return (
-    actor?.role === "ADMIN" ||
-    actor?.accessRoleAssignments.some(({ accessRole }) =>
-      accessRole.capabilities.some(
-        ({ capability: assigned }) => assigned.key === capability,
-      ),
+    (actor?.role === "ADMIN" &&
+      !RESTRICTED_DOCUMENT_CAPABILITIES.has(capability)) ||
+    actor?.accessRoleAssignments.some(
+      ({ accessRole }) =>
+        (accessRole.key !== "ADMIN_COMPAT" ||
+          !RESTRICTED_DOCUMENT_CAPABILITIES.has(capability)) &&
+        accessRole.capabilities.some(
+          ({ capability: assigned }) => assigned.key === capability,
+        ),
     ) ||
     false
   )

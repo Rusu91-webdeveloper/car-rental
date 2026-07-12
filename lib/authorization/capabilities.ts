@@ -16,6 +16,7 @@ export const CAPABILITIES = {
   DOCUMENTS_VIEW: "documents.view",
   DOCUMENTS_DOWNLOAD: "documents.download",
   DOCUMENTS_DELETE: "documents.delete",
+  DOCUMENTS_LEGAL_HOLD_MANAGE: "documents.legal-hold.manage",
   PAYMENTS_MANAGE: "payments.manage",
   CONFIRMATIONS_MANAGE: "confirmations.manage",
   ROLES_MANAGE: "roles.manage",
@@ -23,6 +24,13 @@ export const CAPABILITIES = {
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
+
+export const RESTRICTED_DOCUMENT_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.DOCUMENTS_VIEW,
+  CAPABILITIES.DOCUMENTS_DOWNLOAD,
+  CAPABILITIES.DOCUMENTS_DELETE,
+  CAPABILITIES.DOCUMENTS_LEGAL_HOLD_MANAGE,
+]);
 
 export type CapabilityPrincipal =
   | { authenticated: false }
@@ -48,7 +56,11 @@ function effectiveCapabilities(
 ) {
   // Compatibility only: this pure contract does not replace requireAdmin() or create role persistence.
   if (principal.role === "ADMIN")
-    return new Set<Capability>(Object.values(CAPABILITIES));
+    return new Set<Capability>(
+      Object.values(CAPABILITIES).filter(
+        (capability) => !RESTRICTED_DOCUMENT_CAPABILITIES.has(capability),
+      ),
+    );
   return principal.capabilities;
 }
 
