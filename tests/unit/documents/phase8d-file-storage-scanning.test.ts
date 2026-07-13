@@ -73,6 +73,9 @@ describe("Phase 8D disposable adapters", () => {
     const store = new LocalPrivateDocumentStorage(root);
     stores.push(store);
     const target = await store.createUploadTarget({
+      uploadIntentId: "intent-file-storage-1",
+      normalizedExtension: ".jpg",
+      declaredMimeType: "image/jpeg",
       maximumBytes: 1024,
       expectedChecksumSha256: sha256(jpeg),
       expiresAt: new Date(Date.now() + 60_000),

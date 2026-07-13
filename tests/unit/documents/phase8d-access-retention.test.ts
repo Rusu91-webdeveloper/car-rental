@@ -37,6 +37,9 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       () => now,
     );
     const target = await storage.createUploadTarget({
+      uploadIntentId: "intent-access-1",
+      normalizedExtension: ".jpg",
+      declaredMimeType: "image/jpeg",
       maximumBytes: 1024,
       expectedChecksumSha256: sha256(jpeg),
       expiresAt: new Date(now.getTime() + 60_000),

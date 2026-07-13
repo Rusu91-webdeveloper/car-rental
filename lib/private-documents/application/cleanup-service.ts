@@ -63,7 +63,10 @@ export class DocumentCleanupService {
           )
         )
           continue;
-        await this.storage.cleanupAbandonedUpload(intent.targetId);
+        await this.storage.cleanupAbandonedUpload({
+          targetId: intent.targetId,
+          object: intent.object,
+        });
         await this.repository.updateIntent(intent.id, intent.revision, {
           status: "EXPIRED",
           revision: intent.revision + 1,

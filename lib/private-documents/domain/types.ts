@@ -28,9 +28,19 @@ export interface PrivateObjectReference {
 
 export interface PrivateObjectMetadata extends PrivateObjectReference {
   sizeBytes: number;
-  checksumSha256: string;
+  checksumSha256?: string;
+  declaredContentType?: string;
   updatedAt: Date;
 }
+
+export type UploadDelivery =
+  | { kind: "LOCAL_STAGED" }
+  | {
+      kind: "DIRECT_PUT";
+      accessValue: string;
+      method: "PUT";
+      requiredHeaders: Readonly<Record<string, string>>;
+    };
 
 export interface UploadTarget {
   targetId: string;
@@ -38,6 +48,18 @@ export interface UploadTarget {
   expiresAt: Date;
   maximumBytes: number;
   expectedChecksumSha256: string;
+  delivery: UploadDelivery;
+}
+
+export interface PrivateObjectRead {
+  stream: ReadableStream<Uint8Array>;
+  metadata: PrivateObjectMetadata;
+}
+
+export interface PrivateObjectListPage {
+  objects: PrivateObjectMetadata[];
+  cursor?: string;
+  hasMore: boolean;
 }
 
 export interface ShortLivedAccessGrant {

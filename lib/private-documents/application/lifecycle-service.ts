@@ -117,15 +117,33 @@ export class PrivateDocumentLifecycleService {
           "DOCUMENT_IDEMPOTENCY_CONFLICT",
           "Intent idempotency key was reused inconsistently.",
         );
+      const extension = existing.originalFileName
+        .toLowerCase()
+        .match(/\.(pdf|jpe?g|png)$/)?.[0] as
+        | ".pdf"
+        | ".jpg"
+        | ".jpeg"
+        | ".png"
+        | undefined;
+      if (!extension)
+        documentError(
+          "DOCUMENT_EXTENSION_UNSUPPORTED",
+          "Stored intent extension is unsupported.",
+        );
       return {
         intent: existing,
-        uploadTarget: {
-          targetId: existing.targetId,
-          object: existing.object,
-          expiresAt: existing.expiresAt,
+        uploadTarget: await this.storage.createUploadTarget({
+          uploadIntentId: existing.id,
+          normalizedExtension: extension,
+          declaredMimeType: existing.declaredMimeType as
+            | "application/pdf"
+            | "image/jpeg"
+            | "image/png",
           maximumBytes: DOCUMENT_FILE_POLICY.maximumBytes,
           expectedChecksumSha256: existing.expectedChecksumSha256,
-        },
+          expiresAt: existing.expiresAt,
+          existing: { targetId: existing.targetId, object: existing.object },
+        }),
       };
     }
     const rule = session.requirements.find(
@@ -182,13 +200,33 @@ export class PrivateDocumentLifecycleService {
           "Replacement predecessor is stale or mismatched.",
         );
     }
+    const intentId = randomUUID();
+    const extension = input.originalFileName
+      .toLowerCase()
+      .match(/\.(pdf|jpe?g|png)$/)?.[0] as
+      | ".pdf"
+      | ".jpg"
+      | ".jpeg"
+      | ".png"
+      | undefined;
+    if (!extension)
+      documentError(
+        "DOCUMENT_EXTENSION_UNSUPPORTED",
+        "Upload extension is unsupported.",
+      );
     const target = await this.storage.createUploadTarget({
+      uploadIntentId: intentId,
+      normalizedExtension: extension,
+      declaredMimeType: input.declaredMimeType as
+        | "application/pdf"
+        | "image/jpeg"
+        | "image/png",
       maximumBytes: DOCUMENT_FILE_POLICY.maximumBytes,
       expectedChecksumSha256: input.expectedChecksumSha256,
       expiresAt: session.expiresAt,
     });
     const intent: IntentRecord = {
-      id: randomUUID(),
+      id: intentId,
       uploadSessionId: session.id,
       documentPolicyConfigVersionId: session.documentPolicyConfigVersionId,
       documentTypeId: input.documentTypeId,
@@ -211,7 +249,10 @@ export class PrivateDocumentLifecycleService {
     try {
       await this.repository.createIntent(intent);
     } catch (error) {
-      await this.storage.abortUpload(target.targetId);
+      await this.storage.abortUpload({
+        targetId: target.targetId,
+        object: target.object,
+      });
       throw error;
     }
     await this.repository.audit({
@@ -266,7 +307,10 @@ export class PrivateDocumentLifecycleService {
       );
     if (
       metadata.sizeBytes !== intent.expectedSizeBytes ||
-      metadata.checksumSha256 !== intent.expectedChecksumSha256
+      (metadata.checksumSha256 &&
+        metadata.checksumSha256 !== intent.expectedChecksumSha256) ||
+      (metadata.declaredContentType &&
+        metadata.declaredContentType !== intent.declaredMimeType)
     )
       documentError(
         "DOCUMENT_UPLOAD_METADATA_MISMATCH",
@@ -519,7 +563,10 @@ export class PrivateDocumentLifecycleService {
         "DOCUMENT_SESSION_ALREADY_COMPLETED",
         "Terminal intent cannot be aborted.",
       );
-    await this.storage.abortUpload(intent.targetId);
+    await this.storage.abortUpload({
+      targetId: intent.targetId,
+      object: intent.object,
+    });
     return this.repository.updateIntent(intent.id, intent.revision, {
       status: "ABORTED",
       revision: intent.revision + 1,

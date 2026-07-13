@@ -1,5 +1,7 @@
 import type {
   PrivateObjectMetadata,
+  PrivateObjectListPage,
+  PrivateObjectRead,
   PrivateObjectReference,
   ShortLivedAccessGrant,
   UploadTarget,
@@ -17,9 +19,13 @@ export interface PrivateDocumentStorage {
   readonly providerKey: string;
   verifyProviderConfiguration(): Promise<StorageHealth>;
   createUploadTarget(input: {
+    uploadIntentId: string;
+    normalizedExtension: ".pdf" | ".jpg" | ".jpeg" | ".png";
+    declaredMimeType: "application/pdf" | "image/jpeg" | "image/png";
     maximumBytes: number;
     expectedChecksumSha256: string;
     expiresAt: Date;
+    existing?: { targetId: string; object: PrivateObjectReference };
   }): Promise<UploadTarget>;
   completeStagedUpload(
     targetId: string,
@@ -32,6 +38,9 @@ export interface PrivateDocumentStorage {
     reference: PrivateObjectReference,
     maximumBytes: number,
   ): Promise<Uint8Array>;
+  openPrivateRead(
+    reference: PrivateObjectReference,
+  ): Promise<PrivateObjectRead>;
   createShortLivedReadAccess(
     reference: PrivateObjectReference,
     input: {
@@ -54,6 +63,17 @@ export interface PrivateDocumentStorage {
     confirmationReference: string;
   }>;
   objectExists(reference: PrivateObjectReference): Promise<boolean>;
-  abortUpload(targetId: string): Promise<void>;
-  cleanupAbandonedUpload(targetId: string): Promise<boolean>;
+  abortUpload(input: {
+    targetId: string;
+    object: PrivateObjectReference;
+  }): Promise<void>;
+  cleanupAbandonedUpload(input: {
+    targetId: string;
+    object: PrivateObjectReference;
+  }): Promise<boolean>;
+  listObjects(input: {
+    prefix: string;
+    limit: number;
+    cursor?: string;
+  }): Promise<PrivateObjectListPage>;
 }
