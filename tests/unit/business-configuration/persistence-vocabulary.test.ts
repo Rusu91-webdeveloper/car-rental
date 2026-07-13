@@ -21,6 +21,10 @@ const phase8Capabilities = readFileSync(
   resolve(process.cwd(), "prisma/migrations/20260713110400_add_phase8_restricted_capabilities/migration.sql"),
   "utf8",
 )
+const phase8fCapabilities = readFileSync(
+  resolve(process.cwd(), "prisma/migrations/20260713130000_add_phase8f_manual_review/migration.sql"),
+  "utf8",
+)
 const prismaSchema = readFileSync(resolve(process.cwd(), "prisma/schema.prisma"), "utf8")
 
 function prismaEnumValues(name: string) {
@@ -42,7 +46,7 @@ describe("persisted Business Configuration vocabulary", () => {
   })
 
   it.each(Object.values(CAPABILITIES))("seeds capability %s", (key) => {
-    expect(`${compatibilityMigration}\n${phase6Capabilities}\n${phase8Capabilities}`).toContain(`'${key}'`)
+    expect(`${compatibilityMigration}\n${phase6Capabilities}\n${phase8Capabilities}\n${phase8fCapabilities}`).toContain(`'${key}'`)
   })
 
   it("keeps closed Prisma enums aligned with application contracts", () => {

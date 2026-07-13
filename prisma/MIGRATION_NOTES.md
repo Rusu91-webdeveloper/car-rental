@@ -66,3 +66,19 @@ new source fields before setting them non-null. It does not create, validate, or
 activate a configuration release, and it does not modify `Car.price` or existing
 Booking scalar values. Full-chain replay and atomic booking/snapshot verification
 use only the disposable scripts documented in `10-phase-3-pricing-engine.md`.
+
+## Phase 8F-A manual-review evidence (2026-07-13)
+
+`20260713130000_add_phase8f_manual_review` is a single additive, forward-only
+migration. It preserves the applied Phase 8C/8D files and scanner-backed
+`READY`/`CLEAN` semantics while adding distinct `TECHNICALLY_VALID` and manual
+review state/evidence. Existing documents receive only `NOT_READY` and revision
+zero; no reviewer, timestamp, decision, reason, note, provenance, or history is
+backfilled.
+
+The migration uses text predicates when defining same-transaction checks for the
+new PostgreSQL enum values, avoiding the unsafe-new-enum-value rule without
+splitting the approved migration. Deferred triggers require the document summary
+and append-only decision history to agree at commit and protect atomic replacement
+promotion. Verification uses only disposable PostgreSQL and the synthetic scripts
+documented in `22-phase-8f-manual-document-review-prerequisites.md`.

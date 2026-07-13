@@ -29,30 +29,33 @@ model User {
   adminActions     AdminAuditLog[]
   stripeCustomerId String?
 
-  configurationVersionsCreated   ConfigurationVersion[]         @relation("ConfigurationVersionCreatedBy")
-  configurationVersionsUpdated   ConfigurationVersion[]         @relation("ConfigurationVersionUpdatedBy")
-  configurationVersionsValidated ConfigurationVersion[]         @relation("ConfigurationVersionValidatedBy")
-  configurationReleasesCreated   BusinessConfigurationRelease[] @relation("ConfigurationReleaseCreatedBy")
-  configurationReleasesUpdated   BusinessConfigurationRelease[] @relation("ConfigurationReleaseUpdatedBy")
-  configurationReleasesValidated BusinessConfigurationRelease[] @relation("ConfigurationReleaseValidatedBy")
-  configurationReleasesActivated BusinessConfigurationRelease[] @relation("ConfigurationReleaseActivatedBy")
-  fleetRateSetsCreated           FleetRateSet[]                 @relation("FleetRateSetCreatedBy")
-  fleetRateSetsUpdated           FleetRateSet[]                 @relation("FleetRateSetUpdatedBy")
-  fleetRateSetsValidated         FleetRateSet[]                 @relation("FleetRateSetValidatedBy")
-  fleetRateSetsActivated         FleetRateSet[]                 @relation("FleetRateSetActivatedBy")
-  legalDocumentsCreated          LegalDocumentVersion[]         @relation("LegalDocumentCreatedBy")
-  legalDocumentsUpdated          LegalDocumentVersion[]         @relation("LegalDocumentUpdatedBy")
-  legalDocumentsPublished        LegalDocumentVersion[]         @relation("LegalDocumentPublishedBy")
-  legalDocumentsValidated        LegalDocumentVersion[]         @relation("LegalDocumentValidatedBy")
-  legalAcceptances               BookingLegalAcceptance[]       @relation("LegalAcceptanceCustomer")
-  ownedCustomerDocuments         CustomerDocument[]             @relation("CustomerDocumentOwner")
-  uploadedCustomerDocuments      CustomerDocument[]             @relation("CustomerDocumentUploader")
-  documentUploadSessions         DocumentUploadSession[]        @relation("DocumentUploadSessionCustomer")
-  documentLegalHoldsApplied      DocumentLegalHold[]            @relation("DocumentLegalHoldAppliedBy")
-  documentLegalHoldsReleased     DocumentLegalHold[]            @relation("DocumentLegalHoldReleasedBy")
-  documentDeletionsRequested     DocumentDeletionRequest[]      @relation("DocumentDeletionRequestedBy")
+  configurationVersionsCreated   ConfigurationVersion[]           @relation("ConfigurationVersionCreatedBy")
+  configurationVersionsUpdated   ConfigurationVersion[]           @relation("ConfigurationVersionUpdatedBy")
+  configurationVersionsValidated ConfigurationVersion[]           @relation("ConfigurationVersionValidatedBy")
+  configurationReleasesCreated   BusinessConfigurationRelease[]   @relation("ConfigurationReleaseCreatedBy")
+  configurationReleasesUpdated   BusinessConfigurationRelease[]   @relation("ConfigurationReleaseUpdatedBy")
+  configurationReleasesValidated BusinessConfigurationRelease[]   @relation("ConfigurationReleaseValidatedBy")
+  configurationReleasesActivated BusinessConfigurationRelease[]   @relation("ConfigurationReleaseActivatedBy")
+  fleetRateSetsCreated           FleetRateSet[]                   @relation("FleetRateSetCreatedBy")
+  fleetRateSetsUpdated           FleetRateSet[]                   @relation("FleetRateSetUpdatedBy")
+  fleetRateSetsValidated         FleetRateSet[]                   @relation("FleetRateSetValidatedBy")
+  fleetRateSetsActivated         FleetRateSet[]                   @relation("FleetRateSetActivatedBy")
+  legalDocumentsCreated          LegalDocumentVersion[]           @relation("LegalDocumentCreatedBy")
+  legalDocumentsUpdated          LegalDocumentVersion[]           @relation("LegalDocumentUpdatedBy")
+  legalDocumentsPublished        LegalDocumentVersion[]           @relation("LegalDocumentPublishedBy")
+  legalDocumentsValidated        LegalDocumentVersion[]           @relation("LegalDocumentValidatedBy")
+  legalAcceptances               BookingLegalAcceptance[]         @relation("LegalAcceptanceCustomer")
+  ownedCustomerDocuments         CustomerDocument[]               @relation("CustomerDocumentOwner")
+  uploadedCustomerDocuments      CustomerDocument[]               @relation("CustomerDocumentUploader")
+  documentUploadSessions         DocumentUploadSession[]          @relation("DocumentUploadSessionCustomer")
+  documentLegalHoldsApplied      DocumentLegalHold[]              @relation("DocumentLegalHoldAppliedBy")
+  documentLegalHoldsReleased     DocumentLegalHold[]              @relation("DocumentLegalHoldReleasedBy")
+  documentDeletionsRequested     DocumentDeletionRequest[]        @relation("DocumentDeletionRequestedBy")
+  customerDocumentsReviewed      CustomerDocument[]               @relation("CustomerDocumentReviewedBy")
+  documentReviewDecisions        CustomerDocumentReviewDecision[] @relation("CustomerDocumentDecisionReviewedBy")
+  documentReviewEvidence         CustomerDocumentReviewDecision[] @relation("CustomerDocumentDecisionCustomer")
   accessRoleAssignments          UserAccessRole[]
-  auditEvents                    AuditEvent[]                   @relation("AuditEventActor")
+  auditEvents                    AuditEvent[]                     @relation("AuditEventActor")
 
   @@index([providerId])
   @@index([email])
@@ -550,6 +553,7 @@ enum CustomerDocumentUploadStatus {
   UPLOADING
   UPLOADED
   VERIFYING
+  TECHNICALLY_VALID
   READY
   REJECTED
   FAILED
@@ -595,12 +599,40 @@ enum DocumentUploadIntentStatus {
   UPLOADED
   VERIFYING
   QUARANTINED
+  TECHNICALLY_VALID
   SCAN_PENDING
   CLEAN
   REJECTED
   FAILED
   ABORTED
   EXPIRED
+}
+
+enum DocumentManualReviewStatus {
+  NOT_READY
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  REPLACEMENT_REQUIRED
+}
+
+enum DocumentReviewDecision {
+  APPROVED
+  REJECTED
+  REPLACEMENT_REQUIRED
+}
+
+enum DocumentReviewReason {
+  UNREADABLE
+  CROPPED
+  WRONG_DOCUMENT
+  WRONG_SIDE
+  EXPIRED
+  DETAILS_MISMATCH
+  MISSING_INFORMATION
+  SUSPECTED_ALTERATION
+  DUPLICATE
+  OTHER
 }
 
 enum DocumentQuarantineStatus {
@@ -1027,6 +1059,7 @@ model DocumentRequirementRule {
   translations         DocumentRequirementTranslation[]
   uploadIntents        DocumentUploadIntent[]
   customerDocuments    CustomerDocument[]
+  reviewDecisions      CustomerDocumentReviewDecision[]
 
   @@id([documentPolicyConfigVersionId, documentTypeId])
   @@index([documentTypeId, mode])
@@ -1220,11 +1253,12 @@ model BusinessConfigurationRelease {
   validatedBy           User?                          @relation("ConfigurationReleaseValidatedBy", fields: [validatedById], references: [id], onDelete: Restrict)
   activatedBy           User?                          @relation("ConfigurationReleaseActivatedBy", fields: [activatedById], references: [id], onDelete: Restrict)
 
-  pricingSnapshots       BookingPricingSnapshot[]
-  auditEvents            AuditEvent[]
-  legalAcceptances       BookingLegalAcceptance[]
-  documentUploadSessions DocumentUploadSession[]
-  customerDocuments      CustomerDocument[]
+  pricingSnapshots        BookingPricingSnapshot[]
+  auditEvents             AuditEvent[]
+  legalAcceptances        BookingLegalAcceptance[]
+  documentUploadSessions  DocumentUploadSession[]
+  customerDocuments       CustomerDocument[]
+  documentReviewDecisions CustomerDocumentReviewDecision[]
 
   @@index([status])
   @@index([validationStatus])
@@ -1444,13 +1478,14 @@ model DocumentUploadSession {
   createdAt                     DateTime                    @default(now())
   updatedAt                     DateTime                    @updatedAt
 
-  customer             User                         @relation("DocumentUploadSessionCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
-  car                  Car                          @relation(fields: [carId], references: [id], onDelete: Restrict)
-  configurationRelease BusinessConfigurationRelease @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
-  documentPolicy       DocumentPolicyConfigVersion  @relation(fields: [documentPolicyConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
-  booking              Booking?                     @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customer             User                             @relation("DocumentUploadSessionCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
+  car                  Car                              @relation(fields: [carId], references: [id], onDelete: Restrict)
+  configurationRelease BusinessConfigurationRelease     @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  documentPolicy       DocumentPolicyConfigVersion      @relation(fields: [documentPolicyConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
+  booking              Booking?                         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   intents              DocumentUploadIntent[]
   customerDocuments    CustomerDocument[]
+  reviewDecisions      CustomerDocumentReviewDecision[]
 
   @@index([customerUserId, status, expiresAt])
   @@index([configurationReleaseId])
@@ -1534,46 +1569,54 @@ model CustomerDocument {
   createdAt             DateTime                     @default(now())
   updatedAt             DateTime                     @updatedAt
 
-  evidenceSchemaVersion         Int                       @default(1)
+  evidenceSchemaVersion         Int                        @default(1)
   uploadSessionId               String?
-  uploadIntentId                String?                   @unique
+  uploadIntentId                String?                    @unique
   configurationReleaseId        String?
   documentPolicyConfigVersionId String?
   documentRequirementTypeId     String?
   slotNumber                    Int?
   attemptNumber                 Int?
-  isCurrent                     Boolean                   @default(true)
+  isCurrent                     Boolean                    @default(true)
   replacesDocumentId            String?
   storageContainerId            String?
   storageObjectVersionId        String?
-  declaredMimeType              String?                   @db.VarChar(127)
+  declaredMimeType              String?                    @db.VarChar(127)
   filePolicyVersion             Int?
   quarantineStatus              DocumentQuarantineStatus?
   quarantinedAt                 DateTime?
   releasedFromQuarantineAt      DateTime?
   fileValidatorVersion          String?
   metadataVerifiedAt            DateTime?
-  verificationFailureCode       String?                   @db.VarChar(64)
-  scanAttemptCount              Int                       @default(0)
+  verificationFailureCode       String?                    @db.VarChar(64)
+  scanAttemptCount              Int                        @default(0)
   scanRequestedAt               DateTime?
   scanCompletedAt               DateTime?
-  scanResultCode                String?                   @db.VarChar(64)
+  scanResultCode                String?                    @db.VarChar(64)
   retentionBasis                DocumentRetentionBasis?
   retentionBasisAt              DateTime?
   retentionPolicyDaysSnapshot   Int?
   hardRetentionDaysSnapshot     Int?
   deletionEligibleAt            DateTime?
+  manualReviewStatus            DocumentManualReviewStatus @default(NOT_READY)
+  reviewRevision                Int                        @default(0)
+  reviewedById                  String?
+  reviewedAt                    DateTime?
+  reviewReasonCode              DocumentReviewReason?
+  safeReviewerNote              String?                    @db.VarChar(500)
 
-  booking              Booking?                      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  customer             User                          @relation("CustomerDocumentOwner", fields: [customerUserId], references: [id], onDelete: Restrict)
-  uploadedBy           User                          @relation("CustomerDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
-  documentType         DocumentTypeDefinition        @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
-  uploadSession        DocumentUploadSession?        @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
-  uploadIntent         DocumentUploadIntent?         @relation(fields: [uploadIntentId], references: [id], onDelete: Restrict)
-  configurationRelease BusinessConfigurationRelease? @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
-  documentRequirement  DocumentRequirementRule?      @relation(fields: [documentPolicyConfigVersionId, documentRequirementTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
-  replacesDocument     CustomerDocument?             @relation("CustomerDocumentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
-  replacementDocuments CustomerDocument[]            @relation("CustomerDocumentReplacement")
+  booking              Booking?                         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  customer             User                             @relation("CustomerDocumentOwner", fields: [customerUserId], references: [id], onDelete: Restrict)
+  uploadedBy           User                             @relation("CustomerDocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  documentType         DocumentTypeDefinition           @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  uploadSession        DocumentUploadSession?           @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
+  uploadIntent         DocumentUploadIntent?            @relation(fields: [uploadIntentId], references: [id], onDelete: Restrict)
+  configurationRelease BusinessConfigurationRelease?    @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  documentRequirement  DocumentRequirementRule?         @relation(fields: [documentPolicyConfigVersionId, documentRequirementTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
+  replacesDocument     CustomerDocument?                @relation("CustomerDocumentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
+  replacementDocuments CustomerDocument[]               @relation("CustomerDocumentReplacement")
+  reviewedBy           User?                            @relation("CustomerDocumentReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewDecisions      CustomerDocumentReviewDecision[]
   scanAttempts         DocumentMalwareScanAttempt[]
   legalHolds           DocumentLegalHold[]
   deletionRequests     DocumentDeletionRequest[]
@@ -1594,6 +1637,46 @@ model CustomerDocument {
   @@index([scanStatus, scanRequestedAt])
   @@index([legalHold, retentionUntil])
   @@index([deletionStatus, deletionEligibleAt])
+  @@index([manualReviewStatus])
+  @@index([reviewedById, reviewedAt])
+  @@index([manualReviewStatus, createdAt, id])
+  @@index([manualReviewStatus, metadataVerifiedAt, id])
+}
+
+model CustomerDocumentReviewDecision {
+  id                            String                     @id @default(cuid())
+  customerDocumentId            String
+  decisionVersion               Int
+  previousStatus                DocumentManualReviewStatus
+  decision                      DocumentReviewDecision
+  reasonCode                    DocumentReviewReason?
+  safeReviewerNote              String?                    @db.VarChar(500)
+  reviewedById                  String
+  reviewedAt                    DateTime                   @default(now())
+  configurationReleaseId        String
+  documentPolicyConfigVersionId String
+  documentRequirementTypeId     String
+  uploadSessionId               String
+  customerUserId                String
+  slotNumber                    Int
+  side                          DocumentSide
+  attemptNumber                 Int
+  createdAt                     DateTime                   @default(now())
+
+  customerDocument     CustomerDocument             @relation(fields: [customerDocumentId], references: [id], onDelete: Restrict)
+  reviewedBy           User                         @relation("CustomerDocumentDecisionReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+  customer             User                         @relation("CustomerDocumentDecisionCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
+  configurationRelease BusinessConfigurationRelease @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
+  documentRequirement  DocumentRequirementRule      @relation(fields: [documentPolicyConfigVersionId, documentRequirementTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
+  uploadSession        DocumentUploadSession        @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([customerDocumentId, decisionVersion])
+  @@index([reviewedById, reviewedAt])
+  @@index([decision, reviewedAt])
+  @@index([configurationReleaseId, reviewedAt])
+  @@index([documentPolicyConfigVersionId, documentRequirementTypeId])
+  @@index([uploadSessionId, reviewedAt])
+  @@index([customerUserId, reviewedAt])
 }
 
 model DocumentMalwareScanAttempt {
