@@ -115,6 +115,8 @@ describe("Phase 8D readiness issue codes", () => {
     uploadStatus: "READY",
     scanStatus: "CLEAN",
     scanAttemptCount: 1,
+    manualReviewStatus: "NOT_READY",
+    reviewRevision: 0,
     isCurrent: true,
     retentionUntil: new Date(basisAt.getTime() + 9 * day),
     deletionEligibleAt: new Date(basisAt.getTime() + 9 * day),

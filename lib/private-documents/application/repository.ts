@@ -56,6 +56,7 @@ export interface IntentRecord {
     | "UPLOADED"
     | "VERIFYING"
     | "QUARANTINED"
+    | "TECHNICALLY_VALID"
     | "SCAN_PENDING"
     | "CLEAN"
     | "REJECTED"
@@ -70,6 +71,7 @@ export interface IntentRecord {
 }
 export interface DocumentRecord {
   id: string;
+  bookingId?: string;
   customerUserId: string;
   uploadedById: string;
   documentTypeId: string;
@@ -82,7 +84,13 @@ export interface DocumentRecord {
   documentPolicyConfigVersionId: string;
   object: PrivateObjectReference;
   validation: ValidatedDocumentFile;
-  uploadStatus: "UPLOADED" | "VERIFYING" | "READY" | "REJECTED" | "FAILED";
+  uploadStatus:
+    | "UPLOADED"
+    | "VERIFYING"
+    | "TECHNICALLY_VALID"
+    | "READY"
+    | "REJECTED"
+    | "FAILED";
   scanStatus:
     | "PENDING"
     | "CLEAN"
@@ -91,8 +99,20 @@ export interface DocumentRecord {
     | "TIMEOUT"
     | "UNSUPPORTED"
     | "PASSWORD_PROTECTED"
-    | "FAILED";
+    | "FAILED"
+    | "NOT_AVAILABLE";
   scanAttemptCount: number;
+  manualReviewStatus:
+    | "NOT_READY"
+    | "PENDING_REVIEW"
+    | "APPROVED"
+    | "REJECTED"
+    | "REPLACEMENT_REQUIRED";
+  reviewRevision: number;
+  reviewedById?: string;
+  reviewedAt?: Date;
+  reviewReasonCode?: DocumentReviewReasonValue;
+  safeReviewerNote?: string;
   isCurrent: boolean;
   replacesDocumentId?: string;
   retentionUntil: Date;
@@ -106,6 +126,50 @@ export interface DocumentRecord {
   legalHold: boolean;
   deletionStatus: "RETAINED" | "SCHEDULED" | "DELETED" | "FAILED";
   deletedAt?: Date;
+}
+
+export type DocumentReviewReasonValue =
+  | "UNREADABLE"
+  | "CROPPED"
+  | "WRONG_DOCUMENT"
+  | "WRONG_SIDE"
+  | "EXPIRED"
+  | "DETAILS_MISMATCH"
+  | "MISSING_INFORMATION"
+  | "SUSPECTED_ALTERATION"
+  | "DUPLICATE"
+  | "OTHER";
+
+export interface ReviewDecisionRecord {
+  id: string;
+  customerDocumentId: string;
+  decisionVersion: number;
+  previousStatus: "PENDING_REVIEW";
+  decision: "APPROVED" | "REJECTED" | "REPLACEMENT_REQUIRED";
+  reasonCode?: DocumentReviewReasonValue;
+  safeReviewerNote?: string;
+  reviewedById: string;
+  reviewedAt: Date;
+  configurationReleaseId: string;
+  documentPolicyConfigVersionId: string;
+  documentRequirementTypeId: string;
+  uploadSessionId: string;
+  customerUserId: string;
+  slotNumber: number;
+  side: "SINGLE" | "FRONT" | "BACK";
+  attemptNumber: number;
+}
+
+export interface ReviewQueueItem {
+  documentId: string;
+  bookingId?: string;
+  documentTypeId: string;
+  side: "SINGLE" | "FRONT" | "BACK";
+  slotNumber: number;
+  attemptNumber: number;
+  status: DocumentRecord["manualReviewStatus"];
+  uploadedAt: Date;
+  pendingAgeMs: number;
 }
 export interface LegalHoldRecord {
   id: string;
@@ -176,6 +240,32 @@ export interface DocumentLifecycleRepository {
     approvedObject: PrivateObjectReference,
   ): Promise<DocumentRecord>;
   listSessionDocuments(sessionId: string): Promise<DocumentRecord[]>;
+  recordReviewDecision(input: {
+    documentId: string;
+    expectedReviewRevision: number;
+    reviewerId: string;
+    decision: ReviewDecisionRecord["decision"];
+    reasonCode?: DocumentReviewReasonValue;
+    safeReviewerNote?: string;
+  }): Promise<DocumentRecord>;
+  listReviewDecisions(documentId: string): Promise<ReviewDecisionRecord[]>;
+  listReviewQueue(input: {
+    statuses: DocumentRecord["manualReviewStatus"][];
+    documentTypeId?: string;
+    bookingId?: string;
+    uploadedFrom?: Date;
+    uploadedTo?: Date;
+    minimumPendingAgeMs?: number;
+    cursor?: string;
+    limit: number;
+    now: Date;
+  }): Promise<{ items: ReviewQueueItem[]; nextCursor?: string }>;
+  countPendingReviews(olderThan?: Date): Promise<number>;
+  hasKnownObject(input: {
+    providerKey: string;
+    containerId: string;
+    objectKey: string;
+  }): Promise<boolean>;
   appendScanAttempt(
     documentId: string,
     result: NormalizedScanResult,

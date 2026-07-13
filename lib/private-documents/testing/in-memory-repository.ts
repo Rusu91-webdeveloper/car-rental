@@ -9,6 +9,7 @@ import type {
   IntentRecord,
   LegalHoldRecord,
   PolicyRecord,
+  ReviewDecisionRecord,
   SessionRecord,
 } from "../application/repository";
 
@@ -19,6 +20,7 @@ export class InMemoryDocumentLifecycleRepository implements DocumentLifecycleRep
   holds = new Map<string, LegalHoldRecord>();
   deletions = new Map<string, DeletionRecord>();
   audits: SafeAuditInput[] = [];
+  reviewDecisions = new Map<string, ReviewDecisionRecord[]>();
   private scanEvents = new Map<
     string,
     { documentId: string; attemptNumber: number }
@@ -106,7 +108,8 @@ export class InMemoryDocumentLifecycleRepository implements DocumentLifecycleRep
       [...this.documents.values()].some(
         (value) =>
           value.replacesDocumentId === record.replacesDocumentId &&
-          ["UPLOADED", "VERIFYING"].includes(value.uploadStatus) &&
+          (["UPLOADED", "VERIFYING"].includes(value.uploadStatus) ||
+            value.manualReviewStatus === "PENDING_REVIEW") &&
           value.deletionStatus !== "DELETED",
       )
     )
@@ -163,6 +166,145 @@ export class InMemoryDocumentLifecycleRepository implements DocumentLifecycleRep
     return [...this.documents.values()]
       .filter((value) => value.uploadSessionId === sessionId)
       .map((value) => structuredClone(value));
+  }
+  async recordReviewDecision(input: {
+    documentId: string;
+    expectedReviewRevision: number;
+    reviewerId: string;
+    decision: ReviewDecisionRecord["decision"];
+    reasonCode?: ReviewDecisionRecord["reasonCode"];
+    safeReviewerNote?: string;
+  }) {
+    const document = this.documents.get(input.documentId);
+    if (!document)
+      documentError("DOCUMENT_UPLOAD_NOT_FOUND", "Document not found.");
+    if (
+      document.reviewRevision !== input.expectedReviewRevision ||
+      document.manualReviewStatus !== "PENDING_REVIEW"
+    )
+      documentError(
+        "DOCUMENT_REVIEW_STALE_REVISION",
+        "Document review revision is stale.",
+      );
+    const decisions = this.reviewDecisions.get(document.id) ?? [];
+    const reviewedAt = new Date();
+    const decisionVersion = input.expectedReviewRevision + 1;
+    const decision: ReviewDecisionRecord = {
+      id: randomUUID(),
+      customerDocumentId: document.id,
+      decisionVersion,
+      previousStatus: "PENDING_REVIEW",
+      decision: input.decision,
+      reasonCode: input.reasonCode,
+      safeReviewerNote: input.safeReviewerNote,
+      reviewedById: input.reviewerId,
+      reviewedAt,
+      configurationReleaseId: document.configurationReleaseId,
+      documentPolicyConfigVersionId: document.documentPolicyConfigVersionId,
+      documentRequirementTypeId: document.documentTypeId,
+      uploadSessionId: document.uploadSessionId,
+      customerUserId: document.customerUserId,
+      slotNumber: document.slotNumber,
+      side: document.side,
+      attemptNumber: document.attemptNumber,
+    };
+    if (input.decision === "APPROVED" && document.replacesDocumentId) {
+      const predecessor = this.documents.get(document.replacesDocumentId);
+      if (!predecessor?.isCurrent)
+        documentError(
+          "DOCUMENT_REVIEW_STALE_REVISION",
+          "Replacement predecessor is stale.",
+        );
+      predecessor.isCurrent = false;
+      document.isCurrent = true;
+    }
+    decisions.push(decision);
+    this.reviewDecisions.set(document.id, decisions);
+    Object.assign(document, {
+      manualReviewStatus: input.decision,
+      reviewRevision: decisionVersion,
+      reviewedById: input.reviewerId,
+      reviewedAt,
+      reviewReasonCode: input.reasonCode,
+      safeReviewerNote: input.safeReviewerNote,
+      object: {
+        ...document.object,
+        namespace:
+          input.decision === "APPROVED" ? "approved" : "quarantine",
+      },
+    });
+    return structuredClone(document);
+  }
+  async listReviewDecisions(documentId: string) {
+    return structuredClone(this.reviewDecisions.get(documentId) ?? []);
+  }
+  async listReviewQueue(input: {
+    statuses: DocumentRecord["manualReviewStatus"][];
+    documentTypeId?: string;
+    bookingId?: string;
+    uploadedFrom?: Date;
+    uploadedTo?: Date;
+    minimumPendingAgeMs?: number;
+    cursor?: string;
+    limit: number;
+    now: Date;
+  }) {
+    const rows = [...this.documents.values()]
+      .filter(
+        (document) =>
+          input.statuses.includes(document.manualReviewStatus) &&
+          (!input.documentTypeId ||
+            document.documentTypeId === input.documentTypeId) &&
+          (!input.bookingId || document.bookingId === input.bookingId) &&
+          document.deletionStatus !== "DELETED",
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const start = input.cursor
+      ? Math.max(0, rows.findIndex((row) => row.id === input.cursor) + 1)
+      : 0;
+    const page = rows.slice(start, start + input.limit);
+    return {
+      items: page.map((document) => ({
+        documentId: document.id,
+        bookingId: document.bookingId,
+        documentTypeId: document.documentTypeId,
+        side: document.side,
+        slotNumber: document.slotNumber,
+        attemptNumber: document.attemptNumber,
+        status: document.manualReviewStatus,
+        uploadedAt: new Date(0),
+        pendingAgeMs: input.now.getTime(),
+      })),
+      nextCursor:
+        start + input.limit < rows.length ? page.at(-1)?.id : undefined,
+    };
+  }
+  async countPendingReviews() {
+    return [...this.documents.values()].filter(
+      (document) =>
+        document.manualReviewStatus === "PENDING_REVIEW" &&
+        document.deletionStatus !== "DELETED",
+    ).length;
+  }
+  async hasKnownObject(input: {
+    providerKey: string;
+    containerId: string;
+    objectKey: string;
+  }) {
+    return (
+      [...this.documents.values()].some(
+        (document) =>
+          document.object.providerKey === input.providerKey &&
+          document.object.containerId === input.containerId &&
+          document.object.objectKey === input.objectKey,
+      ) ||
+      [...this.intents.values()].some(
+        (intent) =>
+          intent.object.providerKey === input.providerKey &&
+          intent.object.containerId === input.containerId &&
+          intent.object.objectKey === input.objectKey,
+      )
+    );
   }
   async appendScanAttempt(documentId: string, result: NormalizedScanResult) {
     const duplicate = this.scanEvents.get(result.providerEventId);

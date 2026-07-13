@@ -14,6 +14,7 @@ import type {
 const HOUR = 3_600_000;
 const TERMINAL_INTENTS = new Set([
   "CLEAN",
+  "TECHNICALLY_VALID",
   "REJECTED",
   "FAILED",
   "ABORTED",
@@ -27,6 +28,9 @@ export class PrivateDocumentLifecycleService {
     private readonly scanner: MalwareScanner,
     private readonly now: () => Date = () => new Date(),
     private readonly maximumScanAttempts = 3,
+    private readonly processingMode:
+      | "MANUAL_REVIEW"
+      | "AUTOMATED_SCANNER" = "AUTOMATED_SCANNER",
   ) {}
 
   async createDocumentUploadSession(input: {
@@ -352,17 +356,17 @@ export class PrivateDocumentLifecycleService {
       });
       throw error;
     }
-    const uploadPath = [
+    const uploadPath: IntentRecord["status"][] = [
       "INTENT_CREATED",
       "UPLOADING",
       "UPLOADED",
       "VERIFYING",
       "QUARANTINED",
-      "SCAN_PENDING",
-    ] as const;
-    const currentIndex = uploadPath.indexOf(
-      intent.status as (typeof uploadPath)[number],
-    );
+      this.processingMode === "MANUAL_REVIEW"
+        ? "TECHNICALLY_VALID"
+        : "SCAN_PENDING",
+    ];
+    const currentIndex = uploadPath.indexOf(intent.status);
     if (currentIndex < 0)
       documentError(
         "DOCUMENT_SESSION_ALREADY_COMPLETED",
@@ -406,9 +410,20 @@ export class PrivateDocumentLifecycleService {
         documentPolicyConfigVersionId: session.documentPolicyConfigVersionId,
         object: intent.object,
         validation,
-        uploadStatus: "VERIFYING",
-        scanStatus: "PENDING",
+        uploadStatus:
+          this.processingMode === "MANUAL_REVIEW"
+            ? "TECHNICALLY_VALID"
+            : "VERIFYING",
+        scanStatus:
+          this.processingMode === "MANUAL_REVIEW"
+            ? "NOT_AVAILABLE"
+            : "PENDING",
         scanAttemptCount: 0,
+        manualReviewStatus:
+          this.processingMode === "MANUAL_REVIEW"
+            ? "PENDING_REVIEW"
+            : "NOT_READY",
+        reviewRevision: 0,
         isCurrent: !intent.replacesDocumentId,
         replacesDocumentId: intent.replacesDocumentId,
         retentionUntil: retention.retentionUntil,
@@ -429,6 +444,23 @@ export class PrivateDocumentLifecycleService {
         detectedFileType: validation.detectedFileType,
       },
     });
+    if (this.processingMode === "MANUAL_REVIEW") {
+      await this.repository.audit({
+        actorUserId: input.customerUserId,
+        action: intent.replacesDocumentId
+          ? "document.replacement_uploaded"
+          : "document.entered_pending_review",
+        targetType: "CustomerDocument",
+        targetId: document.id,
+        customerDocumentId: document.id,
+        configurationReleaseId: session.configurationReleaseId,
+        metadata: {
+          technicalValidation: "PASSED",
+          manualReviewStatus: "PENDING_REVIEW",
+        },
+      });
+      return document;
+    }
     const request = await this.scanner.requestScan({
       idempotencyKey: `scan:${document.id}:${document.scanAttemptCount + 1}`,
       object: intent.object,

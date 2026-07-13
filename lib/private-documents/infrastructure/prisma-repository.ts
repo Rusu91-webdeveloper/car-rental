@@ -4,6 +4,7 @@ import type {
   DocumentDeletionAttempt,
   DocumentDeletionRequest,
   DocumentUploadIntent,
+  Prisma,
   PrismaClient,
 } from "@prisma/client";
 import { documentError } from "../domain/errors";
@@ -16,6 +17,7 @@ import type {
   IntentRecord,
   LegalHoldRecord,
   PolicyRecord,
+  ReviewDecisionRecord,
   SessionRecord,
 } from "../application/repository";
 
@@ -256,7 +258,9 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
         verificationStartedAt: changes.status === "VERIFYING" ? now : undefined,
         completedAt:
           changes.status &&
-          ["CLEAN", "REJECTED", "FAILED"].includes(changes.status)
+          ["TECHNICALLY_VALID", "CLEAN", "REJECTED", "FAILED"].includes(
+            changes.status,
+          )
             ? now
             : undefined,
         abortedAt: changes.status === "ABORTED" ? now : undefined,
@@ -272,6 +276,7 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
   private mapDocument(row: CustomerDocument): DocumentRecord {
     return {
       id: row.id,
+      bookingId: row.bookingId ?? undefined,
       customerUserId: row.customerUserId,
       uploadedById: row.uploadedById,
       documentTypeId: row.documentTypeId,
@@ -294,6 +299,12 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
       uploadStatus: row.uploadStatus,
       scanStatus: row.scanStatus,
       scanAttemptCount: row.scanAttemptCount,
+      manualReviewStatus: row.manualReviewStatus,
+      reviewRevision: row.reviewRevision,
+      reviewedById: row.reviewedById ?? undefined,
+      reviewedAt: row.reviewedAt ?? undefined,
+      reviewReasonCode: row.reviewReasonCode ?? undefined,
+      safeReviewerNote: row.safeReviewerNote ?? undefined,
       isCurrent: row.isCurrent,
       replacesDocumentId: row.replacesDocumentId ?? undefined,
       retentionUntil: row.retentionUntil,
@@ -346,7 +357,13 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
         fileValidatorVersion: "phase8d-validator-v1",
         metadataVerifiedAt: new Date(),
         scanAttemptCount: 0,
-        scanRequestedAt: new Date(),
+        scanRequestedAt: record.scanStatus === "PENDING" ? new Date() : null,
+        manualReviewStatus: record.manualReviewStatus,
+        reviewRevision: record.reviewRevision,
+        reviewedById: record.reviewedById,
+        reviewedAt: record.reviewedAt,
+        reviewReasonCode: record.reviewReasonCode,
+        safeReviewerNote: record.safeReviewerNote,
         retentionBasis: record.retentionBasis,
         retentionBasisAt: new Date(),
         retentionPolicyDaysSnapshot: 90,
@@ -423,6 +440,280 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
       });
       return this.mapDocument(row);
     });
+  }
+  async recordReviewDecision(input: {
+    documentId: string;
+    expectedReviewRevision: number;
+    reviewerId: string;
+    decision: ReviewDecisionRecord["decision"];
+    reasonCode?: ReviewDecisionRecord["reasonCode"];
+    safeReviewerNote?: string;
+  }) {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "CustomerDocument" WHERE id = ${input.documentId} FOR UPDATE`;
+      const document = await tx.customerDocument.findUnique({
+        where: { id: input.documentId },
+      });
+      if (!document)
+        documentError("DOCUMENT_UPLOAD_NOT_FOUND", "Document not found.");
+      if (
+        document.reviewRevision !== input.expectedReviewRevision ||
+        document.manualReviewStatus !== "PENDING_REVIEW"
+      )
+        documentError(
+          "DOCUMENT_REVIEW_STALE_REVISION",
+          "Document review revision is stale.",
+        );
+      if (
+        document.uploadStatus !== "TECHNICALLY_VALID" ||
+        document.scanStatus !== "NOT_AVAILABLE" ||
+        document.scanAttemptCount !== 0 ||
+        document.scanRequestedAt ||
+        document.scanCompletedAt ||
+        document.scanResultCode ||
+        document.scanProviderReference ||
+        document.deletionStatus !== "RETAINED" ||
+        !document.configurationReleaseId ||
+        !document.documentPolicyConfigVersionId ||
+        !document.documentRequirementTypeId ||
+        !document.uploadSessionId ||
+        !document.slotNumber ||
+        !document.attemptNumber
+      )
+        documentError(
+          "DOCUMENT_REVIEW_NOT_PENDING",
+          "Document is not valid pending-review evidence.",
+        );
+
+      const [{ reviewedAt }] = await tx.$queryRaw<
+        Array<{ reviewedAt: Date }>
+      >`SELECT transaction_timestamp()::timestamp(3) AS "reviewedAt"`;
+      const decisionVersion = input.expectedReviewRevision + 1;
+
+      if (input.decision === "APPROVED" && document.replacesDocumentId) {
+        const predecessor = await tx.customerDocument.updateMany({
+          where: {
+            id: document.replacesDocumentId,
+            isCurrent: true,
+            deletionStatus: { not: "DELETED" },
+          },
+          data: { isCurrent: false },
+        });
+        if (predecessor.count !== 1)
+          documentError(
+            "DOCUMENT_REVIEW_STALE_REVISION",
+            "Replacement predecessor is no longer current.",
+          );
+      }
+
+      await tx.customerDocumentReviewDecision.create({
+        data: {
+          id: randomUUID(),
+          customerDocumentId: document.id,
+          decisionVersion,
+          previousStatus: "PENDING_REVIEW",
+          decision: input.decision,
+          reasonCode: input.reasonCode,
+          safeReviewerNote: input.safeReviewerNote,
+          reviewedById: input.reviewerId,
+          reviewedAt,
+          configurationReleaseId: document.configurationReleaseId,
+          documentPolicyConfigVersionId:
+            document.documentPolicyConfigVersionId,
+          documentRequirementTypeId: document.documentRequirementTypeId,
+          uploadSessionId: document.uploadSessionId,
+          customerUserId: document.customerUserId,
+          slotNumber: document.slotNumber,
+          side: document.side,
+          attemptNumber: document.attemptNumber,
+        },
+      });
+
+      const updated = await tx.customerDocument.updateMany({
+        where: {
+          id: document.id,
+          reviewRevision: input.expectedReviewRevision,
+          manualReviewStatus: "PENDING_REVIEW",
+          deletionStatus: "RETAINED",
+        },
+        data: {
+          manualReviewStatus: input.decision,
+          reviewRevision: decisionVersion,
+          reviewedById: input.reviewerId,
+          reviewedAt,
+          reviewReasonCode: input.reasonCode,
+          safeReviewerNote: input.safeReviewerNote,
+          quarantineStatus:
+            input.decision === "APPROVED" ? "RELEASED" : "REJECTED",
+          releasedFromQuarantineAt:
+            input.decision === "APPROVED" ? reviewedAt : undefined,
+          isCurrent:
+            input.decision === "APPROVED" && document.replacesDocumentId
+              ? true
+              : undefined,
+        },
+      });
+      if (updated.count !== 1)
+        documentError(
+          "DOCUMENT_REVIEW_STALE_REVISION",
+          "Concurrent document review won the optimistic update.",
+        );
+
+      await tx.auditEvent.create({
+        data: {
+          actorUserId: input.reviewerId,
+          category: "DOCUMENT",
+          action:
+            input.decision === "APPROVED"
+              ? document.replacesDocumentId
+                ? "document.replacement_approved"
+                : "document.approved"
+              : input.decision === "REJECTED"
+                ? "document.rejected"
+                : "document.replacement_requested",
+          targetType: "CustomerDocument",
+          targetId: document.id,
+          customerDocumentId: document.id,
+          configurationReleaseId: document.configurationReleaseId,
+          metadata: input.reasonCode
+            ? ({ reasonCode: input.reasonCode } as Prisma.InputJsonValue)
+            : undefined,
+        },
+      });
+      const result = await tx.customerDocument.findUniqueOrThrow({
+        where: { id: document.id },
+      });
+      return this.mapDocument(result);
+    });
+  }
+  async listReviewDecisions(documentId: string) {
+    const rows = await this.db.customerDocumentReviewDecision.findMany({
+      where: { customerDocumentId: documentId },
+      orderBy: { decisionVersion: "asc" },
+    });
+    return rows.map(
+      (row): ReviewDecisionRecord => ({
+        id: row.id,
+        customerDocumentId: row.customerDocumentId,
+        decisionVersion: row.decisionVersion,
+        previousStatus: "PENDING_REVIEW",
+        decision: row.decision,
+        reasonCode: row.reasonCode ?? undefined,
+        safeReviewerNote: row.safeReviewerNote ?? undefined,
+        reviewedById: row.reviewedById,
+        reviewedAt: row.reviewedAt,
+        configurationReleaseId: row.configurationReleaseId,
+        documentPolicyConfigVersionId:
+          row.documentPolicyConfigVersionId,
+        documentRequirementTypeId: row.documentRequirementTypeId,
+        uploadSessionId: row.uploadSessionId,
+        customerUserId: row.customerUserId,
+        slotNumber: row.slotNumber,
+        side: row.side,
+        attemptNumber: row.attemptNumber,
+      }),
+    );
+  }
+  async listReviewQueue(input: {
+    statuses: DocumentRecord["manualReviewStatus"][];
+    documentTypeId?: string;
+    bookingId?: string;
+    uploadedFrom?: Date;
+    uploadedTo?: Date;
+    minimumPendingAgeMs?: number;
+    cursor?: string;
+    limit: number;
+    now: Date;
+  }) {
+    const rows = await this.db.customerDocument.findMany({
+      where: {
+        manualReviewStatus: { in: input.statuses },
+        documentTypeId: input.documentTypeId,
+        bookingId: input.bookingId,
+        createdAt:
+          input.uploadedFrom ||
+          input.uploadedTo ||
+          input.minimumPendingAgeMs !== undefined
+            ? {
+                gte: input.uploadedFrom,
+                lte:
+                  input.minimumPendingAgeMs !== undefined
+                    ? new Date(
+                        Math.min(
+                          input.uploadedTo?.getTime() ?? Number.MAX_SAFE_INTEGER,
+                          input.now.getTime() - input.minimumPendingAgeMs,
+                        ),
+                      )
+                    : input.uploadedTo,
+              }
+            : undefined,
+        deletionStatus: { not: "DELETED" },
+      },
+      select: {
+        id: true,
+        bookingId: true,
+        documentTypeId: true,
+        side: true,
+        slotNumber: true,
+        attemptNumber: true,
+        manualReviewStatus: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      cursor: input.cursor ? { id: input.cursor } : undefined,
+      skip: input.cursor ? 1 : undefined,
+      take: input.limit + 1,
+    });
+    const hasMore = rows.length > input.limit;
+    const page = rows.slice(0, input.limit);
+    return {
+      items: page.map((row) => ({
+        documentId: row.id,
+        bookingId: row.bookingId ?? undefined,
+        documentTypeId: row.documentTypeId,
+        side: row.side,
+        slotNumber: row.slotNumber!,
+        attemptNumber: row.attemptNumber!,
+        status: row.manualReviewStatus,
+        uploadedAt: row.createdAt,
+        pendingAgeMs: Math.max(0, input.now.getTime() - row.createdAt.getTime()),
+      })),
+      nextCursor: hasMore ? page.at(-1)?.id : undefined,
+    };
+  }
+  async countPendingReviews(olderThan?: Date) {
+    return this.db.customerDocument.count({
+      where: {
+        manualReviewStatus: "PENDING_REVIEW",
+        createdAt: olderThan ? { lte: olderThan } : undefined,
+        deletionStatus: { not: "DELETED" },
+      },
+    });
+  }
+  async hasKnownObject(input: {
+    providerKey: string;
+    containerId: string;
+    objectKey: string;
+  }) {
+    const [document, intent] = await Promise.all([
+      this.db.customerDocument.findFirst({
+        where: {
+          storageProviderId: input.providerKey,
+          storageContainerId: input.containerId,
+          storageKey: input.objectKey,
+        },
+        select: { id: true },
+      }),
+      this.db.documentUploadIntent.findFirst({
+        where: {
+          storageProviderId: input.providerKey,
+          storageContainerId: input.containerId,
+          storageKey: input.objectKey,
+        },
+        select: { id: true },
+      }),
+    ]);
+    return Boolean(document || intent);
   }
   async listSessionDocuments(sessionId: string) {
     return (

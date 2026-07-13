@@ -8,6 +8,8 @@ export interface PrivateDocumentEnvironment {
   production: boolean;
   featureEnabled: boolean;
   storageProvider: PrivateDocumentStorageProvider;
+  reviewMode: "manual" | "scanner";
+  scannerPathEnabled: boolean;
   expectedStoreId?: string;
   actualStoreId?: string;
   expectedRegion: string;
@@ -39,6 +41,9 @@ export function readPrivateDocumentEnvironment(
   const provider = env.PRIVATE_DOCUMENT_STORAGE_PROVIDER;
   const storageProvider: PrivateDocumentStorageProvider =
     provider === "vercel-blob-private" ? provider : "local-private";
+  const reviewMode =
+    env.PRIVATE_DOCUMENT_REVIEW_MODE === "scanner" ? "scanner" : "manual";
+  const scannerPathEnabled = env.PRIVATE_DOCUMENT_SCANNER_ENABLED === "true";
   const maximumUploadBytes = positiveInteger(
     env.PRIVATE_DOCUMENT_MAXIMUM_UPLOAD_BYTES,
     DOCUMENT_FILE_POLICY.maximumBytes,
@@ -83,6 +88,10 @@ export function readPrivateDocumentEnvironment(
     issues.push("DOCUMENT_PRODUCTION_STORAGE_NOT_CONFIGURED");
   if (production && env.PRIVATE_DOCUMENTS_ENABLED !== "true")
     issues.push("DOCUMENT_PRIVATE_DOCUMENTS_DISABLED");
+  if (production && reviewMode !== "manual")
+    issues.push("DOCUMENT_MANUAL_REVIEW_NOT_CONFIGURED");
+  if (production && scannerPathEnabled)
+    issues.push("DOCUMENT_SCANNER_PATH_MUST_BE_DISABLED");
   if (storageProvider === "vercel-blob-private") {
     if (!expectedStoreId) issues.push("DOCUMENT_BLOB_EXPECTED_STORE_MISSING");
     if (!actualStoreId) issues.push("DOCUMENT_BLOB_ACTUAL_STORE_MISSING");
@@ -100,6 +109,8 @@ export function readPrivateDocumentEnvironment(
     production,
     featureEnabled: env.PRIVATE_DOCUMENTS_ENABLED === "true",
     storageProvider,
+    reviewMode,
+    scannerPathEnabled,
     expectedStoreId,
     actualStoreId,
     expectedRegion,

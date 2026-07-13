@@ -7,11 +7,18 @@ import {
   type PolicyPermission,
 } from "../authorization/service";
 import type { DocumentLifecycleRepository } from "./repository";
+import {
+  requireRecentAuthentication,
+  type RecentAuthenticationEvidence,
+  type RecentAuthenticationVerifier,
+} from "../authorization/recent-auth";
 
 export class DocumentLegalHoldService {
   constructor(
     private readonly repository: DocumentLifecycleRepository,
+    private readonly recentAuth: RecentAuthenticationVerifier,
     private readonly now: () => Date = () => new Date(),
+    private readonly recentAuthMaximumAgeMs = 10 * 60_000,
   ) {}
   async apply(input: {
     documentId: string;
@@ -19,12 +26,18 @@ export class DocumentLegalHoldService {
     permission: PolicyPermission;
     reason: string;
     reviewAt?: Date;
+    evidence?: RecentAuthenticationEvidence;
   }) {
     requireDocumentCapability(
       input.actor,
       CAPABILITIES.DOCUMENTS_LEGAL_HOLD_MANAGE,
       input.permission,
     );
+    await requireRecentAuthentication(this.recentAuth, {
+      userId: input.actor.userId,
+      evidence: input.evidence,
+      maximumAgeMs: this.recentAuthMaximumAgeMs,
+    });
     if (!input.reason.trim())
       documentError(
         "DOCUMENT_LEGAL_HOLD_REQUIRED_REASON",
@@ -61,12 +74,18 @@ export class DocumentLegalHoldService {
     actor: DocumentActor;
     permission: PolicyPermission;
     reason: string;
+    evidence?: RecentAuthenticationEvidence;
   }) {
     requireDocumentCapability(
       input.actor,
       CAPABILITIES.DOCUMENTS_LEGAL_HOLD_MANAGE,
       input.permission,
     );
+    await requireRecentAuthentication(this.recentAuth, {
+      userId: input.actor.userId,
+      evidence: input.evidence,
+      maximumAgeMs: this.recentAuthMaximumAgeMs,
+    });
     if (!input.reason.trim())
       documentError(
         "DOCUMENT_LEGAL_HOLD_REQUIRED_REASON",

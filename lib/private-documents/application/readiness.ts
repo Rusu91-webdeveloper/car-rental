@@ -3,6 +3,8 @@ export type ReadinessCode =
   | "DOCUMENT_READY"
   | "DOCUMENT_MISSING"
   | "DOCUMENT_PENDING_SCAN"
+  | "DOCUMENT_PENDING_REVIEW"
+  | "DOCUMENT_REPLACEMENT_REQUIRED"
   | "DOCUMENT_REJECTED"
   | "DOCUMENT_EXPIRED"
   | "DOCUMENT_INVALID_PROVENANCE"
@@ -11,8 +13,10 @@ export function resolveDocumentReadiness(input: {
   session: SessionRecord;
   documents: DocumentRecord[];
   now?: Date;
+  mode?: "MANUAL_REVIEW" | "AUTOMATED_SCANNER";
 }) {
   const now = input.now ?? new Date();
+  const mode = input.mode ?? "AUTOMATED_SCANNER";
   if (input.session.expiresAt <= now && input.session.status !== "CONSUMED")
     return {
       ready: false,
@@ -50,8 +54,12 @@ export function resolveDocumentReadiness(input: {
     document.isCurrent &&
     document.deletionStatus === "RETAINED" &&
     document.retentionUntil > now &&
-    document.uploadStatus === "READY" &&
-    document.scanStatus === "CLEAN";
+    (mode === "MANUAL_REVIEW"
+      ? document.uploadStatus === "TECHNICALLY_VALID" &&
+        document.scanStatus === "NOT_AVAILABLE" &&
+        document.scanAttemptCount === 0 &&
+        document.manualReviewStatus === "APPROVED"
+      : document.uploadStatus === "READY" && document.scanStatus === "CLEAN");
   const missing: Array<{
     documentTypeId: string;
     side: string;
@@ -89,13 +97,29 @@ export function resolveDocumentReadiness(input: {
             )
           )
             code = "DOCUMENT_INVALID_PROVENANCE";
+          else if (
+            mode === "MANUAL_REVIEW" &&
+            candidates.some(
+              (value) => value.manualReviewStatus === "PENDING_REVIEW",
+            )
+          )
+            code = "DOCUMENT_PENDING_REVIEW";
+          else if (
+            mode === "MANUAL_REVIEW" &&
+            candidates.some(
+              (value) =>
+                value.manualReviewStatus === "REPLACEMENT_REQUIRED",
+            )
+          )
+            code = "DOCUMENT_REPLACEMENT_REQUIRED";
           else if (candidates.some((value) => value.scanStatus === "PENDING"))
             code = "DOCUMENT_PENDING_SCAN";
           else if (
             candidates.some(
               (value) =>
                 ["REJECTED", "FAILED"].includes(value.uploadStatus) ||
-                value.scanStatus === "INFECTED",
+                value.scanStatus === "INFECTED" ||
+                value.manualReviewStatus === "REJECTED",
             )
           )
             code = "DOCUMENT_REJECTED";

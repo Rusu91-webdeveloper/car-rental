@@ -12,13 +12,20 @@ import {
   PROVISIONAL_RETENTION,
 } from "../retention/calculator";
 import type { DocumentLifecycleRepository } from "./repository";
+import {
+  requireRecentAuthentication,
+  type RecentAuthenticationEvidence,
+  type RecentAuthenticationVerifier,
+} from "../authorization/recent-auth";
 
 export class DocumentDeletionService {
   constructor(
     private readonly repository: DocumentLifecycleRepository,
     private readonly storage: PrivateDocumentStorage,
+    private readonly recentAuth: RecentAuthenticationVerifier,
     private readonly now: () => Date = () => new Date(),
     private readonly maximumAttempts = 3,
+    private readonly recentAuthMaximumAgeMs = 10 * 60_000,
   ) {}
   async request(input: {
     documentId: string;
@@ -26,12 +33,18 @@ export class DocumentDeletionService {
     actor: DocumentActor;
     permission: PolicyPermission;
     reason: string;
+    evidence?: RecentAuthenticationEvidence;
   }) {
     requireDocumentCapability(
       input.actor,
       CAPABILITIES.DOCUMENTS_DELETE,
       input.permission,
     );
+    await requireRecentAuthentication(this.recentAuth, {
+      userId: input.actor.userId,
+      evidence: input.evidence,
+      maximumAgeMs: this.recentAuthMaximumAgeMs,
+    });
     const existing = await this.repository.getDeletionByIdempotency(
       input.idempotencyKey,
     );

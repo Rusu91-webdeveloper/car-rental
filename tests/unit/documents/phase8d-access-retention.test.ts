@@ -70,6 +70,8 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       uploadStatus: "READY",
       scanStatus: "CLEAN",
       scanAttemptCount: 1,
+      manualReviewStatus: "NOT_READY",
+      reviewRevision: 0,
       isCurrent: true,
       retentionUntil: new Date(now.getTime() + 60_000),
       deletionEligibleAt: new Date(now.getTime() + 60_000),
@@ -102,7 +104,11 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       actor: actor([CAPABILITIES.DOCUMENTS_DOWNLOAD]),
       permission,
       purpose: "DOWNLOAD",
-      authenticatedAt: new Date(now.getTime() - 1_000),
+      evidence: {
+        provider: "google",
+        authenticatedAt: new Date(now.getTime() - 1_000),
+        serverVerified: true,
+      },
       recentAuthMaximumAgeMs: 60_000,
     });
     expect(grant.oneTime).toBe(true);
@@ -121,10 +127,14 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
         actor: actor([CAPABILITIES.DOCUMENTS_DOWNLOAD]),
         permission,
         purpose: "DOWNLOAD",
-        authenticatedAt: new Date(now.getTime() - 120_000),
+        evidence: {
+          provider: "google",
+          authenticatedAt: new Date(now.getTime() - 120_000),
+          serverVerified: true,
+        },
         recentAuthMaximumAgeMs: 60_000,
       }),
-    ).rejects.toMatchObject({ code: "DOCUMENT_RECENT_AUTH_REQUIRED" });
+    ).rejects.toMatchObject({ code: "RECENT_AUTH_EXPIRED" });
     await repository.updateDocument(document.id, {
       uploadStatus: "REJECTED",
       scanStatus: "INFECTED",
@@ -136,9 +146,14 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
         actor: actor([CAPABILITIES.DOCUMENTS_VIEW]),
         permission,
         purpose: "VIEW",
+        evidence: {
+          provider: "google",
+          authenticatedAt: now,
+          serverVerified: true,
+        },
         recentAuthMaximumAgeMs: 60_000,
       }),
-    ).rejects.toMatchObject({ code: "DOCUMENT_SCAN_NOT_CLEAN" });
+    ).rejects.toMatchObject({ code: "DOCUMENT_NOT_ACCESSIBLE" });
     expect(JSON.stringify(repository.audits)).not.toContain(grant.accessValue);
   });
 
@@ -147,10 +162,21 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       retentionUntil: new Date(now.getTime() - 1),
       deletionEligibleAt: new Date(now.getTime() - 1),
     });
-    const legalHold = new DocumentLegalHoldService(repository, () => now);
+    const recentAuth = new FakeRecentAuthenticationVerifier(() => now);
+    const evidence = {
+      provider: "google" as const,
+      authenticatedAt: now,
+      serverVerified: true as const,
+    };
+    const legalHold = new DocumentLegalHoldService(
+      repository,
+      recentAuth,
+      () => now,
+    );
     const deletion = new DocumentDeletionService(
       repository,
       storage,
+      recentAuth,
       () => now,
     );
     const holdActor = actor([CAPABILITIES.DOCUMENTS_LEGAL_HOLD_MANAGE]);
@@ -159,6 +185,7 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       actor: holdActor,
       permission,
       reason: "Open incident",
+      evidence,
     });
     await expect(
       deletion.request({
@@ -167,6 +194,7 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
         actor: actor([CAPABILITIES.DOCUMENTS_DELETE]),
         permission,
         reason: "Retention expired",
+        evidence,
       }),
     ).rejects.toMatchObject({ code: "DOCUMENT_LEGAL_HOLD_ACTIVE" });
     await legalHold.release({
@@ -176,6 +204,7 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       actor: holdActor,
       permission,
       reason: "Incident closed",
+      evidence,
     });
     const request = await deletion.request({
       documentId: document.id,
@@ -183,6 +212,7 @@ describe("Phase 8D restricted access, hold, and deletion", () => {
       actor: actor([CAPABILITIES.DOCUMENTS_DELETE]),
       permission,
       reason: "Retention expired",
+      evidence,
     });
     expect(request.status).toBe("SCHEDULED");
     const completed = await deletion.process({ idempotencyKey: "delete-1" });

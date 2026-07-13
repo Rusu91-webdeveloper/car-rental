@@ -18,6 +18,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:documents:provider": "tsx scripts/private-documents/vercel-blob-integration.ts",
+    "documents:roles:bootstrap": "tsx scripts/private-documents/bootstrap-restricted-roles.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

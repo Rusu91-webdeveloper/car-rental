@@ -32,6 +32,12 @@ export class DocumentCleanupService {
       } catch {
         result.failed++;
         result.issues.push({ id: session.id, code: "SESSION_EXPIRE_FAILED" });
+        await this.repository.audit({
+          action: "document.cleanup_failed",
+          targetType: "DocumentUploadSession",
+          targetId: session.id,
+          metadata: { operation: "EXPIRE_SESSION" },
+        });
       }
     return result;
   }
@@ -58,9 +64,14 @@ export class DocumentCleanupService {
     for (const intent of intents)
       try {
         if (
-          ["CLEAN", "REJECTED", "FAILED", "ABORTED", "EXPIRED"].includes(
-            intent.status,
-          )
+          [
+            "TECHNICALLY_VALID",
+            "CLEAN",
+            "REJECTED",
+            "FAILED",
+            "ABORTED",
+            "EXPIRED",
+          ].includes(intent.status)
         )
           continue;
         await this.storage.cleanupAbandonedUpload({
@@ -82,6 +93,12 @@ export class DocumentCleanupService {
         result.issues.push({
           id: intent.id,
           code: "ABANDONED_UPLOAD_CLEANUP_FAILED",
+        });
+        await this.repository.audit({
+          action: "document.cleanup_failed",
+          targetType: "DocumentUploadIntent",
+          targetId: intent.id,
+          metadata: { operation: "ABANDONED_OBJECT" },
         });
       }
     return result;
