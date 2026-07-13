@@ -17,6 +17,7 @@
     "start": "next start",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:documents:provider": "tsx scripts/private-documents/vercel-blob-integration.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
