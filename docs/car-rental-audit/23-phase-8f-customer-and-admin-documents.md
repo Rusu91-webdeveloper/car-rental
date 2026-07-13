@@ -1,328 +1,164 @@
-# Phase 8F-B — Customer/admin private documents schema gate
+# Phase 8F-B — Booking application schema and migration gate
 
-Date: 2026-07-13. Status: **blocked at the required checkout-persistence stop point; schema approval required**.
+Date: 2026-07-13. Status: **schema/migration implemented and verified; stopped before UI and service integration as required**.
 
-Phase 8F-A is approved and unchanged. No customer/admin Phase 8F-B UI, upload route, worker route, schedule, production feature, production Blob store, schema, migration, database row, role assignment, or document object was created or changed during this gate review. No production, staging, shared, repository-configured, or personal-data system was contacted.
+Phase 8F-A remains approved and unchanged. This phase is additive. It did not create customer/admin UI, upload or worker routes, schedules, production resources, role assignments, real document objects, or production data. No production, staging, shared, repository-configured, or personal-data system was contacted.
 
-## Decision
+## Outcome
 
-The current checkout architecture cannot safely preserve the authoritative customer journey across asynchronous manual review without creating a `Booking` too early.
+The approved pre-booking aggregate is now represented by typed Prisma models and a forward-only migration:
 
-Phase 8F-B implementation must stop until a typed pre-booking application model and additive migration are approved.
+- `BookingApplication` owns the recoverable customer journey before a `Booking` exists;
+- typed customer/driver, insurance, payment, pricing-quote, and legal-acceptance evidence belongs to that application;
+- `DocumentUploadSession.bookingApplicationId` provides the nullable, historical-compatible one-to-one document-session binding;
+- a `Booking` is still created only during finalization;
+- historical Booking, snapshot, legal, document, review, audit, and upload-session rows are not backfilled or inferred.
 
-The existing `DocumentUploadSession` is necessary document evidence, but it is not a complete pending booking/application record. Using browser state, URL parameters, audit metadata, arbitrary JSON, or an early `Booking` to fill this gap would violate the approved architecture and the Phase 8F-B instructions.
+Implementation files:
 
-## Exact architectural conflict
+- `prisma/schema.prisma`;
+- `prisma/migrations/20260713140000_add_phase8fb_booking_application/migration.sql`;
+- `scripts/phase8fb-booking-application-fixture.sql`;
+- `scripts/phase8fb-booking-application-verification.sql`.
 
-### Current browser state
+## Implemented lifecycle
 
-`app/[locale]/checkout/[id]/checkout-client.tsx` keeps these booking inputs in component state until the customer presses the final confirmation button:
+`BookingApplicationStatus` contains:
 
-- customer and driver fields;
-- insurance selection;
-- legal acknowledgements;
-- payment method;
-- pickup location;
-- pickup and return time values.
+- `DRAFT`;
+- `AWAITING_DOCUMENT_UPLOAD`;
+- `AWAITING_DOCUMENT_REVIEW`;
+- `CUSTOMER_ACTION_REQUIRED`;
+- `READY_TO_FINALIZE`;
+- `FINALIZING`;
+- `FINALIZED`;
+- `EXPIRED`;
+- `CANCELLED`;
+- `REJECTED`.
 
-Only some date/location values are reflected in the URL. There is no server-owned draft/application identifier and no recovery path for the complete form after refresh, sign-out, another device, or a review delay.
+`FINALIZED`, `EXPIRED`, `CANCELLED`, and `REJECTED` are immutable terminal states. Database triggers enforce the allowed transition graph, monotonic optimistic revision, expiry, terminal metadata, and the one-winner finalization claim.
 
-The current confirmation handler sends all inputs directly to `createBooking()`. It does not create or update an intermediate application.
+`BookingApplicationActionReason` provides stable customer-action reason codes:
 
-### Current booking transaction
+- `PRICE_CHANGED`;
+- `VEHICLE_UNAVAILABLE`;
+- `CONFIGURATION_CHANGED`;
+- `LEGAL_VERSION_CHANGED`;
+- `RENTAL_DATES_CHANGED`;
+- `INSURANCE_CHANGED`;
+- `PAYMENT_RULES_CHANGED`;
+- `CUSTOMER_DATA_INVALID`;
+- `DOCUMENT_REPLACEMENT_REQUIRED`.
 
-`app/actions/bookings.ts` calls `createAuthoritativeBooking()` immediately after validating the final browser submission.
+The application's release identity is immutable. A change that needs a different Business Configuration release must create a new application; an existing application never silently follows a newly activated release.
 
-`lib/pricing/prisma-booking-service.ts` then performs one serializable transaction that:
+## Aggregate and provenance
 
-1. locks and checks the vehicle;
-2. recalculates availability and pricing;
-3. resolves the active configuration;
-4. validates customer/driver fields and eligibility;
-5. checks legal acknowledgements;
-6. creates the final `Booking`;
-7. creates `BookingPricingSnapshot`;
-8. creates `BookingCustomerDriverSnapshot`;
-9. creates `BookingInsuranceSnapshot`;
-10. creates `BookingLegalAcceptance` evidence.
-
-Those snapshot/evidence tables all require a `bookingId`. They cannot persist pre-review progress without first creating a `Booking`.
-
-### Current document session
+`BookingApplication` stores:
 
-`DocumentUploadSession` persists:
-
-- customer user;
-- vehicle;
-- pickup and return timestamps;
-- locale;
-- exact Business Configuration release;
-- exact document-policy version;
-- expiry/status/revision;
-- optional final Booking binding.
-
-It does **not** persist:
-
-- pickup location;
-- payment method;
-- customer and driver inputs;
-- selected insurance option;
-- exact legal acknowledgement evidence;
-- finalization/idempotency state for the complete application.
-
-The missing facts cannot be reconstructed safely from `User`, the browser, current configuration, audit events, document metadata, or the eventual active release. In particular, legal acceptance must retain the exact published translation, content hash, acceptance time, source, release, and legal-policy version.
-
-### Why the existing models cannot be reused as-is
-
-- Creating `Booking(status=PENDING)` before document approval is explicitly prohibited and would also make the existing booking/history/availability behavior treat the record as a real Booking.
-- Extending `DocumentUploadSession` with unrelated booking fields would turn the document lifecycle root into an untyped booking draft and still leave legal acceptance/customer/insurance evidence without appropriate relational ownership.
-- Storing the draft in `AuditEvent.metadata` or another JSON payload would make audit data primary workflow state, which is prohibited.
-- Keeping the draft only in React, URL, session storage, or local storage would make browser state authoritative and would not survive the required review journey safely.
-- Re-reading whichever release is active after review could mismatch the immutable release/document-policy provenance already attached to uploaded documents. Release activation is required to affect future applications only.
-
-## Proposed typed pending-booking/application model
-
-The following proposal is strictly additive. It does not change historical `Booking`, snapshot, acceptance, document, review, or audit evidence.
-
-### Enums
-
-```prisma
-enum BookingApplicationStatus {
-  DRAFT
-  DOCUMENTS_PENDING
-  READY_TO_BOOK
-  CONSUMED
-  EXPIRED
-  ABORTED
-}
-```
-
-Terminal states are `CONSUMED`, `EXPIRED`, and `ABORTED`. `READY_TO_BOOK` is a recalculated summary, not browser authority. A document review decision can move the summary between `DOCUMENTS_PENDING` and `READY_TO_BOOK`; final Booking creation always rechecks every rule.
-
-### `BookingApplication`
-
-```prisma
-model BookingApplication {
-  id                     String                   @id @default(cuid())
-  customerUserId         String
-  carId                  String
-  configurationReleaseId String
-  locale                 String                   @db.VarChar(10)
-  pickupAt               DateTime
-  returnAt               DateTime
-  location               String
-  paymentMethod          BookingPaymentMethod
-  status                 BookingApplicationStatus @default(DRAFT)
-  revision               Int                      @default(1)
-  expiresAt              DateTime
-  readyCheckedAt         DateTime?
-  consumedAt             DateTime?
-  abortedAt              DateTime?
-  bookingId              String?                  @unique
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-
-  customer            User                            @relation("BookingApplicationCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
-  car                 Car                             @relation(fields: [carId], references: [id], onDelete: Restrict)
-  configurationRelease BusinessConfigurationRelease    @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
-  booking             Booking?                        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
-  customerDriver      BookingApplicationCustomerDriver?
-  insuranceSelection  BookingApplicationInsuranceSelection?
-  legalAcceptances    BookingApplicationLegalAcceptance[]
-  documentUploadSession DocumentUploadSession?
-
-  @@index([customerUserId, status, expiresAt])
-  @@index([carId, pickupAt, returnAt])
-  @@index([configurationReleaseId])
-  @@index([status, expiresAt])
-}
-```
-
-Requirements:
-
-- `pickupAt < returnAt`, positive revision, nonblank bounded location, supported locale, and expiry after creation;
-- immutable customer, vehicle, and release after document intent creation;
-- mutable dates/location/payment only through a revision-checked service that revalidates configuration and invalidates stale readiness;
-- exactly one final Booking, linked only in the final serializable transaction;
-- no availability reservation during manual review; final availability may fail and the customer must be told this clearly.
-
-### `BookingApplicationCustomerDriver`
-
-```prisma
-model BookingApplicationCustomerDriver {
-  id                            String    @id @default(cuid())
-  bookingApplicationId          String    @unique
-  customerDriverConfigVersionId String
-  revision                      Int       @default(1)
-  firstName                     String
-  lastName                      String
-  email                         String
-  phone                         String?
-  dateOfBirth                   DateTime? @db.Date
-  country                       String?   @db.VarChar(2)
-  address                       String?
-  city                          String?
-  postalCode                    String?
-  nationality                   String?   @db.VarChar(2)
-  licenceNumber                 String?
-  licenceIssueDate              DateTime? @db.Date
-  licenceExpiryDate             DateTime? @db.Date
-  licenceIssuingCountry         String?   @db.VarChar(2)
-  capturedAt                    DateTime
-  validatedAt                   DateTime?
-  createdAt                     DateTime  @default(now())
-  updatedAt                     DateTime  @updatedAt
-
-  bookingApplication BookingApplication        @relation(fields: [bookingApplicationId], references: [id], onDelete: Restrict)
-  customerDriverConfig CustomerDriverConfigVersion @relation(fields: [customerDriverConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
-
-  @@index([customerDriverConfigVersionId])
-}
-```
-
-This is typed draft state. On finalization, the service re-normalizes and revalidates it against the application's exact release and writes the existing immutable `BookingCustomerDriverSnapshot`.
-
-### `BookingApplicationInsuranceSelection`
-
-```prisma
-model BookingApplicationInsuranceSelection {
-  id                       String   @id @default(cuid())
-  bookingApplicationId     String   @unique
-  insuranceConfigVersionId String
-  selected                 Boolean
-  revision                 Int      @default(1)
-  capturedAt               DateTime
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  bookingApplication BookingApplication   @relation(fields: [bookingApplicationId], references: [id], onDelete: Restrict)
-  insuranceConfig    InsuranceConfigVersion @relation(fields: [insuranceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
-
-  @@index([insuranceConfigVersionId])
-}
-```
-
-Only the customer's selection is persisted. Price, availability, requirement mode, day count, and subtotal are recalculated from the application's exact immutable release during finalization and written to the existing `BookingInsuranceSnapshot`.
-
-### `BookingApplicationLegalAcceptance`
-
-```prisma
-model BookingApplicationLegalAcceptance {
-  id                             String                @id @default(cuid())
-  bookingApplicationId           String
-  legalDocumentTranslationId     String
-  customerUserId                 String
-  configurationReleaseId         String
-  legalAcceptanceConfigVersionId String
-  documentType                   LegalDocumentType
-  documentVersionNumber          Int
-  locale                         String                @db.VarChar(10)
-  contentHash                    String                @db.Char(64)
-  accepted                       Boolean
-  acceptedAt                     DateTime
-  source                         LegalAcceptanceSource
-  contentSnapshot                String?               @db.Text
-  createdAt                      DateTime              @default(now())
-
-  bookingApplication       BookingApplication            @relation(fields: [bookingApplicationId], references: [id], onDelete: Restrict)
-  legalDocumentTranslation LegalDocumentTranslation      @relation(fields: [legalDocumentTranslationId], references: [id], onDelete: Restrict)
-  customer                 User                          @relation("BookingApplicationLegalAcceptanceCustomer", fields: [customerUserId], references: [id], onDelete: Restrict)
-  configurationRelease     BusinessConfigurationRelease  @relation(fields: [configurationReleaseId], references: [id], onDelete: Restrict)
-  legalAcceptanceConfig    LegalAcceptanceConfigVersion  @relation(fields: [legalAcceptanceConfigVersionId], references: [configurationVersionId], onDelete: Restrict)
-
-  @@unique([bookingApplicationId, documentType])
-  @@index([customerUserId, acceptedAt])
-  @@index([configurationReleaseId])
-  @@index([legalAcceptanceConfigVersionId])
-}
-```
-
-The acceptance is append-only once the application enters `DOCUMENTS_PENDING`. If customer/driver/date changes require a fresh acceptance under policy, the service creates a new application or performs an explicitly defined revision flow; it never silently changes the accepted release/content hash. Finalization copies the exact evidence into the existing `BookingLegalAcceptance` rows while preserving `acceptedAt`.
-
-### `DocumentUploadSession` binding
-
-Add one nullable historical-compatible field and relation:
-
-```prisma
-model DocumentUploadSession {
-  bookingApplicationId String? @unique
-  bookingApplication   BookingApplication? @relation(fields: [bookingApplicationId], references: [id], onDelete: Restrict)
-}
-```
-
-For every new Phase 8F-B session, `bookingApplicationId` is mandatory at the service/database boundary. A deferred consistency trigger verifies equal customer, vehicle, dates, locale, release, and document-policy membership. Historical Phase 8 sessions remain null and unchanged.
-
-Required inverse relations are added to `User`, `Car`, `Booking`, `BusinessConfigurationRelease`, `CustomerDriverConfigVersion`, `InsuranceConfigVersion`, `LegalDocumentTranslation`, and `LegalAcceptanceConfigVersion`.
-
-## Required database protections
-
-The additive migration should include:
-
-- positive revision and valid timestamp/status checks;
-- one application-to-Booking and one application-to-document-session relationship;
-- restrictive foreign keys and no lifecycle evidence cascades;
-- application transition and terminal-immutability trigger;
-- deferred application/session/release/policy consistency trigger;
-- immutable/append-only legal acceptance after document review begins;
-- exact legal translation/content-hash/release/policy consistency checks;
-- customer-driver and insurance config versions belonging to the application's release;
-- `CONSUMED` requiring a matching Booking, consumed session, exact document provenance, and all final snapshots/evidence;
-- historical rows remaining unchanged; no backfill inference;
-- preflight checks before indexes/triggers and forward-only recovery after application rows exist.
-
-No primary application state may be stored in audit JSON. `AuditEvent` remains append-only evidence for safe application create/update/finalize/expire/abort events.
-
-## Final authoritative booking orchestration after approval
-
-The final service should accept only an authenticated application ID and expected revision, not a new copy of the booking form from the browser.
-
-Inside one serializable PostgreSQL transaction it must:
-
-1. lock the application, document session, and vehicle;
-2. return the already-created Booking for an idempotent consumed application;
-3. verify ownership, active user, nonterminal state, expiry, and revision;
-4. load the exact immutable Business Configuration release bound to the application;
-5. verify the session uses that release and its exact document policy;
-6. recalculate vehicle availability;
-7. recalculate pricing and insurance from the exact application release;
-8. normalize and validate the typed customer/driver record and eligibility;
-9. verify exact legal acceptance evidence;
-10. recalculate document readiness from current persisted document rows;
-11. create the final `Booking` and existing pricing/customer/insurance/legal snapshots;
-12. link current approved documents to the Booking;
-13. consume the document session and application atomically.
-
-Blob objects do not participate in this transaction. No object move/copy is needed; the approved immutable-pathname and compensation model remains unchanged.
-
-If availability, pricing, eligibility, legal acceptance, or document readiness fails, no Booking is created. The application remains recoverable when the failure is correctable and transitions to an appropriate terminal state only through an explicit service action.
-
-## Phase 8F-B work intentionally not started
-
-Pending schema approval, the following requested work remains blocked:
+- authenticated customer and selected vehicle;
+- locale, pickup/return UTC timestamps, separate pickup and return locations, and the release business time zone;
+- payment method, lifecycle status, revision, idempotency key, activity/expiry/submission/readiness/finalization timestamps, and reason evidence;
+- exact `BusinessConfigurationRelease` ID;
+- exact general, pricing, fleet-rate, insurance, customer-driver, workflow, document, payment, confirmation, and legal configuration IDs from that release;
+- legal acceptance round;
+- nullable unique final `bookingId`.
 
+The database rejects an application whose duplicated provenance IDs or business time zone do not exactly match its release. Customer, vehicle, release, configuration membership, idempotency identity, and creation identity are immutable. Rental facts and payment method may change only through revision-checked customer-action paths.
+
+The current `Booking` schema has one `location` field. The application deliberately stores both pickup and return locations so the customer journey does not lose information. Phase 8F-B finalization currently requires the Booking location to equal the application pickup location; a future separately approved Booking destination migration would be needed to persist a distinct return location on the final Booking itself.
+
+## Typed child state
+
+`BookingApplicationCustomerDriver` is a one-to-one typed record with nullable progressive-entry fields, licence-held-since evidence, validator version, validation result/timestamp, capture timestamp, and optimistic revision. Readiness requires `VALID` or `WARNING` validation under the application's exact customer-driver configuration.
+
+`BookingApplicationInsuranceSelection` is a one-to-one quote-time insurance snapshot. It retains selection, requirement mode, displayed name/description, unit price, billable days, quoted subtotal, currency, tax treatment, availability scope, presentation facts, selected time, exact insurance version, and revision.
+
+`BookingApplicationPaymentSelection` is a one-to-one payment choice. It retains both the Booking payment method and configured payment mode, exact payment version, optional exact localized instruction, deposit type/value, quoted amount/rate, currency, selected time, and revision. It intentionally stores no payment or settlement evidence.
+
+All three records are mutable only while their application is in a pre-readiness active state, must begin at revision one, use the next revision on update, and must reference the exact configuration IDs bound to the application.
+
+## Historical pricing quotes
+
+`BookingApplicationPricingQuote` retains every price the customer was shown, including exact release/pricing/fleet/rate provenance, version numbers, engine/source metadata, duration/billing decomposition, source rates, subtotal/insurance/adjustment/tax/grand total, calculation trace, quote expiry, and customer-confirmation evidence.
+
+Protections include:
+
+- one current quote per application by partial unique index;
+- monotonic per-application quote versions;
+- renewed quotes must point to the immediately prior demoted quote;
+- exact release, pricing, rate-set, vehicle-rate, vehicle, currency, and source provenance;
+- owner-only, database-receipted confirmation;
+- immutable quote facts after insertion, with only current-quote demotion and first owner confirmation allowed;
+- no quote deletion.
+
+A price change moves the application to `CUSTOMER_ACTION_REQUIRED`, preserves the old quote, and requires a new current unexpired customer-confirmed quote before readiness can be restored.
+
+## Append-only application legal evidence
+
+`BookingApplicationLegalAcceptance` retains:
+
+- application and acceptance round;
+- exact legal document version and exact translation;
+- customer, release, and legal-policy version;
+- document type/version, locale, content hash, affirmative result, database receipt time, source, and required content snapshot.
+
+The migration rejects updates and deletes. Inserts must belong to the application owner and current round, match the application's immutable release/policy, match the policy's exact document version, and exactly match the published translation type/version/locale/hash/content. Historical rounds remain queryable.
+
+## Document-session binding and upload expiry
+
+`DocumentUploadSession.bookingApplicationId` is nullable and unique. Historical sessions remain null. A new binding is allowed only on an open session, uses the next session revision, and becomes immutable.
+
+The extended session trigger requires equal customer, vehicle, dates, locale, release, and document-policy provenance. A consumed session must match both the authoritative Booking evidence and an application in `FINALIZING` with the same Booking.
+
+A separate upload-intent guard rejects new or changed upload intents whenever a bound application is not in an upload-permitting state or has reached its application expiry, even if the document session's own expiry has not yet elapsed.
+
+## Database readiness and finalization gates
+
+`READY_TO_FINALIZE` and the claim of `FINALIZING` call the database readiness assertion. It requires:
+
+1. an unexpired active application;
+2. valid typed customer/driver evidence under the exact configuration;
+3. internally consistent insurance evidence under the exact configuration and currency;
+4. an enabled exact payment method and consistent deposit quote;
+5. exactly one current, unexpired, owner-confirmed price quote with exact pricing provenance;
+6. required current-round terms/privacy evidence under the exact legal policy;
+7. one open, unexpired, exactly matching document session;
+8. every required document slot/side to have current retained evidence with exact provenance and either clean scanner evidence or approved manual-review evidence;
+9. correct `EITHER_IDENTITY_CARD_OR_PASSPORT` semantics when configured.
+
+Finalization is checked again by a deferred constraint trigger so the Booking, pricing snapshot, customer/driver snapshot, insurance snapshot, legal evidence, application, and consumed document session can be created/linked atomically in one transaction. The trigger verifies ownership, vehicle, dates, pickup location, payment method, release, current quote total, snapshot provenance/content, copied current-round legal evidence, and the consumed session/Booking identity.
+
+The final service must still recalculate availability and lock the vehicle in its serializable finalization transaction. This schema does not reserve vehicle availability while manual review is pending.
+
+## Disposable PostgreSQL verification
+
+The complete 30-migration chain was replayed from empty state on a fresh local PostgreSQL 16 database. The standalone synthetic fixture and verification then exercised:
+
+- exact release-provenance rejection;
+- typed child and document readiness;
+- append-only exact legal evidence;
+- rejection of readiness before quote confirmation;
+- database-receipted owner confirmation;
+- price-change quote demotion, history retention, renewal, and reconfirmation;
+- stale revision rejection;
+- a two-connection finalization race with exactly one winner;
+- atomic Booking/snapshot/legal/session/application finalization;
+- immutable finalized state;
+- application expiry blocking a new upload while its session remains open.
+
+The verification uses only `*.invalid` identities and metadata-only document records. It creates `dblink` only inside the disposable verification database to drive the two-connection race; the application migration does not install or depend on that extension.
+
+## Required stop before UI
+
+The additive schema/migration phase is complete. Per approval, work stops here before:
+
+- customer application persistence actions and checkout recovery;
 - customer upload/status/replacement UI and routes;
-- complete document-policy administration form;
-- booking finalization/readiness integration;
-- admin review queue and review screens;
-- legal-hold/deletion administration screens;
-- worker Route Handlers and non-production schedules;
-- release/health activation integration;
-- synthetic Playwright flows and visual verification;
-- production provisioning checklist execution.
+- final booking service integration;
+- admin review/document-policy/hold/deletion screens;
+- worker Route Handlers or schedules;
+- Playwright and visual UI verification;
+- any production provisioning or release activation.
 
-The already approved Phase 8F-A protected view/download/review/queue/restricted-role Route Handlers and services remain unchanged.
-
-## Approval request
-
-Please approve or amend:
-
-- the `BookingApplicationStatus` enum;
-- `BookingApplication` and its exact release/Booking relationship;
-- typed customer-driver and insurance-selection records;
-- append-only pre-booking legal acceptance evidence;
-- the nullable historical-compatible `DocumentUploadSession.bookingApplicationId` binding;
-- the transition, consistency, finalization, and no-backfill protections above;
-- the rule that existing applications continue on their exact bound release while newly activated releases affect only future applications;
-- a new forward-only additive migration and disposable-PostgreSQL verification for these models.
-
-Approval authorizes only the additive schema/migration phase unless Phase 8F-B implementation is explicitly reauthorized after review of the exact Prisma and SQL diff.
+Those items require explicit approval of the implemented Prisma/SQL diff and authorization to continue Phase 8F-B beyond this schema gate.
