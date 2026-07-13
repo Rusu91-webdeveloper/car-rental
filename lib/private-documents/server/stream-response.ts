@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { PrivateDocumentError } from "../domain/errors";
 import { loadPrivateDocumentRequestContext } from "./request-context";
+import { enforceRateLimit, PHASE8FB_RATE_LIMITS } from "@/lib/rate-limit";
 
 function safeExtension(mimeType: string) {
   if (mimeType === "application/pdf") return "pdf";
@@ -23,6 +24,11 @@ export async function streamPrivateDocument(input: {
   try {
     const context = await loadPrivateDocumentRequestContext(input.documentId);
     contextLoaded = true;
+    enforceRateLimit(
+      "document:access",
+      context.actor.userId,
+      PHASE8FB_RATE_LIMITS.documentAccess,
+    );
     const { document, read } = await context.access.open({
       documentId: input.documentId,
       actor: context.actor,

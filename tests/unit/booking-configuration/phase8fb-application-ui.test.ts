@@ -1,0 +1,60 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { describe, expect, it } from "vitest"
+
+const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8")
+
+describe("Phase 8F-B application and UI integration", () => {
+  it("uses forward-only database gates for shared location and manual approval", () => {
+    const migration = read("prisma/migrations/20260713141000_enforce_phase8fb_shared_location_and_review/migration.sql")
+    expect(migration).toContain('CHECK ("pickupLocation" = "returnLocation")')
+    expect(migration).toContain('document."manualReviewStatus" = \'APPROVED\'')
+    expect(migration).toContain("BookingApplication_manual_review_gate")
+  })
+
+  it("persists checkout as an application and never calls the legacy early-booking action", () => {
+    const checkout = read("app/[locale]/checkout/[id]/checkout-client.tsx")
+    expect(checkout).toContain("beginBookingApplication")
+    expect(checkout).toContain("Pick-up and return location")
+    expect(checkout).toContain("Continue to document upload")
+    expect(checkout).not.toContain("const result = await createBooking(")
+  })
+
+  it("provides opaque resume, upload, review, access, and worker routes", () => {
+    for (const path of [
+      "app/[locale]/applications/[applicationId]/page.tsx",
+      "app/api/booking-applications/[applicationId]/upload-intents/route.ts",
+      "app/api/booking-applications/[applicationId]/upload-intents/[intentId]/complete/route.ts",
+      "app/[locale]/admin/documents/page.tsx",
+      "app/[locale]/admin/documents/[documentId]/page.tsx",
+      "app/api/private-documents/[documentId]/view/route.ts",
+      "app/api/private-documents/[documentId]/download/route.ts",
+      "app/api/internal/phase8fb/[job]/route.ts",
+    ]) expect(read(path).length).toBeGreaterThan(20)
+  })
+
+  it("locks application and car and writes all snapshots in serializable finalization", () => {
+    const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
+    expect(adapter).toContain('FROM "BookingApplication" WHERE id = ${input.applicationId} FOR UPDATE')
+    expect(adapter).toContain('FROM "Car" WHERE id = ${row.carId} FOR UPDATE')
+    expect(adapter).toContain("TransactionIsolationLevel.Serializable")
+    for (const snapshot of ["bookingPricingSnapshot.create", "bookingCustomerDriverSnapshot.create", "bookingInsuranceSnapshot.create", "bookingLegalAcceptance.createMany", "customerDocument.updateMany"])
+      expect(adapter).toContain(snapshot)
+    expect(adapter).toContain('status: "FINALIZED"')
+  })
+
+  it("keeps production providers and workers explicitly disabled", () => {
+    const uploads = read("lib/private-documents/server/lifecycle-context.ts")
+    const workers = read("app/api/internal/phase8fb/[job]/route.ts")
+    expect(uploads).toContain("environment.production || !environment.featureEnabled")
+    expect(workers).toContain('process.env.NODE_ENV === "production"')
+    expect(workers).toContain('process.env.PHASE8FB_WORKERS_ENABLED !== "true"')
+  })
+
+  it("requires recent authentication for review and all sensitive administration", () => {
+    const reauth = read("components/private-documents/reauthenticate-panel.tsx")
+    expect(reauth).toContain("reauthenticatePrivateDocumentAccess")
+    expect(read("app/[locale]/admin/documents/[documentId]/page.tsx")).toContain("RECENT_AUTH_")
+    expect(read("app/[locale]/admin/documents/security/page.tsx")).toContain("requireRecentAuthentication")
+  })
+})

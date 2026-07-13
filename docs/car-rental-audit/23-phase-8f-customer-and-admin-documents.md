@@ -1,164 +1,211 @@
-# Phase 8F-B — Booking application schema and migration gate
+# Phase 8F-B — customer and administrator private-document workflow
 
-Date: 2026-07-13. Status: **schema/migration implemented and verified; stopped before UI and service integration as required**.
+Date: 2026-07-13. Status: **application/UI implementation complete in non-production; stopped before production provisioning and schedule enablement**.
 
-Phase 8F-A remains approved and unchanged. This phase is additive. It did not create customer/admin UI, upload or worker routes, schedules, production resources, role assignments, real document objects, or production data. No production, staging, shared, repository-configured, or personal-data system was contacted.
+Phase 8F-A remains unchanged. Phase 8F-B is additive and preserves all historical Booking, snapshot, legal, document, review, upload-session, and audit evidence. No production Blob store was provisioned or contacted, no real identity document or customer data was used, no payment processing was added, and no production worker schedule was enabled.
 
-## Outcome
+## Location-semantics decision
 
-The approved pre-booking aggregate is now represented by typed Prisma models and a forward-only migration:
+The mandatory repository review found one checkout control, one `location` URL parameter, one `Booking.location` write, and one value rendered in booking success, email, admin, and booking history. Pricing and availability do not branch on location. There is no return-location control or second location value. The current product therefore supports **same pickup and return location only**.
 
-- `BookingApplication` owns the recoverable customer journey before a `Booking` exists;
-- typed customer/driver, insurance, payment, pricing-quote, and legal-acceptance evidence belongs to that application;
-- `DocumentUploadSession.bookingApplicationId` provides the nullable, historical-compatible one-to-one document-session binding;
-- a `Booking` is still created only during finalization;
-- historical Booking, snapshot, legal, document, review, audit, and upload-session rows are not backfilled or inferred.
+Phase 8F-B makes that contract explicit:
 
-Implementation files:
+- checkout labels the input “Pick-up and return location”;
+- `BookingApplication.pickupLocation` and `returnLocation` retain identical evidence values;
+- application validation rejects unequal or blank values;
+- migration `20260713141000_enforce_phase8fb_shared_location_and_review` adds a validated database equality constraint;
+- finalization calls the explicit `mapApplicationLocationToBooking` mapper;
+- the shared value is written to `Booking.location`;
+- tests prove equality and rejection of silent location loss.
 
-- `prisma/schema.prisma`;
-- `prisma/migrations/20260713140000_add_phase8fb_booking_application/migration.sql`;
-- `scripts/phase8fb-booking-application-fixture.sql`;
-- `scripts/phase8fb-booking-application-verification.sql`.
+A future different-location product requires a separately approved additive Booking snapshot/schema change. JSON, concatenation, and silent dropping are prohibited.
 
-## Implemented lifecycle
+## Application services and persistence
 
-`BookingApplicationStatus` contains:
+The provider-neutral service boundary is in `lib/booking-applications`; Prisma is confined to `infrastructure/prisma-repository.ts`. Implemented service operations are:
 
-- `DRAFT`;
-- `AWAITING_DOCUMENT_UPLOAD`;
-- `AWAITING_DOCUMENT_REVIEW`;
-- `CUSTOMER_ACTION_REQUIRED`;
-- `READY_TO_FINALIZE`;
-- `FINALIZING`;
-- `FINALIZED`;
-- `EXPIRED`;
-- `CANCELLED`;
-- `REJECTED`.
+- `createBookingApplication`;
+- `updateBookingApplicationCustomerDriver`;
+- `updateBookingApplicationInsurance`;
+- `updateBookingApplicationPaymentSelection`;
+- `createOrRefreshApplicationQuote`;
+- `recordApplicationLegalAcceptance`;
+- `submitApplicationForDocumentReview`;
+- `loadBookingApplication`;
+- `resumeBookingApplication`;
+- `evaluateBookingApplicationReadiness`;
+- `markApplicationCustomerActionRequired`;
+- `expireBookingApplications`;
+- `cancelBookingApplication`;
+- `finalizeBookingApplication`.
 
-`FINALIZED`, `EXPIRED`, `CANCELLED`, and `REJECTED` are immutable terminal states. Database triggers enforce the allowed transition graph, monotonic optimistic revision, expiry, terminal metadata, and the one-winner finalization claim.
+Creation is owner-bound and idempotent, snapshots the exact active Business Configuration release, creates and binds one document upload session, and advances the database-controlled lifecycle. Every mutation uses an expected application revision. Cross-owner access, stale revisions, expired state, terminal state, invalid configuration, and location mismatch have stable error codes.
 
-`BookingApplicationActionReason` provides stable customer-action reason codes:
+## Checkout persistence and resume
 
-- `PRICE_CHANGED`;
-- `VEHICLE_UNAVAILABLE`;
-- `CONFIGURATION_CHANGED`;
-- `LEGAL_VERSION_CHANGED`;
-- `RENTAL_DATES_CHANGED`;
-- `INSURANCE_CHANGED`;
-- `PAYMENT_RULES_CHANGED`;
-- `CUSTOMER_DATA_INVALID`;
-- `DOCUMENT_REPLACEMENT_REQUIRED`.
+Checkout now calls `beginBookingApplication` instead of the legacy early-Booking action. The server validates and persists customer/driver data, insurance, payment-method choice, authoritative quote, quote confirmation, legal evidence, dates, and the shared location. Browser totals, configuration identifiers, content hashes, and readiness claims are ignored.
 
-The application's release identity is immutable. A change that needs a different Business Configuration release must create a new application; an existing application never silently follows a newly activated release.
+The browser-generated idempotency key only correlates a retry; the database and authenticated owner define identity. A successful checkout redirects to the opaque localized route:
 
-## Aggregate and provenance
+- `/{locale}/applications/{applicationId}`.
 
-`BookingApplication` stores:
+The resume page reloads progress from PostgreSQL, rejects cross-user access, survives refresh/browser restart, renders expiry and safe terminal states, and links the final Booking after finalization. Refresh does not create another application.
 
-- authenticated customer and selected vehicle;
-- locale, pickup/return UTC timestamps, separate pickup and return locations, and the release business time zone;
-- payment method, lifecycle status, revision, idempotency key, activity/expiry/submission/readiness/finalization timestamps, and reason evidence;
-- exact `BusinessConfigurationRelease` ID;
-- exact general, pricing, fleet-rate, insurance, customer-driver, workflow, document, payment, confirmation, and legal configuration IDs from that release;
-- legal acceptance round;
-- nullable unique final `bookingId`.
+No Booking is created while documents are awaiting upload or manual review.
 
-The database rejects an application whose duplicated provenance IDs or business time zone do not exactly match its release. Customer, vehicle, release, configuration membership, idempotency identity, and creation identity are immutable. Rental facts and payment method may change only through revision-checked customer-action paths.
+## Customer upload and status flow
 
-The current `Booking` schema has one `location` field. The application deliberately stores both pickup and return locations so the customer journey does not lose information. Phase 8F-B finalization currently requires the Booking location to equal the application pickup location; a future separately approved Booking destination migration would be needed to persist a distinct return location on the final Booking itself.
+Routes:
 
-## Typed child state
+- `POST /api/booking-applications/[applicationId]/upload-intents`;
+- `PUT /api/booking-applications/[applicationId]/upload-intents/[intentId]/content` for the local disposable adapter;
+- `POST /api/booking-applications/[applicationId]/upload-intents/[intentId]/complete`.
 
-`BookingApplicationCustomerDriver` is a one-to-one typed record with nullable progressive-entry fields, licence-held-since evidence, validator version, validation result/timestamp, capture timestamp, and optimistic revision. Readiness requires `VALID` or `WARNING` validation under the application's exact customer-driver configuration.
+The UI renders the exact release-bound typed requirements, including ID-card/passport alternatives, driving licence, front/back or single-file slots, required/optional state, and replacement lineage. It accepts PDF/JPEG/PNG up to 10 MiB, hashes the selected bytes for upload binding, shows transfer progress, and supports re-upload/replacement.
 
-`BookingApplicationInsuranceSelection` is a one-to-one quote-time insurance snapshot. It retains selection, requirement mode, displayed name/description, unit price, billable days, quoted subtotal, currency, tax treatment, availability scope, presentation facts, selected time, exact insurance version, and revision.
+For the approved private Vercel Blob adapter the intent returns a short-lived direct PUT target. For local disposable development it returns a staged target. A successful browser PUT remains provisional: only server-side object inspection, signature/MIME/size/checksum validation, evidence persistence, and `PENDING_REVIEW` creation count as completion. Expired sessions and technical failures return stable safe codes.
 
-`BookingApplicationPaymentSelection` is a one-to-one payment choice. It retains both the Booking payment method and configured payment mode, exact payment version, optional exact localized instruction, deposit type/value, quoted amount/rate, currency, selected time, and revision. It intentionally stores no payment or settlement evidence.
+Customer states include not uploaded, checking, pending review, approved, rejected, replacement required, and re-upload. Only synthetic test bytes were used.
 
-All three records are mutable only while their application is in a pre-readiness active state, must begin at revision one, use the next revision on update, and must reference the exact configuration IDs bound to the application.
+## Restricted administrator review
 
-## Historical pricing quotes
+Routes and components:
 
-`BookingApplicationPricingQuote` retains every price the customer was shown, including exact release/pricing/fleet/rate provenance, version numbers, engine/source metadata, duration/billing decomposition, source rates, subtotal/insurance/adjustment/tax/grand total, calculation trace, quote expiry, and customer-confirmation evidence.
+- `/{locale}/admin/documents` — restricted queue, filters, cursor pagination, and 24-hour stale indicator;
+- `/{locale}/admin/documents/[documentId]` — secure review page;
+- `GET /api/private-documents/review-queue`;
+- `POST /api/private-documents/[documentId]/review`.
 
-Protections include:
+The review page uses protected server streaming and exposes only safe technical metadata. Review decisions support approve, reject, and replacement-required; non-approval requires a structured reason, `OTHER` requires a safe note, and the repository enforces optimistic `reviewRevision`. The page renders append-only decision and replacement history. A stale reviewer receives a conflict rather than overwriting another decision.
 
-- one current quote per application by partial unique index;
-- monotonic per-application quote versions;
-- renewed quotes must point to the immediately prior demoted quote;
-- exact release, pricing, rate-set, vehicle-rate, vehicle, currency, and source provenance;
-- owner-only, database-receipted confirmation;
-- immutable quote facts after insertion, with only current-quote demotion and first owner confirmation allowed;
-- no quote deletion.
+Legacy `ADMIN` and `ADMIN_COMPAT` remain denied restricted document capabilities without an explicit `DOCUMENT_*` role.
 
-A price change moves the application to `CUSTOMER_ACTION_REQUIRED`, preserves the old quote, and requires a new current unexpired customer-confirmed quote before readiness can be restored.
+## Secure access and recent authentication
 
-## Append-only application legal evidence
+Existing protected routes are fully used:
 
-`BookingApplicationLegalAcceptance` retains:
+- `GET /api/private-documents/[documentId]/view`;
+- `GET /api/private-documents/[documentId]/download`.
 
-- application and acceptance round;
-- exact legal document version and exact translation;
-- customer, release, and legal-policy version;
-- document type/version, locale, content hash, affirmative result, database receipt time, source, and required content snapshot.
+They enforce active authentication, persisted restricted capabilities, exact policy permission, exact document scope, ten-minute server-verified Google authentication, lifecycle state, safe server streaming, `private, no-store`, `nosniff`, safe content disposition, audit evidence, and no provider pathname disclosure. Pending-review preview is reviewer-only. Download additionally requires `documents.download` and approved lifecycle evidence.
 
-The migration rejects updates and deletes. Inserts must belong to the application owner and current round, match the application's immutable release/policy, match the policy's exact document version, and exactly match the published translation type/version/locale/hash/content. Historical rounds remain queryable.
+`ReauthenticatePanel` starts Google OAuth with `prompt=login` and `max_age=0`, accepts only safe local return paths, and returns to the intended localized action. Review, preview, download, legal hold, deletion, and restricted-role management use the same server-verified evidence. There is no production bypass.
 
-## Document-session binding and upload expiry
+Additional sensitive routes/pages:
 
-`DocumentUploadSession.bookingApplicationId` is nullable and unique. Historical sessions remain null. A new binding is allowed only on an open session, uses the next session revision, and becomes immutable.
+- `POST/DELETE /api/private-documents/[documentId]/legal-hold`;
+- `POST /api/private-documents/[documentId]/deletion`;
+- `/{locale}/admin/documents/security`;
+- `POST /api/private-documents/restricted-roles`.
 
-The extended session trigger requires equal customer, vehicle, dates, locale, release, and document-policy provenance. A consumed session must match both the authoritative Booking evidence and an application in `FINALIZING` with the same Booking.
+## Readiness
 
-A separate upload-intent guard rejects new or changed upload intents whenever a bound application is not in an upload-permitting state or has reached its application expiry, even if the document session's own expiry has not yet elapsed.
+The application evaluator returns stable blocker codes plus plain-language customer messages. `READY_TO_FINALIZE` requires:
 
-## Database readiness and finalization gates
+1. an active owner-bound, unexpired application;
+2. valid customer/driver evidence;
+3. valid exact insurance and payment selections;
+4. one current unexpired owner-confirmed authoritative quote;
+5. current-round required legal evidence;
+6. exact release and policy provenance;
+7. every required slot/side technically valid and manually approved;
+8. correct ID-card/passport alternative semantics;
+9. no unresolved customer action.
 
-`READY_TO_FINALIZE` and the claim of `FINALIZING` call the database readiness assertion. It requires:
+The forward-only follow-up migration adds a second database gate requiring manual `APPROVED` state. “Technically clean” alone cannot make an application ready.
 
-1. an unexpired active application;
-2. valid typed customer/driver evidence under the exact configuration;
-3. internally consistent insurance evidence under the exact configuration and currency;
-4. an enabled exact payment method and consistent deposit quote;
-5. exactly one current, unexpired, owner-confirmed price quote with exact pricing provenance;
-6. required current-round terms/privacy evidence under the exact legal policy;
-7. one open, unexpired, exactly matching document session;
-8. every required document slot/side to have current retained evidence with exact provenance and either clean scanner evidence or approved manual-review evidence;
-9. correct `EITHER_IDENTITY_CARD_OR_PASSPORT` semantics when configured.
+## Quote, legal renewal, and finalization
 
-Finalization is checked again by a deferred constraint trigger so the Booking, pricing snapshot, customer/driver snapshot, insurance snapshot, legal evidence, application, and consumed document session can be created/linked atomically in one transaction. The trigger verifies ownership, vehicle, dates, pickup location, payment method, release, current quote total, snapshot provenance/content, copied current-round legal evidence, and the consumed session/Booking identity.
+Finalization executes in a serializable transaction. It locks `BookingApplication`, returns the existing Booking for an already-finalized application, validates owner/revision/readiness, locks `Car`, rechecks availability, recalculates the authoritative quote, and compares it with the confirmed quote. A changed price preserves/demotes the old quote, stores a new quote, and returns `CUSTOMER_ACTION_REQUIRED`; the customer must explicitly confirm before another readiness evaluation.
 
-The final service must still recalculate availability and lock the vehicle in its serializable finalization transaction. This schema does not reserve vehicle availability while manual review is pending.
+If the active release changed, the immutable release binding prevents silent migration. The application enters `CONFIGURATION_CHANGED`; a newly configured application is required. Earlier quote/legal rounds remain unchanged. Current legal acceptance is append-only and copied only from the current accepted round.
 
-## Disposable PostgreSQL verification
+On success finalization creates exactly one Booking, pricing snapshot, insurance snapshot, customer/driver snapshot, Booking legal rows, and approved-document bindings; it consumes the matching upload session and marks the application `FINALIZED` in the same transaction. Deferred database constraints verify the aggregate before commit. Serialization conflicts return a reload-safe conflict code. Concurrent requests converge on the same Booking.
 
-The complete 30-migration chain was replayed from empty state on a fresh local PostgreSQL 16 database. The standalone synthetic fixture and verification then exercised:
+## Explicit Booking field mapping
 
-- exact release-provenance rejection;
-- typed child and document readiness;
-- append-only exact legal evidence;
-- rejection of readiness before quote confirmation;
-- database-receipted owner confirmation;
-- price-change quote demotion, history retention, renewal, and reconfirmation;
-- stale revision rejection;
-- a two-connection finalization race with exactly one winner;
-- atomic Booking/snapshot/legal/session/application finalization;
-- immutable finalized state;
-- application expiry blocking a new upload while its session remains open.
+| Application evidence | Booking result |
+| --- | --- |
+| `carId` | `Booking.carId` |
+| `pickupAt`, `returnAt` | `pickupDate`, `dropoffDate` |
+| equal pickup/return location | `Booking.location` |
+| current confirmed quote | Booking totals and `BookingPricingSnapshot` |
+| quote currency | pricing and insurance snapshots |
+| payment selection | `paymentMethod`, deposit amount |
+| validated customer/driver | `BookingCustomerDriverSnapshot` |
+| insurance selection | `BookingInsuranceSnapshot` |
+| exact release IDs | immutable snapshot provenance |
+| current legal round | `BookingLegalAcceptance` rows |
+| current approved documents | `CustomerDocument.bookingId` and consumed session |
 
-The verification uses only `*.invalid` identities and metadata-only document records. It creates `dblink` only inside the disposable verification database to drive the two-connection race; the application migration does not install or depend on that extension.
+The executable mapping contract is `BOOKING_APPLICATION_TO_BOOKING_MAPPING` and is covered by tests.
 
-## Required stop before UI
+## Document policy administration
 
-The additive schema/migration phase is complete. Per approval, work stops here before:
+`/{locale}/admin/business-configuration/documents` replaces the placeholder with a restricted typed policy editor. It supports:
 
-- customer application persistence actions and checkout recovery;
-- customer upload/status/replacement UI and routes;
-- final booking service integration;
-- admin review/document-policy/hold/deletion screens;
-- worker Route Handlers or schedules;
-- Playwright and visual UI verification;
-- any production provisioning or release activation.
+- ID card/passport choice;
+- driving licence;
+- front/back or single file;
+- required/optional/disabled;
+- one or two files maximum;
+- customer instructions;
+- mandatory manual review (fixed on, not bypassable);
+- retention preference from 1 through the 365-day hard maximum.
 
-Those items require explicit approval of the implemented Prisma/SQL diff and authorization to continue Phase 8F-B beyond this schema gate.
+Saving validates cross-field identity semantics, creates a new immutable `DOCUMENT_POLICY` version, copies restricted role permissions, and links it only to an existing draft release. It never edits the live or historical version. The page exposes release validation and non-production environment health codes.
+
+## Protected worker entry points
+
+`POST /api/internal/phase8fb/[job]` supports:
+
+- `application-expiry`;
+- `abandoned-upload-cleanup`;
+- `review-backlog`;
+- `stale-review`;
+- `retention-processing`;
+- `deletion-processing`;
+- `failed-deletion-retry`;
+- `orphan-reconciliation`.
+
+Jobs require an exact bearer secret, explicit `PHASE8FB_WORKERS_ENABLED=true`, a supported job name, and a rate limit. The route hard-denies `NODE_ENV=production`. No schedule is configured. Retention/deletion discovery remains evidence-first; destructive provider processing is not enabled for production.
+
+## Rate limits
+
+Bounded non-production limits protect application creation (5/min), updates (30/min), upload intent/completion (20/min), invalid upload retries (8/10 min policy), secure access (30/min), review decisions (30/min), finalization (5/min), and workers (10/min/job). The current bounded in-process store is intentionally a production blocker; production approval must provide a shared atomic backend before multi-instance enablement.
+
+## Tests and validation
+
+Added tests cover the application service boundary, exact location behavior, ownership, optimistic conflict, refresh recovery, cancellation, concurrent idempotent finalization, database gates, checkout non-creation of Booking, route presence, finalization locks/snapshots, reauthentication, and production guards. Existing document tests continue to cover technical validation, manual review, rejection/replacement, access, recent authentication, retention, provider adapters, and non-production integration guards.
+
+Disposable PostgreSQL verification from the schema gate covers expiry, price renewal, legal evidence, atomic rollback constraints, availability/finalization consistency, and a two-connection exactly-one-Booking race. The provider integration harness remains synthetic and isolated. Playwright is not installed in this repository; browser verification uses the available local browser harness and is recorded with the final validation results.
+
+Final non-production validation on 2026-07-13:
+
+- Prisma schema validation passed and all 31 migrations replayed successfully on disposable PostgreSQL 16;
+- the approved synthetic Phase 8F-B fixture and lifecycle/concurrency verification passed;
+- TypeScript passed;
+- all 39 test files and 271 tests passed;
+- scoped Phase 8F-B ESLint passed with zero errors (the touched legacy checkout retains two pre-existing warnings);
+- repository-wide ESLint remains at its pre-existing baseline of 30 errors and 27 warnings outside this phase;
+- the optimized Next.js production build passed;
+- the customer application was checked at desktop and 390-pixel mobile widths, and the restricted review screen at 390-pixel mobile width, with no horizontal overflow or runtime error overlay;
+- the temporary synthetic preview routes were removed after verification and are not part of the production artifact.
+
+## Production provisioning blockers/checklist
+
+Production remains blocked until separately approved work provides and verifies:
+
+- a private production Blob store in the approved region and project;
+- OIDC-only runtime access, private-access and region attestations, and no static token;
+- a shared atomic rate-limit backend;
+- explicit reviewer/downloader/security/retention role assignments and exact policy permissions;
+- operational recent Google reauthentication;
+- confirmed retention/legal policy and deletion runbook;
+- production worker deployment, secrets, monitoring, retry alerts, and schedules;
+- backlog/stale-review, audit-persistence, cleanup, deletion, and orphan-reconciliation alerts;
+- synthetic production-readiness rehearsal with no real identity data;
+- security/privacy review and explicit production-provisioning approval;
+- review and upgrade Next.js 16.0.10 to the current supported stable release before production release.
+
+Until those items are approved, private-document production workflows, Blob provisioning, and schedules must remain disabled.

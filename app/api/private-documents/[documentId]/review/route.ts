@@ -1,6 +1,9 @@
 import { PrivateDocumentError } from "@/lib/private-documents/domain/errors";
 import type { DocumentReviewReasonValue } from "@/lib/private-documents/application/repository";
 import { loadPrivateDocumentRequestContext } from "@/lib/private-documents/server/request-context";
+import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository";
+import { prisma } from "@/lib/db";
+import { enforceRateLimit, PHASE8FB_RATE_LIMITS } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +35,7 @@ export async function POST(
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     const context = await loadPrivateDocumentRequestContext(documentId);
+    enforceRateLimit("document:review", context.actor.userId, PHASE8FB_RATE_LIMITS.reviewDecision);
     const common = {
       documentId,
       expectedReviewRevision: Number(body.expectedReviewRevision),
@@ -56,6 +60,14 @@ export async function POST(
                 | DocumentReviewReasonValue
                 | undefined,
             });
+    const binding = await prisma.documentUploadSession.findFirst({
+      where: { customerDocuments: { some: { id: document.id } } },
+      select: { bookingApplicationId: true },
+    });
+    if (binding?.bookingApplicationId)
+      await new PrismaBookingApplicationRepository(prisma).evaluateReadiness(
+        binding.bookingApplicationId,
+      );
     return Response.json(
       {
         documentId: document.id,

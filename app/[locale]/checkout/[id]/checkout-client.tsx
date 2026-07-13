@@ -3,7 +3,8 @@
 import { useRouter, usePathname } from "@/navigation"
 import { useState, useTransition, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-import { createBooking, getBookingQuote } from "@/app/actions/bookings"
+import { getBookingQuote } from "@/app/actions/bookings"
+import { beginBookingApplication } from "@/app/actions/booking-applications"
 import { getCarAvailability } from "@/app/actions/cars"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +13,6 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCents } from "@/lib/money"
 import { CalendarIcon } from "lucide-react"
-import { BookingSuccessModal } from "./booking-success-modal"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { BookingCustomerDriverInput, PublicBookingConfiguration } from "@/lib/booking-configuration/types"
 import { LegalContent } from "@/components/legal/legal-content"
@@ -21,7 +21,6 @@ export function CheckoutClient({
   locale,
   car,
   signInUrl,
-  paymentDetails,
   bookingConfiguration,
   initialCustomer,
 }: {
@@ -232,33 +231,6 @@ export function CheckoutClient({
     privacyNotice: false,
   })
   const [isPending, startTransition] = useTransition()
-  const [bookingSuccess, setBookingSuccess] = useState<{
-    bookingNumber: string
-    transferCode: string
-    paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
-    totalPrice: number
-    depositAmount: number
-    guaranteeAmount: number
-    pickupDate: Date
-    dropoffDate: Date
-    location: string
-    carName: string
-    currency: string
-    depositRateBps: number
-    guaranteeRateBps: number
-    insurance?: {
-      customerFacingName: string
-      subtotal: number
-      showInConfirmation: boolean
-    } | null
-    legalAcceptances?: Array<{
-      type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
-      title: string
-      versionNumber: number
-      versionLabel: string
-      locale: string
-    }>
-  } | null>(null)
   const [quote, setQuote] = useState<
     | (Awaited<ReturnType<typeof getBookingQuote>> extends {
         quote?: infer Quote
@@ -613,19 +585,26 @@ export function CheckoutClient({
       const pickupISO = pickup.toISOString()
       const dropoffISO = dropoff.toISOString()
 
-      const result = await createBooking({
+      const storageKey = `booking-application:${car.id}:${pickupISO}:${dropoffISO}`
+      let idempotencyKey = window.localStorage.getItem(storageKey)
+      if (!idempotencyKey) {
+        idempotencyKey = crypto.randomUUID()
+        window.localStorage.setItem(storageKey, idempotencyKey)
+      }
+      const result = await beginBookingApplication({
         carId: car.id,
-        pickupDate: pickupISO,
-        dropoffDate: dropoffISO,
-        location,
+        pickupAt: pickupISO,
+        returnAt: dropoffISO,
+        sharedLocation: location,
         paymentMethod,
         locale: locale === "de" ? "de" : "en",
         insuranceSelected,
         customer,
         legalAcknowledgements,
+        idempotencyKey,
       })
 
-      if (result?.error) {
+      if ("error" in result) {
         if (result.error === "Unauthorized") {
           const returnUrl = `${window.location.pathname}${window.location.search}`
           router.push(`${signInUrl}?redirect_url=${encodeURIComponent(returnUrl)}`)
@@ -635,49 +614,11 @@ export function CheckoutClient({
         return
       }
 
-      // Stripe checkout redirect is temporarily disabled.
-      // Uncomment this block when you want to re-enable Stripe integration.
-      /*
-      if (result?.checkoutUrl) {
-        window.location.href = result.checkoutUrl
-        return
-      }
-      */
-
-      // Manual payment flow - show success modal with payment instructions
-      if (result?.manualPayment && result?.booking) {
-        setBookingSuccess({ ...result.booking, carName: car.name })
-        return
-      }
-
-      // Fallback: redirect to bookings page
-      router.push("/bookings")
+      router.push(`/applications/${result.applicationId}`)
     })
   }
 
   return (
-    <>
-      {bookingSuccess && (
-        <BookingSuccessModal
-          bookingNumber={bookingSuccess.bookingNumber}
-          transferCode={bookingSuccess.transferCode}
-          paymentMethod={bookingSuccess.paymentMethod}
-          totalPrice={bookingSuccess.totalPrice}
-          depositAmount={bookingSuccess.depositAmount}
-          guaranteeAmount={bookingSuccess.guaranteeAmount}
-          currency={bookingSuccess.currency}
-          depositRateBps={bookingSuccess.depositRateBps}
-          guaranteeRateBps={bookingSuccess.guaranteeRateBps}
-          insurance={bookingSuccess.insurance}
-          carName={bookingSuccess.carName}
-          pickupDate={bookingSuccess.pickupDate}
-          dropoffDate={bookingSuccess.dropoffDate}
-          location={bookingSuccess.location}
-          paymentDetails={paymentDetails}
-          onClose={() => router.push("/bookings")}
-        />
-      )}
-
       <div className="min-h-screen bg-muted pb-24">
         {/* Header */}
         <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
@@ -802,7 +743,7 @@ export function CheckoutClient({
             {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
 
             <div className="space-y-2">
-              <Label htmlFor="location">Pick-up Location</Label>
+              <Label htmlFor="location">Pick-up and return location</Label>
               <Input
                 id="location"
                 value={location}
@@ -1087,10 +1028,9 @@ export function CheckoutClient({
             disabled={isPending || isQuoteLoading || !quote}
             className="w-full h-12 text-base font-semibold"
           >
-            {isPending ? "Processing..." : "Confirm Booking"}
+            {isPending ? "Saving application..." : "Continue to document upload"}
           </Button>
         </div>
       </div>
-    </>
   )
 }
