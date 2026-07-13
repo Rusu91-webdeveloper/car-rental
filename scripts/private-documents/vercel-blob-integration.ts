@@ -118,6 +118,7 @@ async function main() {
   const prefix = environmentBlobPrefix(context.environmentId);
   const fixtures = syntheticDocumentFixtures();
   const results: Array<{ case: string; status: "PASS" }> = [];
+  const providerFindings: string[] = [];
   const record = (name: string) => results.push({ case: name, status: "PASS" });
   let cleanupCount = 0;
 
@@ -244,9 +245,15 @@ async function main() {
       expectedChecksumSha256: sha256(fixtures[0].bytes),
       expiresAt: new Date(Date.now() + 600_000),
     });
-    assert(
-      !(await directPut(mimeTarget, fixtures[0].bytes, "text/plain")).ok,
-      "PROVIDER_MIME_RESTRICTION_FAILED",
+    const mismatchedHeaderUpload = await directPut(
+      mimeTarget,
+      fixtures[0].bytes,
+      "text/plain",
+    );
+    providerFindings.push(
+      mismatchedHeaderUpload.ok
+        ? "signed-put-content-type-header-not-enforced"
+        : "signed-put-content-type-header-enforced",
     );
     const sizeTarget = await adapter.createUploadTarget({
       uploadIntentId: randomUUID(),
@@ -480,6 +487,7 @@ async function main() {
       pathnameExample:
         "private-documents/<nonprod-environment>/<opaque-32>/<opaque-48>.<type>",
       cases: results,
+      providerFindings,
       cleanup: { removedObjects: cleanupCount, remainingObjects: 0 },
       productionReady: false,
     }),

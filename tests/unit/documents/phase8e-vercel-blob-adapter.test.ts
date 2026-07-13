@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BlobNotFoundError } from "@vercel/blob";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,7 @@ import type {
   VercelBlobClient,
   VercelBlobHead,
 } from "@/lib/private-documents/infrastructure/vercel-blob-client";
+import { isVercelBlobNotFound } from "@/lib/private-documents/infrastructure/vercel-blob-client";
 import type { PrivateObjectReference } from "@/lib/private-documents/domain/types";
 import { environmentBlobPrefix } from "@/lib/private-documents/storage/vercel-blob-pathname";
 import { LocalPrivateDocumentStorage } from "@/lib/private-documents/storage/local-private-storage";
@@ -529,5 +531,13 @@ describe("Phase 8E-B Vercel Blob private adapter", () => {
       expect(await storage.objectExists(approved)).toBe(false);
     }
     await local.dispose();
+  });
+});
+
+describe("Phase 8E-C live SDK regression coverage", () => {
+  it("normalizes an actual BlobNotFoundError instance even when its name is Error", async () => {
+    const error = new BlobNotFoundError();
+    expect(error.name).toBe("Error");
+    expect(isVercelBlobNotFound(error)).toBe(true);
   });
 });

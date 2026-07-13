@@ -1,4 +1,5 @@
 import {
+  BlobNotFoundError,
   del,
   get,
   head,
@@ -61,6 +62,10 @@ export interface VercelBlobClient {
   }): Promise<VercelBlobListResult>;
 }
 
+export function isVercelBlobNotFound(error: unknown) {
+  return error instanceof BlobNotFoundError;
+}
+
 export const vercelBlobClient: VercelBlobClient = {
   issueUploadToken: (input) =>
     issueSignedToken({
@@ -80,8 +85,7 @@ export const vercelBlobClient: VercelBlobClient = {
     try {
       return await head(pathname);
     } catch (error) {
-      if (error instanceof Error && error.name === "BlobNotFoundError")
-        return undefined;
+      if (isVercelBlobNotFound(error)) return undefined;
       throw error;
     }
   },
