@@ -1,0 +1,49 @@
+export const DOCUMENT_ERROR_CODES = [
+  "DOCUMENT_SESSION_NOT_FOUND",
+  "DOCUMENT_SESSION_EXPIRED",
+  "DOCUMENT_SESSION_ABORTED",
+  "DOCUMENT_SESSION_ALREADY_COMPLETED",
+  "DOCUMENT_INTENT_NOT_FOUND",
+  "DOCUMENT_INTENT_MISMATCH",
+  "DOCUMENT_UPLOAD_NOT_FOUND",
+  "DOCUMENT_UPLOAD_INCOMPLETE",
+  "DOCUMENT_UPLOAD_METADATA_MISMATCH",
+  "DOCUMENT_IDEMPOTENCY_CONFLICT",
+  "DOCUMENT_FILE_EMPTY",
+  "DOCUMENT_FILE_TOO_LARGE",
+  "DOCUMENT_FILENAME_UNSAFE",
+  "DOCUMENT_EXTENSION_UNSUPPORTED",
+  "DOCUMENT_MIME_UNSUPPORTED",
+  "DOCUMENT_SIGNATURE_INVALID",
+  "DOCUMENT_MIME_MISMATCH",
+  "DOCUMENT_EXTENSION_MISMATCH",
+  "DOCUMENT_ACTIVE_CONTENT_REJECTED",
+  "DOCUMENT_SCAN_NOT_CLEAN",
+  "DOCUMENT_ACCESS_DENIED",
+  "DOCUMENT_RECENT_AUTH_REQUIRED",
+  "DOCUMENT_LEGAL_HOLD_ACTIVE",
+  "DOCUMENT_LEGAL_HOLD_REQUIRED_REASON",
+  "DOCUMENT_DELETION_NOT_ELIGIBLE",
+  "DOCUMENT_PROVIDER_OPERATION_FAILED",
+  "DOCUMENT_RETRY_LIMIT_REACHED",
+  "DOCUMENT_INVALID_PROVENANCE",
+] as const;
+export type DocumentErrorCode = (typeof DOCUMENT_ERROR_CODES)[number];
+
+export class PrivateDocumentError extends Error {
+  constructor(
+    readonly code: DocumentErrorCode,
+    message: string,
+    readonly retryable = false,
+  ) {
+    super(message);
+    this.name = "PrivateDocumentError";
+  }
+}
+export function documentError(
+  code: DocumentErrorCode,
+  message: string,
+  retryable = false,
+): never {
+  throw new PrivateDocumentError(code, message, retryable);
+}
