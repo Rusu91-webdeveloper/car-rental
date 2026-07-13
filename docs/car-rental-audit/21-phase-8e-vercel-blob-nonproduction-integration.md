@@ -4,6 +4,8 @@ Execution date: 2026-07-13. Status: complete for one isolated synthetic-only non
 
 No production project, production store, real customer system, shared data environment, repository-configured database, identity document, customer file, scanner or public document route was contacted. Prisma schema and migrations are unchanged.
 
+> Phase 8F-A supersession: production scanner selection is no longer a v1 blocker. Manual review after mandatory technical validation is the selected v1 decision. The scanner abstraction remains disabled and available for a separately approved future upgrade; see `22-phase-8f-manual-document-review-prerequisites.md`.
+
 ## 1. Outcome
 
 One dedicated Vercel project and one dedicated private Blob store were created and verified end to end with synthetic files:

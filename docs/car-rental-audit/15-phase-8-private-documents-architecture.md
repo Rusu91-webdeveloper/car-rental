@@ -2,6 +2,8 @@
 
 > Supersession note (2026-07-13): the AWS S3/KMS/GuardDuty implementation described here was evaluated but cancelled after Phase 8D. `19-phase-8e-vercel-blob-design.md` is the current production-storage architecture. This document is preserved as historical analysis.
 
+> Phase 8F-A update: v1 uses restricted manual administrator review after mandatory technical file validation. Automated malware scanning is deferred; the provider-neutral scanner contract remains an optional future upgrade and does not gate manual-mode readiness. The current lifecycle is documented in `22-phase-8f-manual-document-review-prerequisites.md`.
+
 Review date: 2026-07-13. Scope: architecture, schema sufficiency, provider/scanner options, security controls, migration proposal, and approval checklist only.
 
 No Prisma file, migration, dependency, application behavior, database, object store, scanner, upload route, or cloud resource was changed or contacted during this review.

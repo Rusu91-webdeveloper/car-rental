@@ -2,6 +2,8 @@
 
 Review date: 2026-07-13. Status: architecture and exact implementation design only. Phase 8D is approved. The previously proposed AWS/S3/GuardDuty implementation is cancelled and retained only as an evaluated alternative.
 
+> Phase 8F-A supersession: the managed-scanner path was evaluated and cancelled for v1. OPSWAT MetaDefender Cloud remains an evaluated optional future upgrade, not a selected dependency. V1 uses private Vercel Blob, mandatory technical validation, and restricted manual administrator review as documented in `22-phase-8f-manual-document-review-prerequisites.md`.
+
 No dependency, Prisma model, migration, runtime behavior, environment value, Vercel project, Blob store, Blob object, scanner, production/shared database, or external infrastructure was created, modified, or contacted during this review.
 
 ## 1. Decision
