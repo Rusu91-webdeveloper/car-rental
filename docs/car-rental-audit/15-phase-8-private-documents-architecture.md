@@ -1,5 +1,7 @@
 # Phase 8A — Private customer documents architecture gate
 
+> Supersession note (2026-07-13): the AWS S3/KMS/GuardDuty implementation described here was evaluated but cancelled after Phase 8D. `19-phase-8e-vercel-blob-design.md` is the current production-storage architecture. This document is preserved as historical analysis.
+
 Review date: 2026-07-13. Scope: architecture, schema sufficiency, provider/scanner options, security controls, migration proposal, and approval checklist only.
 
 No Prisma file, migration, dependency, application behavior, database, object store, scanner, upload route, or cloud resource was changed or contacted during this review.

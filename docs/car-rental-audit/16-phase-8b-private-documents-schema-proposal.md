@@ -1,5 +1,7 @@
 # Phase 8B — Exact private-document schema and migration proposal
 
+> Supersession note (2026-07-13): the provider-neutral schema remains authoritative and compatible. The AWS-specific production assumptions and adapter plan are superseded by Vercel Blob Private Storage in `19-phase-8e-vercel-blob-design.md`; the AWS analysis is retained as an evaluated alternative.
+
 Review date: 2026-07-13. Status: **proposal only; approval required before Phase 8C or any schema/migration change**.
 
 No Prisma schema, migration, dependency, application behavior, database, object store, scanner, upload route, signed-access path, retention job, deletion job, or cloud resource was changed or contacted during Phase 8B.

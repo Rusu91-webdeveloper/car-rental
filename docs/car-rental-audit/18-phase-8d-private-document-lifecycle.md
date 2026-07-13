@@ -107,6 +107,8 @@ Validation commands: Prisma format/validate/generate, TypeScript, full Vitest, s
 
 ## Files and Phase 8E readiness
 
+Phase 8E direction update (2026-07-13): the planned AWS adapter was cancelled. `19-phase-8e-vercel-blob-design.md` now specifies Vercel Blob Private Storage while preserving these provider-neutral Phase 8D boundaries.
+
 Phase 8D adds the `lib/private-documents/` module tree, the forward migration and SQL verification script, focused unit/integration tests, and this report. `Car.price`, historical document evidence, `.graphifyignore`, and `graphify-out/` remain untouched.
 
 Phase 8E still needs explicit approval and decisions for the real private object provider, encryption/key ownership, network/region boundary, provider upload/access mechanism, production malware scanner and callback authenticity, recent-reauthentication policy, secrets/configuration, operational alerts, recovery/cleanup workers, and infrastructure provisioning. No Phase 8E work has begun.

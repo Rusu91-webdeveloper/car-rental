@@ -40,6 +40,8 @@ Phase 2A reduces schema-gate owner decisions to the option/consequence matrix in
 
 ## Identity documents
 
+Phase 8E-A update (2026-07-13): Vercel Blob Private Storage is the selected production-storage direction, replacing the cancelled AWS implementation. Frankfurt (`fra1`), Vercel CDN/data-location acceptance, the real malware scanner, recent-authentication window, and production role/operator assignments still require owner approval; see `19-phase-8e-vercel-blob-design.md`.
+
 22. Which storage provider and EU region should hold identity documents?
 23. How long must each identity document and its metadata be retained, from which event, and what legal holds/deletion exceptions apply?
 24. Who may view or download documents—customer, all admins, a restricted operations role, or external staff—and must every access be audited?

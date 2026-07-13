@@ -63,6 +63,8 @@ Implement translated legal drafts, validation, immutable publication, archival, 
 
 Only after provider/region/scanner approval, implement the private-store adapter, local development adapter, quarantine/finalization, file-signature and MIME validation, malware scan state, short-lived authorized access, access audits, retention, deletion, and least-privilege document capabilities. Risk: Critical.
 
+Phase 8 direction update (2026-07-13): Phases 8A–8D completed the provider-neutral persistence and disposable lifecycle. The earlier AWS production-adapter plan is cancelled; Phase 8E now targets Vercel Blob Private Storage under the separately gated design in `19-phase-8e-vercel-blob-design.md`. Production scanning and recent authentication remain independent blockers.
+
 ### Phase 9 — Payments and confirmations
 
 Expose only implemented payment modes, validate deposit/balance/review combinations, and render typed/sanitized confirmation content from the booking snapshot. Provider credentials remain System Settings/environment concerns. Risk: Critical.
