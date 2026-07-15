@@ -74,7 +74,7 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       depositValue: 0,
       remainingBalanceRule: "NOT_APPLICABLE",
       methods: [{ method: "BANK_TRANSFER", enabled: true }],
-      instructions: [{ locale: "de", instructions: "Bank instructions" }],
+      instructions: [{ method: "BANK_TRANSFER", locale: "de", instructions: "Bank instructions" }],
     },
     confirmations: {
       sections: CONFIRMATION_SECTIONS.map((section) => ({

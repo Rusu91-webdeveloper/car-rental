@@ -172,7 +172,7 @@ function mapDomains(row: ReleaseRow): BusinessConfigurationDomains {
       depositValue: row.paymentConfig.depositValue,
       remainingBalanceRule: row.paymentConfig.remainingBalanceRule,
       methods: row.paymentConfig.methods.map(({ method, enabled }) => ({ method, enabled })),
-      instructions: row.paymentConfig.instructions.map(({ locale, instructions }) => ({ locale, instructions })),
+      instructions: row.paymentConfig.instructions.map(({ method, locale, instructions }) => ({ method, locale, instructions })),
     },
     confirmations: {
       sections: CONFIRMATION_SECTIONS.map((section) => ({

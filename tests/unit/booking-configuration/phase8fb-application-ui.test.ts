@@ -43,12 +43,13 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('status: "FINALIZED"')
   })
 
-  it("keeps production providers and workers explicitly disabled", () => {
+  it("keeps production providers gated and workers explicitly opt-in", () => {
     const uploads = read("lib/private-documents/server/lifecycle-context.ts")
     const workers = read("app/api/internal/phase8fb/[job]/route.ts")
     expect(uploads).toContain("environment.production || !environment.featureEnabled")
-    expect(workers).toContain('process.env.NODE_ENV === "production"')
     expect(workers).toContain('process.env.PHASE8FB_WORKERS_ENABLED !== "true"')
+    expect(workers).toContain("timingSafeEqual")
+    expect(workers).toContain("PHASE8FB_WORKER_SECRET")
   })
 
   it("requires recent authentication for review and all sensitive administration", () => {

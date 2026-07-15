@@ -20,7 +20,7 @@ import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 
-const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
+const IMPLEMENTED_PAYMENT_METHODS = ["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 
 export interface FleetCoverageSummary {
   totalVehicles: number
@@ -577,8 +577,8 @@ function impactFor(domain: ConfigurationDomainId) {
     "customer-driver-requirements": "Customer and driver forms are planned for a later phase.",
     "booking-workflow": "Configurable booking steps are planned for a later phase.",
     "document-policy": "Document collection is planned for a later phase.",
-    payments: "Payment integrations are not enabled by this release workflow.",
-    confirmations: "Configurable confirmation content is planned for a later phase.",
+    payments: "Changes the offline payment instructions selected for future booking confirmations; no payment processing is performed.",
+    confirmations: "Changes the localized content and sections shown in future booking-confirmation emails.",
     "legal-acceptance": "Changes require already-published legal documents; no legal content is shown here.",
   }
   return impacts[domain]

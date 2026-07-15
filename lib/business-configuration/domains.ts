@@ -156,6 +156,7 @@ export interface PaymentMethodConfiguration {
 }
 
 export interface PaymentInstructionTranslation {
+  method: ConfiguredPaymentMethod;
   locale: string;
   instructions: string;
 }

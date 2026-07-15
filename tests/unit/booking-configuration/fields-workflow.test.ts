@@ -65,7 +65,7 @@ describe("effective customer fields and booking workflow", () => {
     expect(maskLicenceNumber("ABCD12345678")).not.toContain("ABCD")
   })
 
-  it("accepts the safe minimal flow and blocks future or conflicting steps", () => {
+  it("accepts the implemented document step and blocks conflicting required steps", () => {
     const domains = validBusinessConfigurationDomains()
     const fields = resolveEffectiveBookingFields(domains["customer-driver-requirements"])
     expect(
@@ -83,7 +83,7 @@ describe("effective customer fields and booking workflow", () => {
         insurance: domains.insurance,
         fields,
       }).map(({ code }) => code),
-    ).toEqual(expect.arrayContaining(["DOCUMENT_STEP_NOT_AVAILABLE", "CONFIRMATION_STEP_REQUIRED"]))
+    ).toEqual(expect.arrayContaining(["CONFIRMATION_STEP_REQUIRED"]))
   })
 
   it("requires an insurance step exactly when insurance is enabled", () => {
@@ -104,7 +104,7 @@ describe("effective customer fields and booking workflow", () => {
     const flow = resolveEffectiveBookingFlow(domains["booking-workflow"])
     expect(flow.find(({ step }) => step === "DOCUMENTS")).toMatchObject({
       visible: false,
-      available: false,
+      available: true,
     })
   })
 })

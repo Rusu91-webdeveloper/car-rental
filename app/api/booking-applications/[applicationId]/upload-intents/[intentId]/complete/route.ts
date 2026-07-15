@@ -11,7 +11,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ap
     const { applicationId, intentId } = await params
     const context = await loadOwnedApplicationDocumentLifecycle(applicationId)
     rateLimitSubject = context.user.id
-    enforceRateLimit("upload:complete", context.user.id, PHASE8FB_RATE_LIMITS.uploadComplete)
+    await enforceRateLimit("upload:complete", context.user.id, PHASE8FB_RATE_LIMITS.uploadComplete)
     const document = await context.lifecycle.completeDocumentUpload({ intentId, customerUserId: context.user.id })
     return Response.json({
       documentId: document.id,
@@ -22,7 +22,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ap
   } catch (error) {
     if (rateLimitSubject && error instanceof PrivateDocumentError) {
       try {
-        enforceRateLimit("upload:invalid", rateLimitSubject, PHASE8FB_RATE_LIMITS.invalidUpload)
+        await enforceRateLimit("upload:invalid", rateLimitSubject, PHASE8FB_RATE_LIMITS.invalidUpload)
       } catch (rateLimitError) {
         if (rateLimitError instanceof RateLimitExceededError)
           return Response.json({ code: "RATE_LIMITED" }, { status: 429, headers: { "Cache-Control": "private, no-store", "Retry-After": String(rateLimitError.retryAfterSeconds) } })

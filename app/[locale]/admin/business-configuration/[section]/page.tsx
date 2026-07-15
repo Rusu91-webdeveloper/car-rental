@@ -3,13 +3,17 @@ import { notFound } from "next/navigation"
 import { ConfigurationStatusBadge } from "@/components/business-configuration/configuration-status-badge"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service"
+import { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service"
+import { PaymentInstructionForm } from "@/components/business-configuration/notification-configuration-form"
+import { ConfirmationContentForm } from "@/components/business-configuration/confirmation-content-form"
+import { NotificationDraftControl } from "@/components/business-configuration/notification-draft-control"
 
 export const dynamic = "force-dynamic"
 
 const sections = {
   documents: { label: "Documents", domain: "document-policy", permission: "canViewDocuments", note: "Document requirements and uploads are planned for a later phase." },
-  payments: { label: "Payments", domain: "payments", permission: "canView", note: "Payment configuration and integrations are planned for a later phase." },
-  confirmations: { label: "Confirmations", domain: "confirmations", permission: "canView", note: "Confirmation-content forms are planned for a later phase." },
+  payments: { label: "Payments", domain: "payments", permission: "canView", note: "Configure offline payment instructions for booking-confirmation emails." },
+  confirmations: { label: "Confirmations", domain: "confirmations", permission: "canView", note: "Configure localized content and the sections included in booking confirmations." },
   advanced: { label: "Advanced", domain: "general-rental", permission: "canView", note: "Advanced identifiers and low-level controls remain read-only." },
 } as const
 
@@ -23,6 +27,18 @@ export default async function ConfigurationSectionPage({ params }: { params: Pro
   }
   const overview = await loadConfigurationOverview({ includeAudit: false })
   const status = overview.domainStatuses.find(({ domain }) => domain === metadata.domain)
+  if (section === "payments" || section === "confirmations") {
+    const data = await loadNotificationConfigurationPage()
+    return (
+      <div className="space-y-6">
+        <div><h1 className="text-2xl font-bold">{metadata.label}</h1><p className="mt-1 text-sm text-muted-foreground">{metadata.note}</p></div>
+        <section className="rounded-xl border bg-background p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">Current status</h2><p className="mt-2 text-sm text-muted-foreground">Live: {status?.liveVersion ? `Version ${status.liveVersion}` : "Not configured"} · Draft: {status?.draftVersion ? `Version ${status.draftVersion}` : "None"}</p></div>{status ? <ConfigurationStatusBadge status={status.status} /> : null}</div></section>
+        <NotificationDraftControl key={data.draftRelease?.revision ?? "no-draft"} data={data} canEdit={capabilities.canEdit && capabilities.canManagePayments && capabilities.canManageConfirmations} />
+        {section === "payments" ? <PaymentInstructionForm key={`${data.draftPayment?.id ?? "live"}-${data.draftPayment?.revision ?? 0}`} data={data} canEdit={capabilities.canManagePayments} /> : <ConfirmationContentForm key={`${data.draftConfirmation?.id ?? "live"}-${data.draftConfirmation?.revision ?? 0}`} data={data} canEdit={capabilities.canManageConfirmations} />}
+        <Link href="/admin/business-configuration/overview" className="inline-block text-sm font-medium text-primary hover:underline">Back to Overview</Link>
+      </div>
+    )
+  }
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold">{metadata.label}</h1><p className="mt-1 text-sm text-muted-foreground">{metadata.note}</p></div>

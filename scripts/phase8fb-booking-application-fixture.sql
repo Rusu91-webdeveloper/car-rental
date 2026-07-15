@@ -67,7 +67,13 @@ INSERT INTO "DocumentRequirementTranslation" (
 INSERT INTO "PaymentConfigVersion" ("configurationVersionId", "defaultMethod", "confirmationMode")
 VALUES ('p8-payments', 'BANK_TRANSFER', 'REQUIRES_REVIEW');
 INSERT INTO "PaymentMethodRule" ("paymentConfigVersionId", method, enabled) VALUES ('p8-payments', 'BANK_TRANSFER', true);
+INSERT INTO "PaymentInstructionTranslation" (id, "paymentConfigVersionId", method, locale, instructions)
+VALUES ('p8fb-payment-instructions', 'p8-payments', 'BANK_TRANSFER', 'en', 'Use the synthetic booking reference.');
 INSERT INTO "ConfirmationConfigVersion" VALUES ('p8-confirmations');
+INSERT INTO "ConfirmationSectionRule" ("confirmationConfigVersionId", "sectionDefinitionId", enabled)
+SELECT 'p8-confirmations', id, true FROM "ConfirmationSectionDefinition";
+INSERT INTO "ConfirmationContentTranslation" (id, "confirmationConfigVersionId", locale, heading, "safeContent")
+VALUES ('p8fb-confirmation-en', 'p8-confirmations', 'en', 'Synthetic booking confirmed', 'Synthetic confirmation content.');
 INSERT INTO "LegalAcceptanceConfigVersion" (
   "configurationVersionId", "termsDocumentVersionId", "privacyDocumentVersionId", "termsAcceptance",
   "privacyAcknowledgment", "bookingEnforcementEnabled", "requiredLocales", "retainContentSnapshot"

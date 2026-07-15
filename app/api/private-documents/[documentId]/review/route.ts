@@ -35,7 +35,7 @@ export async function POST(
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     const context = await loadPrivateDocumentRequestContext(documentId);
-    enforceRateLimit("document:review", context.actor.userId, PHASE8FB_RATE_LIMITS.reviewDecision);
+    await enforceRateLimit("document:review", context.actor.userId, PHASE8FB_RATE_LIMITS.reviewDecision);
     const common = {
       documentId,
       expectedReviewRevision: Number(body.expectedReviewRevision),

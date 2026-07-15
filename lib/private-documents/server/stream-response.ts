@@ -24,7 +24,7 @@ export async function streamPrivateDocument(input: {
   try {
     const context = await loadPrivateDocumentRequestContext(input.documentId);
     contextLoaded = true;
-    enforceRateLimit(
+    await enforceRateLimit(
       "document:access",
       context.actor.userId,
       PHASE8FB_RATE_LIMITS.documentAccess,

@@ -18,7 +18,7 @@ export function ConfigurationIssueList({
       ) : (
         <ul className="mt-4 space-y-3">
           {issues.map((issue) => (
-            <li key={`${issue.code}-${issue.affectedResource ?? "general"}`} className="rounded-lg border p-3">
+            <li key={`${issue.domain}-${issue.code}-${issue.affectedResource ?? "general"}`} className="rounded-lg border p-3">
               <p className="text-sm font-medium">{issue.message}</p>
               {issue.affectedResource ? <p className="mt-1 text-xs text-muted-foreground">Affected: {issue.affectedResource}</p> : null}
               {issue.suggestedAction ? <p className="mt-2 text-sm text-muted-foreground">Next: {issue.suggestedAction}</p> : null}

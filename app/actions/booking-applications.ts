@@ -78,7 +78,7 @@ function publicError(error: unknown) {
 export async function beginBookingApplication(input: unknown) {
   try {
     const user = await requireAuth()
-    enforceRateLimit("application:create", user.id, PHASE8FB_RATE_LIMITS.applicationCreate)
+    await enforceRateLimit("application:create", user.id, PHASE8FB_RATE_LIMITS.applicationCreate)
     const value = beginSchema.parse(input)
     const repository = new PrismaBookingApplicationRepository(prisma)
     let application = await createBookingApplication(repository, {
@@ -157,7 +157,7 @@ export async function getBookingApplication(applicationId: string) {
 export async function submitBookingApplicationForReview(input: unknown) {
   try {
     const user = await requireAuth()
-    enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
+    await enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
     const value = applicationMutationSchema.parse(input)
     const repository = new PrismaBookingApplicationRepository(prisma)
     const application = await submitApplicationForDocumentReview(repository, {
@@ -173,7 +173,7 @@ export async function submitBookingApplicationForReview(input: unknown) {
 export async function confirmRenewedApplicationTerms(input: unknown) {
   try {
     const user = await requireAuth()
-    enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
+    await enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
     const value = applicationMutationSchema.extend({ rentalTerms: z.boolean(), privacyNotice: z.boolean() }).parse(input)
     const repository = new PrismaBookingApplicationRepository(prisma)
     let application = await createOrRefreshApplicationQuote(repository, {
@@ -198,7 +198,7 @@ export async function confirmRenewedApplicationTerms(input: unknown) {
 export async function finalizeSavedBookingApplication(input: unknown) {
   try {
     const user = await requireAuth()
-    enforceRateLimit("application:finalize", user.id, PHASE8FB_RATE_LIMITS.finalization)
+    await enforceRateLimit("application:finalize", user.id, PHASE8FB_RATE_LIMITS.finalization)
     const value = applicationMutationSchema.parse(input)
     const repository = new PrismaBookingApplicationRepository(prisma)
     const application = await finalizeBookingApplication(repository, {
@@ -214,7 +214,7 @@ export async function finalizeSavedBookingApplication(input: unknown) {
 export async function cancelSavedBookingApplication(input: unknown) {
   try {
     const user = await requireAuth()
-    enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
+    await enforceRateLimit("application:update", user.id, PHASE8FB_RATE_LIMITS.applicationUpdate)
     const value = applicationMutationSchema.parse(input)
     const repository = new PrismaBookingApplicationRepository(prisma)
     const application = await cancelBookingApplication(repository, {

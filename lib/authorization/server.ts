@@ -93,6 +93,8 @@ export async function getBusinessConfigurationCapabilities() {
     canManageDriverRequirements: allowed(CAPABILITIES.DRIVER_REQUIREMENTS_MANAGE),
     canManageCustomerFields: allowed(CAPABILITIES.CUSTOMER_FIELDS_MANAGE),
     canManageBookingWorkflow: allowed(CAPABILITIES.BOOKING_WORKFLOW_MANAGE),
+    canManagePayments: allowed(CAPABILITIES.PAYMENTS_MANAGE),
+    canManageConfirmations: allowed(CAPABILITIES.CONFIRMATIONS_MANAGE),
     canViewSensitiveCustomerData: allowed(CAPABILITIES.CUSTOMER_SENSITIVE_DATA_VIEW),
     canEditLegal: allowed(CAPABILITIES.LEGAL_EDIT),
     canPublishLegal: allowed(CAPABILITIES.LEGAL_PUBLISH),

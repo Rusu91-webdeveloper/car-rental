@@ -62,10 +62,10 @@ INSERT INTO "BookingApplicationInsuranceSelection" (
 );
 
 INSERT INTO "BookingApplicationPaymentSelection" (
-  id, "bookingApplicationId", "paymentConfigVersionId", "bookingPaymentMethod", "configuredPaymentMode",
+  id, "bookingApplicationId", "paymentConfigVersionId", "paymentInstructionTranslationId", "bookingPaymentMethod", "configuredPaymentMode",
   "depositType", "depositValue", "quotedDepositAmount", currency, "selectedAt", "updatedAt"
 ) VALUES (
-  'p8fb-payment', 'p8fb-application', 'p8-payments', 'TRANSFER', 'BANK_TRANSFER',
+  'p8fb-payment', 'p8fb-application', 'p8-payments', 'p8fb-payment-instructions', 'TRANSFER', 'BANK_TRANSFER',
   'NONE', 0, 0, 'EUR', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 

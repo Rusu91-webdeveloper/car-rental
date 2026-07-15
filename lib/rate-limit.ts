@@ -1,11 +1,12 @@
+import "server-only"
+
+import { createHmac } from "node:crypto"
+import { prisma } from "@/lib/db"
+
 export interface RateLimitPolicy {
   limit: number
   windowMs: number
 }
-
-type Entry = { count: number; resetAt: number }
-const entries = new Map<string, Entry>()
-const MAX_KEYS = 5_000
 
 export class RateLimitExceededError extends Error {
   constructor(readonly retryAfterSeconds: number) {
@@ -14,32 +15,63 @@ export class RateLimitExceededError extends Error {
   }
 }
 
+function subjectHash(subject: string) {
+  const secret = process.env.RATE_LIMIT_HASH_SECRET ?? process.env.NEXTAUTH_SECRET
+  if (!secret && process.env.NODE_ENV === "production")
+    throw new Error("RATE_LIMIT_HASH_SECRET is required in production.")
+  return createHmac("sha256", secret ?? "nonproduction-rate-limit-key")
+    .update(subject)
+    .digest("hex")
+}
+
 /**
- * A deliberately bounded non-production limiter. Production enablement must
- * replace this process-local store with a shared atomic backend.
+ * Shared PostgreSQL fixed-window limiter. The compound unique key and atomic
+ * increment make decisions deterministic across functions, regions, and
+ * retries without adding another production service.
  */
-export function enforceRateLimit(
+export async function enforceRateLimit(
   scope: string,
   subject: string,
   policy: RateLimitPolicy,
-  now = Date.now(),
+  now = new Date(),
 ) {
-  if (entries.size >= MAX_KEYS)
-    for (const [key, value] of entries) {
-      if (value.resetAt <= now || entries.size >= MAX_KEYS) entries.delete(key)
-      if (entries.size < MAX_KEYS) break
-    }
-  const key = `${scope}:${subject}`
-  const current = entries.get(key)
-  if (!current || current.resetAt <= now) {
-    entries.set(key, { count: 1, resetAt: now + policy.windowMs })
-    return
-  }
-  if (current.count >= policy.limit)
+  if (!/^[a-z0-9:-]{1,64}$/i.test(scope))
+    throw new Error("Invalid rate-limit scope.")
+  if (
+    !Number.isSafeInteger(policy.limit) ||
+    policy.limit < 1 ||
+    !Number.isSafeInteger(policy.windowMs) ||
+    policy.windowMs < 1
+  )
+    throw new Error("Invalid rate-limit policy.")
+
+  const windowStartedAt = new Date(
+    Math.floor(now.getTime() / policy.windowMs) * policy.windowMs,
+  )
+  const resetAt = new Date(windowStartedAt.getTime() + policy.windowMs)
+  const hash = subjectHash(subject)
+  const bucket = await prisma.rateLimitBucket.upsert({
+    where: {
+      scope_subjectHash_windowStartedAt: {
+        scope,
+        subjectHash: hash,
+        windowStartedAt,
+      },
+    },
+    create: { scope, subjectHash: hash, windowStartedAt, resetAt },
+    update: { count: { increment: 1 }, resetAt },
+    select: { count: true },
+  })
+
+  // Bounded housekeeping is safe on every call because resetAt is indexed.
+  await prisma.rateLimitBucket.deleteMany({
+    where: { resetAt: { lt: new Date(now.getTime() - 24 * 60 * 60_000) } },
+  })
+
+  if (bucket.count > policy.limit)
     throw new RateLimitExceededError(
-      Math.max(1, Math.ceil((current.resetAt - now) / 1_000)),
+      Math.max(1, Math.ceil((resetAt.getTime() - now.getTime()) / 1_000)),
     )
-  current.count += 1
 }
 
 export const PHASE8FB_RATE_LIMITS = {

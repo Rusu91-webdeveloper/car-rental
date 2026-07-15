@@ -1,28 +1,22 @@
-import nodemailer from "nodemailer"
 import { Resend } from "resend"
 import { formatCents } from "@/lib/money"
 import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
 import { getPaymentDetails } from "@/lib/payment-details"
 import { prisma } from "@/lib/db"
+import { logger } from "@/lib/logger"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const safeEmailConsole = {
+  log(message: string, ...discarded: unknown[]) { void message; void discarded; logger.info("email.operation_succeeded") },
+  warn(message: string, ...discarded: unknown[]) { void message; void discarded; logger.warn("email.operation_skipped") },
+  error(message: string, ...discarded: unknown[]) { void message; void discarded; logger.error("email.operation_failed") },
+}
 const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "RentCar <noreply@rentcar.com>"
-const smtpHost = process.env.EMAIL_HOST
-const smtpPort = process.env.EMAIL_PORT ? Number(process.env.EMAIL_PORT) : 587
-const smtpUser = process.env.EMAIL_USER
-const smtpPass = process.env.EMAIL_PASS
-const smtpEnabled = Boolean(smtpHost && smtpUser && smtpPass)
-const smtpTransport = smtpEnabled
-  ? nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    })
-  : null
+let resend: Resend | undefined
+
+function getResend() {
+  resend ??= new Resend(process.env.RESEND_API_KEY)
+  return resend
+}
 
 type SendEmailInput = {
   to: string | string[]
@@ -34,23 +28,11 @@ type SendEmailInput = {
  * Validates email configuration and returns status information
  */
 export function getEmailConfigStatus() {
-  const hasSmtp = Boolean(smtpHost && smtpUser && smtpPass)
   const hasResend = Boolean(process.env.RESEND_API_KEY)
-  const isEnabled = hasSmtp || hasResend
 
   return {
-    enabled: isEnabled,
-    provider: hasSmtp ? "SMTP" : hasResend ? "Resend" : "None",
-    smtp: {
-      enabled: hasSmtp,
-      host: smtpHost || "Not configured",
-      port: smtpPort,
-      user: smtpUser ? `${smtpUser.substring(0, 3)}***` : "Not configured",
-    },
-    resend: {
-      enabled: hasResend,
-      apiKey: hasResend ? "Configured" : "Not configured",
-    },
+    enabled: hasResend,
+    provider: hasResend ? "Resend" : "None",
     from: emailFrom,
   }
 }
@@ -100,6 +82,19 @@ function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
   return locale.toLowerCase().startsWith("de") ? "de" : "en"
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function configuredTextHtml(value: string | undefined) {
+  return value ? escapeHtml(value).replace(/\r?\n/g, "<br>") : ""
+}
+
 function resolveSupportEmail(
   settings: {
     supportEmail?: string | null
@@ -111,7 +106,6 @@ function resolveSupportEmail(
     settings?.companyEmail ||
     process.env.SUPPORT_EMAIL ||
     process.env.ADMIN_EMAIL ||
-    process.env.EMAIL_USER ||
     extractEmailAddress(emailFrom)
   )
 }
@@ -122,9 +116,9 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
   // Validate email configuration
   if (!configStatus.enabled) {
     const errorMsg =
-      "Email provider not configured. Please set SMTP credentials (EMAIL_HOST, EMAIL_USER, EMAIL_PASS) or RESEND_API_KEY"
-    console.error("[EMAIL_ERROR] Configuration:", configStatus)
-    console.error("[EMAIL_ERROR]", errorMsg)
+      "Email provider not configured. Please set RESEND_API_KEY"
+    safeEmailConsole.error("[EMAIL_ERROR] Configuration:", configStatus)
+    safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
   }
 
@@ -133,47 +127,21 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
   const invalidEmails = recipients.filter((email) => !isValidEmail(email))
   if (invalidEmails.length > 0) {
     const errorMsg = `Invalid email address(es): ${invalidEmails.join(", ")}`
-    console.error("[EMAIL_ERROR]", errorMsg)
+    safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
   }
 
   // Log email configuration status
-  console.log(`[EMAIL] Sending via ${configStatus.provider} to:`, recipients.join(", "))
+  safeEmailConsole.log(`[EMAIL] Sending via ${configStatus.provider} to:`, recipients.join(", "))
 
-  // Try SMTP first if configured
-  if (smtpTransport) {
-    try {
-      const info = await smtpTransport.sendMail({
-        from: emailFrom,
-        to,
-        subject,
-        html,
-      })
-
-      console.log(`[EMAIL] SMTP email sent successfully (messageId: ${info.messageId})`)
-      return { id: info.messageId }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown SMTP error"
-      console.error("[EMAIL_ERROR] SMTP send failed:", {
-        error: errorMessage,
-        host: smtpHost,
-        port: smtpPort,
-        user: smtpUser,
-        to: recipients,
-      })
-      return { error: `SMTP error: ${errorMessage}` }
-    }
-  }
-
-  // Fallback to Resend
   if (!process.env.RESEND_API_KEY) {
-    const errorMsg = "Email provider not configured. SMTP failed and Resend API key is missing"
-    console.error("[EMAIL_ERROR]", errorMsg)
+    const errorMsg = "Email provider not configured. Resend API key is missing"
+    safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
   }
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: emailFrom,
       to,
       subject,
@@ -181,22 +149,22 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Resend send failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Resend send failed:", {
         error: error.message || "Unknown Resend error",
         to: recipients,
       })
-      return { error: error.message || "Failed to send email via Resend" }
+      return { error: "Email delivery failed" }
     }
 
-    console.log(`[EMAIL] Resend email sent successfully (id: ${data?.id})`)
+    safeEmailConsole.log(`[EMAIL] Resend email sent successfully (id: ${data?.id})`)
     return { id: data?.id }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown Resend error"
-    console.error("[EMAIL_ERROR] Resend exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Resend exception:", {
       error: errorMessage,
       to: recipients,
     })
-    return { error: `Resend error: ${errorMessage}` }
+    return { error: "Email delivery failed" }
   }
 }
 
@@ -217,12 +185,17 @@ interface BookingEmailData {
   insuranceName?: string
   insuranceSubtotal?: number
   legalReferences?: LegalAcceptanceEmailReference[]
+  confirmationHeading?: string
+  confirmationContent?: string
+  paymentMode?: "BOOKING_REQUEST" | "BANK_TRANSFER" | "CASH_ON_PICKUP"
+  paymentInstructions?: string
+  showPaymentInstructions?: boolean
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send booking confirmation email:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send booking confirmation email:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       carName: data.carName,
@@ -231,12 +204,12 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping booking confirmation email.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping booking confirmation email.")
       return { error: "Email is not configured" }
     }
 
     if (!isValidEmail(data.to)) {
-      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
       return { error: `Invalid email address: ${data.to}` }
     }
 
@@ -253,18 +226,30 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"
 
-    const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
-    const paymentMethodLabel = isTransfer
-      ? isGerman
-        ? "Bankuberweisung"
-        : "Bank Transfer"
-      : data.paymentMethod === "CARD"
-        ? isGerman
-          ? "Karte"
-          : "Card"
-        : isGerman
-          ? "Zahlung bei Abholung"
-          : "Pay at Pickup"
+    const paymentMode = data.paymentMode
+    const isTransfer = paymentMode
+      ? paymentMode === "BANK_TRANSFER"
+      : (data.paymentMethod || "TRANSFER") === "TRANSFER"
+    const paymentMethodLabel =
+      paymentMode === "BOOKING_REQUEST"
+        ? isGerman ? "Rechnung" : "Invoice"
+        : paymentMode === "BANK_TRANSFER"
+          ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+          : paymentMode === "CASH_ON_PICKUP"
+            ? isGerman ? "Barzahlung bei Abholung" : "Cash at Pickup"
+            : isTransfer
+              ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+              : data.paymentMethod === "CARD"
+                ? isGerman ? "Karte" : "Card"
+                : isGerman ? "Zahlung bei Abholung" : "Pay at Pickup"
+    const confirmationHeading =
+      data.confirmationHeading?.trim() || (isGerman ? "Buchung bestatigt!" : "Booking Confirmed!")
+    const subjectHeading = confirmationHeading.replace(/[\r\n]+/g, " ")
+    const configuredContentHtml = configuredTextHtml(data.confirmationContent)
+    const paymentInstructionsHtml =
+      data.showPaymentInstructions && data.paymentInstructions
+        ? `<div class="payment-instructions"><strong>${isGerman ? "Zahlungsanweisungen" : "Payment Instructions"}</strong><p>${configuredTextHtml(data.paymentInstructions)}</p></div>`
+        : ""
     const guaranteeAmount = data.guaranteeAmount ?? 0
     const guaranteeDetailsHtml =
       guaranteeAmount > 0
@@ -276,7 +261,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         `
         : ""
     const transferCodeHtml =
-      isTransfer && data.transferCode
+      isTransfer && !paymentMode && data.transferCode
         ? `
                 <div class="transfer-code">
                   ${isGerman ? "Uberweisungscode" : "Transfer Code"}: ${data.transferCode}
@@ -284,7 +269,13 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 <p style="text-align: center; color: #666; font-size: 14px;">${isGerman ? "Bitte diesen Code bei der Fahrzeugabholung vorzeigen." : "Please show this code when picking up your vehicle"}</p>
           `
         : ""
-    const nextStepsHtml = isTransfer
+    const nextStepsHtml = paymentMode
+      ? `
+                  <li>${isGerman ? "Folgen Sie den oben angegebenen Zahlungsanweisungen" : "Follow the payment instructions shown above"}</li>
+                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+                  <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
+        `
+      : isTransfer
       ? `
                   <li>${isGerman ? "Speichern Sie Ihren Uberweisungscode" : "Save your transfer code"} (${data.transferCode || "-"})</li>
                   <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
@@ -298,7 +289,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${isGerman ? "Buchung bestatigt" : "Booking Confirmed"} - ${data.carName}`,
+      subject: `${subjectHeading} - ${data.carName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -310,6 +301,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
               .header { background: #0066FF; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
               .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
               .transfer-code { background: #fff; border: 2px dashed #0066FF; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; margin: 20px 0; border-radius: 4px; }
+              .payment-instructions { background: #fff; border-left: 4px solid #0066FF; padding: 16px; margin: 20px 0; border-radius: 4px; }
               .details { background: white; padding: 20px; border-radius: 4px; margin: 20px 0; }
               .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
               .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
@@ -318,11 +310,12 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
           <body>
             <div class="container">
               <div class="header">
-                <h1>🚗 ${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
+                <h1>🚗 ${escapeHtml(confirmationHeading)}</h1>
               </div>
               <div class="content">
                 <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
                 <p>${isGerman ? "Gute Nachrichten! Ihre Buchung wurde bestatigt. Hier sind Ihre Buchungsdetails:" : "Great news! Your booking has been confirmed. Here are your booking details:"}</p>
+                ${configuredContentHtml ? `<p>${configuredContentHtml}</p>` : ""}
                 ${transferCodeHtml}
                 
                 <div class="details">
@@ -356,6 +349,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                     <span style="color: #0066FF; font-weight: bold;">${formatCents(data.totalPrice, data.currency)}</span>
                   </div>
                 </div>
+                ${paymentInstructionsHtml}
                 ${
                   guaranteeAmount > 0
                     ? `<p style="font-size: 13px; color: #4b5563; margin-top: 10px;">
@@ -380,7 +374,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Booking confirmation failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Booking confirmation failed:", {
         error,
         to: data.to,
         bookingNumber: data.bookingNumber,
@@ -389,14 +383,14 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Booking confirmation sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Booking confirmation sent successfully:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Booking confirmation exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Booking confirmation exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       to: data.to,
       bookingNumber: data.bookingNumber,
@@ -415,7 +409,7 @@ export async function sendBookingStatusEmail(
 ) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send booking status email:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send booking status email:", {
       to,
       status,
       bookingNumber,
@@ -425,12 +419,12 @@ export async function sendBookingStatusEmail(
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping booking status email.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping booking status email.")
       return { error: "Email is not configured" }
     }
 
     if (!isValidEmail(to)) {
-      console.error("[EMAIL_ERROR] Invalid recipient email:", to)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid recipient email:", to)
       return { error: `Invalid email address: ${to}` }
     }
 
@@ -459,7 +453,7 @@ export async function sendBookingStatusEmail(
           : "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
         break
       default:
-        console.log("[EMAIL] Status email skipped for status:", status)
+        safeEmailConsole.log("[EMAIL] Status email skipped for status:", status)
         return { success: true }
     }
 
@@ -494,7 +488,7 @@ export async function sendBookingStatusEmail(
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Booking status email failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Booking status email failed:", {
         error,
         to,
         status,
@@ -503,7 +497,7 @@ export async function sendBookingStatusEmail(
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Booking status email sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Booking status email sent successfully:", {
       to,
       status,
       bookingNumber,
@@ -511,7 +505,7 @@ export async function sendBookingStatusEmail(
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Booking status email exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Booking status email exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       to,
       status,
@@ -533,7 +527,7 @@ export async function sendBookingCompletionReviewEmail(data: {
 }) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send booking completion review email:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send booking completion review email:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       carName: data.carName,
@@ -542,12 +536,12 @@ export async function sendBookingCompletionReviewEmail(data: {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping booking completion review email.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping booking completion review email.")
       return { error: "Email is not configured" }
     }
 
     if (!isValidEmail(data.to)) {
-      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
       return { error: `Invalid email address: ${data.to}` }
     }
 
@@ -614,7 +608,7 @@ export async function sendBookingCompletionReviewEmail(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Booking completion review email failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Booking completion review email failed:", {
         error,
         to: data.to,
         bookingNumber: data.bookingNumber,
@@ -622,14 +616,14 @@ export async function sendBookingCompletionReviewEmail(data: {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Booking completion review email sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Booking completion review email sent successfully:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Booking completion review email exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Booking completion review email exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       to: data.to,
       bookingNumber: data.bookingNumber,
@@ -659,7 +653,7 @@ export async function sendManualPaymentEmail(data: {
 }) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send manual payment email:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send manual payment email:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       carName: data.carName,
@@ -668,12 +662,12 @@ export async function sendManualPaymentEmail(data: {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping manual payment email.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping manual payment email.")
       return { error: "Email is not configured" }
     }
 
     if (!isValidEmail(data.to)) {
-      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
       return { error: `Invalid email address: ${data.to}` }
     }
 
@@ -882,7 +876,7 @@ export async function sendManualPaymentEmail(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Manual payment email failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Manual payment email failed:", {
         error,
         to: data.to,
         bookingNumber: data.bookingNumber,
@@ -891,14 +885,14 @@ export async function sendManualPaymentEmail(data: {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Manual payment email sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Manual payment email sent successfully:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Manual payment email exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Manual payment email exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       to: data.to,
       bookingNumber: data.bookingNumber,
@@ -925,7 +919,7 @@ export async function sendPayAtPickupEmail(data: {
 }) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send pay-at-pickup email:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send pay-at-pickup email:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       carName: data.carName,
@@ -934,12 +928,12 @@ export async function sendPayAtPickupEmail(data: {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping pay-at-pickup email.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping pay-at-pickup email.")
       return { error: "Email is not configured" }
     }
 
     if (!isValidEmail(data.to)) {
-      console.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid recipient email:", data.to)
       return { error: `Invalid email address: ${data.to}` }
     }
 
@@ -1033,7 +1027,7 @@ export async function sendPayAtPickupEmail(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Pay-at-pickup email failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Pay-at-pickup email failed:", {
         error,
         to: data.to,
         bookingNumber: data.bookingNumber,
@@ -1041,14 +1035,14 @@ export async function sendPayAtPickupEmail(data: {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Pay-at-pickup email sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Pay-at-pickup email sent successfully:", {
       to: data.to,
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Pay-at-pickup email exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Pay-at-pickup email exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       to: data.to,
       bookingNumber: data.bookingNumber,
@@ -1078,7 +1072,7 @@ export async function sendAdminBookingNotification(data: {
 }) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send admin booking notification:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send admin booking notification:", {
       bookingNumber: data.bookingNumber,
       carName: data.carName,
       emailEnabled: configStatus.enabled,
@@ -1086,7 +1080,7 @@ export async function sendAdminBookingNotification(data: {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping admin booking notification.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping admin booking notification.")
       return { error: "Email is not configured" }
     }
 
@@ -1107,7 +1101,7 @@ export async function sendAdminBookingNotification(data: {
     )
 
     if (recipients.length === 0) {
-      console.error("[EMAIL_ERROR] No admin email configured:", {
+      safeEmailConsole.error("[EMAIL_ERROR] No admin email configured:", {
         adminEmail: data.adminEmail,
         adminEmails: data.adminEmails,
         companyAdminEmail: companySettings?.adminEmail,
@@ -1118,13 +1112,13 @@ export async function sendAdminBookingNotification(data: {
     // Validate admin email addresses
     const invalidEmails = recipients.filter((email) => !isValidEmail(email))
     if (invalidEmails.length > 0) {
-      console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
       return {
         error: `Invalid admin email address(es): ${invalidEmails.join(", ")}`,
       }
     }
 
-    console.log("[EMAIL] Sending admin notification to:", recipients.join(", "))
+    safeEmailConsole.log("[EMAIL] Sending admin notification to:", recipients.join(", "))
     const isTransfer = (data.paymentMethod || "TRANSFER") === "TRANSFER"
     const paymentMethodLabel = isTransfer ? "Bank Transfer" : "Pay at Pickup"
     const statusBadge = isTransfer ? "PENDING PAYMENT" : "PAY AT PICKUP"
@@ -1296,7 +1290,7 @@ export async function sendAdminBookingNotification(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Admin booking notification failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Admin booking notification failed:", {
         error,
         recipients: recipients.join(", "),
         bookingNumber: data.bookingNumber,
@@ -1304,14 +1298,14 @@ export async function sendAdminBookingNotification(data: {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Admin booking notification sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Admin booking notification sent successfully:", {
       recipients: recipients.join(", "),
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Admin booking notification exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Admin booking notification exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       bookingNumber: data.bookingNumber,
     })
@@ -1338,7 +1332,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
 }) {
   try {
     const configStatus = getEmailConfigStatus()
-    console.log("[EMAIL] Attempting to send admin booking confirmation notification:", {
+    safeEmailConsole.log("[EMAIL] Attempting to send admin booking confirmation notification:", {
       bookingNumber: data.bookingNumber,
       carName: data.carName,
       emailEnabled: configStatus.enabled,
@@ -1346,7 +1340,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
     })
 
     if (!configStatus.enabled) {
-      console.warn("[EMAIL] Email is disabled. Skipping admin booking confirmation notification.")
+      safeEmailConsole.warn("[EMAIL] Email is disabled. Skipping admin booking confirmation notification.")
       return { error: "Email is not configured" }
     }
 
@@ -1366,7 +1360,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
     )
 
     if (recipients.length === 0) {
-      console.error("[EMAIL_ERROR] No admin email configured:", {
+      safeEmailConsole.error("[EMAIL_ERROR] No admin email configured:", {
         adminEmail: data.adminEmail,
         adminEmails: data.adminEmails,
         companyAdminEmail: companySettings?.adminEmail,
@@ -1377,13 +1371,13 @@ export async function sendAdminBookingConfirmationNotification(data: {
     // Validate admin email addresses
     const invalidEmails = recipients.filter((email) => !isValidEmail(email))
     if (invalidEmails.length > 0) {
-      console.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
+      safeEmailConsole.error("[EMAIL_ERROR] Invalid admin email addresses:", invalidEmails)
       return {
         error: `Invalid admin email address(es): ${invalidEmails.join(", ")}`,
       }
     }
 
-    console.log("[EMAIL] Sending admin confirmation notification to:", recipients.join(", "))
+    safeEmailConsole.log("[EMAIL] Sending admin confirmation notification to:", recipients.join(", "))
 
     const { id, error } = await sendEmail({
       to: recipients,
@@ -1505,7 +1499,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
     })
 
     if (error) {
-      console.error("[EMAIL_ERROR] Admin booking confirmation notification failed:", {
+      safeEmailConsole.error("[EMAIL_ERROR] Admin booking confirmation notification failed:", {
         error,
         recipients: recipients.join(", "),
         bookingNumber: data.bookingNumber,
@@ -1513,14 +1507,14 @@ export async function sendAdminBookingConfirmationNotification(data: {
       return { error }
     }
 
-    console.log("[EMAIL] ✅ Admin booking confirmation notification sent successfully:", {
+    safeEmailConsole.log("[EMAIL] ✅ Admin booking confirmation notification sent successfully:", {
       recipients: recipients.join(", "),
       bookingNumber: data.bookingNumber,
       id: id || "unknown",
     })
     return { success: true, id }
   } catch (error) {
-    console.error("[EMAIL_ERROR] Admin booking confirmation notification exception:", {
+    safeEmailConsole.error("[EMAIL_ERROR] Admin booking confirmation notification exception:", {
       error: error instanceof Error ? error.message : "Unknown error",
       bookingNumber: data.bookingNumber,
     })

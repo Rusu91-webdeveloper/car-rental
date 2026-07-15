@@ -203,8 +203,8 @@ async function touch(
 
 function configuredPaymentMethod(method: "TRANSFER" | "PAY_AT_PICKUP") {
   return method === "TRANSFER"
-    ? ["BANK_TRANSFER" as const]
-    : (["CASH_ON_PICKUP", "CARD_ON_PICKUP"] as const)
+    ? (["BANK_TRANSFER", "BOOKING_REQUEST"] as const)
+    : (["CASH_ON_PICKUP"] as const)
 }
 
 async function authoritativeQuote(db: Db, row: LoadedApplication) {
@@ -573,12 +573,14 @@ export class PrismaBookingApplicationRepository
         where: { configurationVersionId: row.paymentConfigVersionId },
         include: { methods: true, instructions: true },
       })
-      const method = config?.methods.find(
-        (value) =>
-          value.enabled && configuredPaymentMethod(input.paymentMethod).includes(
-            value.method as never,
-          ),
+      const supportedMethods = configuredPaymentMethod(input.paymentMethod)
+      const enabledMethods = config?.methods.filter(
+        (value) => value.enabled && supportedMethods.includes(value.method as never),
       )
+      const method =
+        enabledMethods?.find((value) => value.method === config?.defaultMethod) ??
+        enabledMethods?.find((value) => value.method === supportedMethods[0]) ??
+        enabledMethods?.[0]
       if (!config || !method)
         applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
       const total = row.pricingQuotes[0]?.grandTotal ?? 0
@@ -588,9 +590,13 @@ export class PrismaBookingApplicationRepository
           : config.depositType === "FIXED_AMOUNT"
             ? config.depositValue
             : Math.round((total * config.depositValue) / 10_000)
+      const methodInstructions = config.instructions.filter(
+        (value) => value.method === method.method,
+      )
       const instruction =
-        config.instructions.find((value) => value.locale === row.locale) ??
-        config.instructions[0]
+        methodInstructions.find((value) => value.locale === row.locale) ??
+        methodInstructions.find((value) => value.locale === "en") ??
+        methodInstructions[0]
       const revision = row.paymentSelection?.revision ?? 0
       await tx.bookingApplicationPaymentSelection.upsert({
         where: { bookingApplicationId: row.id },

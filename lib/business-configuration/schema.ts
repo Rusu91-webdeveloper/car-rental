@@ -294,6 +294,7 @@ export const paymentConfigurationSchema = z
     methods: z.array(paymentMethodSchema).min(1),
     instructions: z.array(
       z.object({
+        method: z.enum(PAYMENT_METHODS),
         locale: localeSchema,
         instructions: z.string().trim().min(1).max(5_000),
       }),
@@ -320,6 +321,29 @@ export const paymentConfigurationSchema = z
           "The default payment method must be enabled",
         ),
       });
+    }
+    const instructionKeys = configuration.instructions.map(({ method, locale }) => `${method}:${locale}`);
+    if (!uniqueStrings(instructionKeys)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["instructions"],
+        message: codeMessage(
+          "payments.instructions_unique",
+          "Configure at most one instruction per payment method and language",
+        ),
+      });
+    }
+    for (const { method } of enabled) {
+      if (!configuration.instructions.some((instruction) => instruction.method === method)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["instructions", method],
+          message: codeMessage(
+            "payments.instructions_required",
+            `Add payment instructions for ${method}`,
+          ),
+        });
+      }
     }
     if (
       configuration.depositMode === "NONE" &&

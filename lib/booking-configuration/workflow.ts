@@ -18,7 +18,7 @@ const labels = {
   REVIEW: "Review",
   CONFIRMATION: "Confirmation",
 } as const
-const unavailable = new Set(["DOCUMENTS"])
+const unavailable = new Set<BookingStepConfiguration["step"]>()
 
 export function validateBookingWorkflow(input: {
   workflow: BookingWorkflowConfiguration

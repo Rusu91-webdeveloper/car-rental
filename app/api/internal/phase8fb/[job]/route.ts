@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto"
+import { randomUUID, timingSafeEqual } from "node:crypto"
 import { prisma } from "@/lib/db"
 import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository"
 import { expireBookingApplications } from "@/lib/booking-applications/service"
@@ -10,24 +10,16 @@ import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastr
 import { PrismaDocumentLifecycleRepository } from "@/lib/private-documents/infrastructure/prisma-repository"
 import { createPrivateDocumentStorage } from "@/lib/private-documents/storage/factory"
 import { enforceRateLimit, PHASE8FB_RATE_LIMITS } from "@/lib/rate-limit"
+import { enabledProductionWorkerJobs, PRODUCTION_WORKER_JOBS } from "@/lib/production/operations-environment"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const JOBS = new Set([
-  "application-expiry",
-  "abandoned-upload-cleanup",
-  "review-backlog",
-  "stale-review",
-  "retention-processing",
-  "deletion-processing",
-  "failed-deletion-retry",
-  "orphan-reconciliation",
-])
+const JOBS = new Set<string>(PRODUCTION_WORKER_JOBS)
 
-function authorized(request: Request) {
-  if (process.env.NODE_ENV === "production") return false
+function authorized(request: Request, job: string) {
   if (process.env.PHASE8FB_WORKERS_ENABLED !== "true") return false
+  if (!enabledProductionWorkerJobs().has(job as typeof PRODUCTION_WORKER_JOBS[number])) return false
   const secret = process.env.PHASE8FB_WORKER_SECRET
   const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
   if (!secret || !supplied) return false
@@ -38,13 +30,23 @@ function authorized(request: Request) {
 
 export async function POST(request: Request, { params }: { params: Promise<{ job: string }> }) {
   const { job } = await params
-  if (!JOBS.has(job)) return Response.json({ code: "WORKER_NOT_FOUND" }, { status: 404 })
-  if (!authorized(request)) return Response.json({ code: "WORKER_DISABLED_OR_DENIED" }, { status: 403 })
+  if (!JOBS.has(job)) return Response.json({ code: "WORKER_NOT_FOUND" }, { status: 404, headers: { "Cache-Control": "private, no-store" } })
+  if (!authorized(request, job)) return Response.json({ code: "WORKER_DISABLED_OR_DENIED" }, { status: 403, headers: { "Cache-Control": "private, no-store" } })
+  const invocationId = randomUUID()
+  let executionCreated = false
   try {
-    enforceRateLimit("worker", job, PHASE8FB_RATE_LIMITS.worker)
+    await enforceRateLimit("worker", job, PHASE8FB_RATE_LIMITS.worker)
+    await prisma.workerExecution.create({
+      data: { job, invocationId, status: "RUNNING" },
+    })
+    executionCreated = true
     if (job === "application-expiry") {
       const expired = await expireBookingApplications(new PrismaBookingApplicationRepository(prisma), new Date(), 100)
-      return Response.json({ job, expired })
+      await prisma.workerExecution.update({
+        where: { invocationId },
+        data: { status: "SUCCEEDED", completedAt: new Date(), examined: expired, succeeded: expired, failed: 0 },
+      })
+      return Response.json({ job, expired }, { headers: { "Cache-Control": "private, no-store" } })
     }
     const environment = readPrivateDocumentEnvironment()
     const repository = new PrismaDocumentLifecycleRepository(prisma)
@@ -83,12 +85,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
         limit: environment.reconciliationBatchSize,
       })
     }
+    const summary = result && typeof result === "object" && !Array.isArray(result)
+      ? result as { examined?: unknown; succeeded?: unknown; failed?: unknown }
+      : undefined
+    await prisma.workerExecution.update({
+      where: { invocationId },
+      data: {
+        status: "SUCCEEDED",
+        completedAt: new Date(),
+        examined: typeof summary?.examined === "number" ? summary.examined : undefined,
+        succeeded: typeof summary?.succeeded === "number" ? summary.succeeded : undefined,
+        failed: typeof summary?.failed === "number" ? summary.failed : undefined,
+      },
+    })
     return Response.json({ job, result }, { headers: { "Cache-Control": "private, no-store" } })
   } catch (error) {
+    if (executionCreated)
+      await prisma.workerExecution.update({
+        where: { invocationId },
+        data: { status: "FAILED", completedAt: new Date(), failureCode: "WORKER_FAILED" },
+      }).catch(() => undefined)
     console.error("[PHASE8FB_WORKER_ERROR]", {
       job,
       name: error instanceof Error ? error.name : "UnknownError",
     })
-    return Response.json({ code: "WORKER_FAILED", job }, { status: 503 })
+    return Response.json({ code: "WORKER_FAILED", job }, { status: 503, headers: { "Cache-Control": "private, no-store" } })
   }
 }

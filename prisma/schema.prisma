@@ -1168,14 +1168,15 @@ model PaymentMethodRule {
 model PaymentInstructionTranslation {
   id                     String @id @default(cuid())
   paymentConfigVersionId String
+  method                 ConfiguredPaymentMode
   locale                 String @db.VarChar(10)
   instructions           String @db.Text
 
   paymentConfig         PaymentConfigVersion                 @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
   applicationSelections BookingApplicationPaymentSelection[]
 
-  @@unique([paymentConfigVersionId, locale])
-  @@index([locale])
+  @@unique([paymentConfigVersionId, method, locale])
+  @@index([method, locale])
 }
 
 model ConfirmationConfigVersion {
@@ -2117,4 +2118,38 @@ model AuditEvent {
   @@index([customerDocumentId, createdAt])
   @@index([correlationId])
   @@index([createdAt])
+}
+
+/// Shared fixed-window counters used by production rate limiting. Subjects are
+/// stored only as keyed hashes so user identifiers never become operational
+/// metadata.
+model RateLimitBucket {
+  id              String   @id @default(cuid())
+  scope           String   @db.VarChar(64)
+  subjectHash     String   @db.Char(64)
+  windowStartedAt DateTime
+  resetAt         DateTime
+  count           Int      @default(1)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([scope, subjectHash, windowStartedAt])
+  @@index([resetAt])
+}
+
+/// Bounded, production-safe worker execution evidence. Payloads, document
+/// identifiers, Blob paths, and customer data are intentionally excluded.
+model WorkerExecution {
+  id           String   @id @default(cuid())
+  job          String   @db.VarChar(64)
+  invocationId String   @unique @db.VarChar(64)
+  status       String   @db.VarChar(16)
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  examined     Int?
+  succeeded    Int?
+  failed       Int?
+  failureCode  String?  @db.VarChar(64)
+
+  @@index([job, startedAt])
+  @@index([status, startedAt])
 }

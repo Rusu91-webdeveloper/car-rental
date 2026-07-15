@@ -7,13 +7,30 @@ interface LogData {
   [key: string]: unknown
 }
 
+const SENSITIVE_KEY = /(email|phone|name|address|licen[cs]e|document|blob|path|token|secret|credential|password|authorization|cookie|recipient|error)/i
+
+function sanitize(data: unknown): Record<string, unknown> {
+  if (data instanceof Error) return { error: "[REDACTED]", errorName: data.name }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {}
+  return Object.fromEntries(
+    Object.entries(data as Record<string, unknown>).map(([key, value]) => [
+      key,
+      SENSITIVE_KEY.test(key)
+        ? "[REDACTED]"
+        : value instanceof Error
+          ? { name: value.name }
+          : value,
+    ]),
+  )
+}
+
 class Logger {
-  private log(level: LogLevel, message: string, data?: Record<string, unknown>) {
+  private log(level: LogLevel, message: string, data?: unknown) {
     const logData: LogData = {
       message,
       level,
       timestamp: new Date().toISOString(),
-      ...data,
+      ...sanitize(data),
     }
 
     // In production, you would send this to a logging service
@@ -31,19 +48,19 @@ class Logger {
     }
   }
 
-  info(message: string, data?: Record<string, unknown>) {
+  info(message: string, data?: unknown) {
     this.log("info", message, data)
   }
 
-  warn(message: string, data?: Record<string, unknown>) {
+  warn(message: string, data?: unknown) {
     this.log("warn", message, data)
   }
 
-  error(message: string, data?: Record<string, unknown>) {
+  error(message: string, data?: unknown) {
     this.log("error", message, data)
   }
 
-  debug(message: string, data?: Record<string, unknown>) {
+  debug(message: string, data?: unknown) {
     if (process.env.NODE_ENV === "development") {
       this.log("debug", message, data)
     }

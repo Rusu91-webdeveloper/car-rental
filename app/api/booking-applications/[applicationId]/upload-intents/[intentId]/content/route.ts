@@ -11,7 +11,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ appl
     const { applicationId, intentId } = await params
     const context = await loadOwnedApplicationDocumentLifecycle(applicationId)
     rateLimitSubject = context.user.id
-    enforceRateLimit("upload:content", context.user.id, PHASE8FB_RATE_LIMITS.uploadComplete)
+    await enforceRateLimit("upload:content", context.user.id, PHASE8FB_RATE_LIMITS.uploadComplete)
     const contentLength = Number(request.headers.get("content-length") ?? 0)
     if (contentLength > 10 * 1024 * 1024)
       throw new PrivateDocumentError("DOCUMENT_FILE_TOO_LARGE", "Document exceeds the upload limit.")
@@ -23,7 +23,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ appl
   } catch (error) {
     if (rateLimitSubject && error instanceof PrivateDocumentError) {
       try {
-        enforceRateLimit("upload:invalid", rateLimitSubject, PHASE8FB_RATE_LIMITS.invalidUpload)
+        await enforceRateLimit("upload:invalid", rateLimitSubject, PHASE8FB_RATE_LIMITS.invalidUpload)
       } catch (rateLimitError) {
         if (rateLimitError instanceof RateLimitExceededError)
           return Response.json({ code: "RATE_LIMITED" }, { status: 429, headers: { "Cache-Control": "private, no-store", "Retry-After": String(rateLimitError.retryAfterSeconds) } })

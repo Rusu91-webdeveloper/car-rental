@@ -31,14 +31,16 @@ INSERT INTO "LegalDocumentVersion" (
   ('p4-terms', 'RENTAL_TERMS', 1, 'DRAFT', 'p4-terms-v1', 'Synthetic terms.', 'p4-admin', 'p4-admin', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
   ('p4-privacy', 'PRIVACY_NOTICE', 1, 'DRAFT', 'p4-privacy-v1', 'Synthetic privacy.', 'p4-admin', 'p4-admin', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT INTO "LegalDocumentTranslation" (
-  id, "legalDocumentVersionId", locale, title, "canonicalContent", "contentHash", "createdAt", "updatedAt"
+  id, "legalDocumentVersionId", locale, title, "canonicalContent", "contentHash", "validationStatus", "createdAt", "updatedAt"
 ) VALUES
-  ('p4-terms-de', 'p4-terms', 'de', 'Mietbedingungen', 'Synthetic terms DE', repeat('a',64), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('p4-terms-en', 'p4-terms', 'en', 'Rental terms', 'Synthetic terms EN', repeat('b',64), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('p4-privacy-de', 'p4-privacy', 'de', 'Datenschutz', 'Synthetic privacy DE', repeat('c',64), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-  ('p4-privacy-en', 'p4-privacy', 'en', 'Privacy', 'Synthetic privacy EN', repeat('d',64), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('p4-terms-de', 'p4-terms', 'de', 'Mietbedingungen', 'Synthetic terms DE', repeat('a',64), 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('p4-terms-en', 'p4-terms', 'en', 'Rental terms', 'Synthetic terms EN', repeat('b',64), 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('p4-privacy-de', 'p4-privacy', 'de', 'Datenschutz', 'Synthetic privacy DE', repeat('c',64), 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+  ('p4-privacy-en', 'p4-privacy', 'en', 'Privacy', 'Synthetic privacy EN', repeat('d',64), 'VALID', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 UPDATE "LegalDocumentVersion"
-SET status = 'PUBLISHED', "publishedById" = 'p4-admin', "publishedAt" = CURRENT_TIMESTAMP
+SET status = 'PUBLISHED', "primaryLocale" = 'en', "validationStatus" = 'VALID',
+    "validatedById" = 'p4-admin', "validatedAt" = CURRENT_TIMESTAMP,
+    "manifestHash" = repeat('e', 64), "publishedById" = 'p4-admin', "publishedAt" = CURRENT_TIMESTAMP
 WHERE id IN ('p4-terms', 'p4-privacy');
 
 BEGIN;
@@ -62,8 +64,8 @@ INSERT INTO "PricingBillingConfigVersion" (
   "rentalMonthDefinition", "billableDayMethod", "gracePeriodMinutes", "minimumRentalMinutes",
   "minimumChargeDays", "priceTaxTreatment", "taxRateBps"
 ) VALUES ('p4-pricing', false, false, 'DAILY_ONLY', 'FIXED_30_DAYS', 'STARTED_24_HOUR_PERIODS', 0, 1, 1, 'TAX_INCLUDED', 0);
-INSERT INTO "InsuranceConfigVersion" ("configurationVersionId", "requirementMode", "pricePerDay")
-VALUES ('p4-insurance', 'DISABLED', 0);
+INSERT INTO "InsuranceConfigVersion" ("configurationVersionId", "requirementMode", "pricePerDay", "showCustomerSelection")
+VALUES ('p4-insurance', 'DISABLED', 0, false);
 INSERT INTO "InsuranceConfigTranslation" (id, "insuranceConfigVersionId", locale, "customerFacingName")
 VALUES ('p4-insurance-en', 'p4-insurance', 'en', 'Insurance');
 INSERT INTO "CustomerDriverConfigVersion" (
@@ -78,7 +80,13 @@ FROM unnest(ARRAY[
 ]) field;
 INSERT INTO "BookingWorkflowConfigVersion" VALUES ('p4-workflow');
 INSERT INTO "BookingStepRule" ("bookingWorkflowConfigVersionId", step, mode, "displayOrder")
-SELECT 'p4-workflow', step::"BookingStepType", 'REQUIRED', ordinal - 1
+SELECT 'p4-workflow', step::"BookingStepType",
+  CASE
+    WHEN step IN ('INSURANCE', 'LEGAL_ACCEPTANCE') THEN 'HIDDEN'::"BookingStepMode"
+    WHEN step = 'DOCUMENTS' THEN 'OPTIONAL'::"BookingStepMode"
+    ELSE 'REQUIRED'::"BookingStepMode"
+  END,
+  ordinal - 1
 FROM unnest(ARRAY[
   'VEHICLE_AND_DATES','CUSTOMER_INFORMATION','DRIVER_INFORMATION','INSURANCE','DOCUMENTS',
   'LEGAL_ACCEPTANCE','PAYMENT','REVIEW','CONFIRMATION'
@@ -92,8 +100,9 @@ INSERT INTO "PaymentConfigVersion" (
 ) VALUES ('p4-payments', 'BANK_TRANSFER', 'REQUIRES_REVIEW', 'NONE', 0, 'NOT_APPLICABLE');
 INSERT INTO "PaymentMethodRule" ("paymentConfigVersionId", method, enabled) VALUES
   ('p4-payments', 'BANK_TRANSFER', true), ('p4-payments', 'CASH_ON_PICKUP', true);
-INSERT INTO "PaymentInstructionTranslation" (id, "paymentConfigVersionId", locale, instructions)
-VALUES ('p4-payment-de', 'p4-payments', 'de', 'Synthetic bank instructions.');
+INSERT INTO "PaymentInstructionTranslation" (id, "paymentConfigVersionId", method, locale, instructions) VALUES
+  ('p4-payment-bank-de', 'p4-payments', 'BANK_TRANSFER', 'de', 'Synthetic bank instructions.'),
+  ('p4-payment-cash-de', 'p4-payments', 'CASH_ON_PICKUP', 'de', 'Synthetic cash-at-pickup instructions.');
 INSERT INTO "ConfirmationConfigVersion" VALUES ('p4-confirmations');
 INSERT INTO "ConfirmationSectionRule" ("confirmationConfigVersionId", "sectionDefinitionId", enabled)
 SELECT 'p4-confirmations', id, true FROM "ConfirmationSectionDefinition";
