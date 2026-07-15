@@ -40,6 +40,9 @@ export function readProductionOperationsEnvironment(
   env: OperationsEnvironment = process.env,
 ) {
   const enabledWorkerJobs = enabledProductionWorkerJobs(env)
+  const workerActivationAt = env.PRODUCTION_WORKERS_ENABLED_AT
+    ? new Date(env.PRODUCTION_WORKERS_ENABLED_AT)
+    : undefined
   const ownership = {
     production: Boolean(env.PRODUCTION_OWNER),
     alertResponder: Boolean(env.PRODUCTION_ALERT_OWNER),
@@ -57,5 +60,9 @@ export function readProductionOperationsEnvironment(
     enabledWorkerJobs,
     allWorkerJobsEnabled: PRODUCTION_WORKER_JOBS.every((job) => enabledWorkerJobs.has(job)),
     allAutomatedWorkerJobsEnabled: AUTOMATED_PRODUCTION_WORKER_JOBS.every((job) => enabledWorkerJobs.has(job)),
+    workerActivationAt:
+      workerActivationAt && !Number.isNaN(workerActivationAt.getTime())
+        ? workerActivationAt
+        : undefined,
   }
 }

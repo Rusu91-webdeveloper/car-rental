@@ -22,6 +22,7 @@ describe("production operations environment", () => {
       RESEND_API_KEY: "re_synthetic",
       DATABASE_RECOVERY_OWNER: "database-primary",
       WORKER_MAINTENANCE_OWNER: "worker-primary",
+      PRODUCTION_WORKERS_ENABLED_AT: "2026-07-15T12:00:00.000Z",
       PHASE8FB_WORKER_JOBS_ENABLED: PRODUCTION_WORKER_JOBS.join(","),
     })
     expect(report).toMatchObject({
@@ -30,6 +31,7 @@ describe("production operations environment", () => {
       allWorkerJobsEnabled: true,
       allAutomatedWorkerJobsEnabled: true,
       legacyAlertAttestation: false,
+      workerActivationAt: new Date("2026-07-15T12:00:00.000Z"),
     })
   })
 

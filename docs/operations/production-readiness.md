@@ -42,7 +42,7 @@ Every automatic or manual run receives a server-generated invocation ID. Cron de
 
 `WorkerLease` allows one active run per concrete job. A lease expires after 60 seconds so a crashed function cannot block the job permanently. Each item records trigger source, environment, deployment reference when available, start/completion time, status, bounded counts, and a sanitized failure code/summary. Customer IDs, document IDs, Blob paths, payloads, tokens, and raw exception messages are not stored.
 
-The readiness page requires a successful execution of every scheduled job within 48 hours. Environment variables alone cannot make the worker check ready. `PARTIAL` and `FAILED` runs are failing; missing/old runs are stale.
+The readiness page requires a successful execution of every scheduled job within 48 hours. Set `PRODUCTION_WORKERS_ENABLED_AT` once, to the UTC ISO-8601 timestamp when both Production worker switches were enabled. Until the first cron evidence arrives, this anchors a one-time 48-hour `PENDING` grace so a deployment made after the daily windows is not immediately mislabeled stale. An invalid, missing, or future timestamp grants no grace; after 48 hours, missing evidence becomes stale. Environment variables alone cannot make the worker check ready. `PARTIAL` and `FAILED` runs are failing; missing/old runs after the grace are stale.
 
 ## Alert-delivery verification
 

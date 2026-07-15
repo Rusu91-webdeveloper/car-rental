@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 
 const statusClass = {
   READY: "bg-emerald-100 text-emerald-900",
+  PENDING: "bg-blue-100 text-blue-900",
   STALE: "bg-amber-100 text-amber-900",
   MANUAL_VERIFICATION_REQUIRED: "bg-amber-100 text-amber-900",
   BLOCKED: "bg-red-100 text-red-900",

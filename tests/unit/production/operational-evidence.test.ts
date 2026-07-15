@@ -194,6 +194,37 @@ describe("readiness evidence gates", () => {
     }).status).toBe("STALE")
   })
 
+  it("keeps the first scheduled heartbeat pending during a bounded activation grace", () => {
+    const activation = new Date("2026-07-15T11:30:00.000Z")
+    expect(evaluateScheduledWorkerStatus({
+      configured: true,
+      rows: [{
+        job: "application-expiry",
+        status: "SUCCEEDED",
+        triggerSource: "vercel-cron",
+        startedAt: new Date("2026-07-15T11:45:00.000Z"),
+        completedAt: new Date("2026-07-15T11:45:10.000Z"),
+      }],
+      jobs: ["application-expiry", "review-backlog"],
+      now,
+      initialGraceStartedAt: activation,
+    }).status).toBe("PENDING")
+    expect(evaluateScheduledWorkerStatus({
+      configured: true,
+      rows: [],
+      jobs: ["review-backlog"],
+      now: new Date("2026-07-17T11:30:01.000Z"),
+      initialGraceStartedAt: activation,
+    }).status).toBe("STALE")
+    expect(evaluateScheduledWorkerStatus({
+      configured: true,
+      rows: [],
+      jobs: ["review-backlog"],
+      now,
+      initialGraceStartedAt: new Date("2026-07-16T11:30:00.000Z"),
+    }).status).toBe("STALE")
+  })
+
   it("requires genuine alert, backup, and restore success before readiness", () => {
     expect(evaluateAlertEvidenceStatus({ configured: true, rows: [], now }).status)
       .toBe("MANUAL_VERIFICATION_REQUIRED")

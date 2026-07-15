@@ -13,6 +13,7 @@ const RESTORE_MAX_AGE_MS = 90 * DAY_MS
 
 export type HealthStatus =
   | "READY"
+  | "PENDING"
   | "BLOCKED"
   | "STALE"
   | "FAILING"
@@ -69,6 +70,7 @@ export function evaluateScheduledWorkerStatus(input: {
   rows: WorkerEvidenceRow[]
   now: Date
   jobs?: readonly string[]
+  initialGraceStartedAt?: Date
 }) {
   const jobs = input.jobs ?? SCHEDULED_PRODUCTION_JOBS
   const cronRows = input.rows.filter((row) => row.triggerSource === "vercel-cron")
@@ -88,14 +90,25 @@ export function evaluateScheduledWorkerStatus(input: {
   const stale = jobs.some(
     (job) => !recent(successful.get(job)?.completedAt, WORKER_MAX_AGE_MS, input.now),
   )
+  const withinInitialGrace = Boolean(
+    jobs.some((job) => !latest.has(job)) &&
+    input.initialGraceStartedAt &&
+    input.initialGraceStartedAt.getTime() <= input.now.getTime() &&
+    input.now.getTime() - input.initialGraceStartedAt.getTime() <= WORKER_MAX_AGE_MS,
+  )
   const status: HealthStatus = !input.configured
     ? "NOT_CONFIGURED"
     : failing
       ? "FAILING"
-      : stale
-        ? "STALE"
-        : "READY"
-  return { status, latest, successful }
+      : withinInitialGrace
+        ? "PENDING"
+        : stale
+          ? "STALE"
+          : "READY"
+  const initialGraceExpiresAt = input.initialGraceStartedAt
+    ? new Date(input.initialGraceStartedAt.getTime() + WORKER_MAX_AGE_MS)
+    : undefined
+  return { status, latest, successful, initialGraceExpiresAt }
 }
 
 export function evaluateAlertEvidenceStatus(input: {
@@ -346,8 +359,14 @@ export async function getProductionHealthReport(now = new Date()) {
   const workersConfigured =
     process.env.PHASE8FB_WORKERS_ENABLED === "true" &&
     process.env.BOOKING_MAINTENANCE_WORKER_ENABLED === "true" &&
-    operations.allAutomatedWorkerJobsEnabled
-  const workerEvaluation = evaluateScheduledWorkerStatus({ configured: workersConfigured, rows: workerRows, now })
+    operations.allAutomatedWorkerJobsEnabled &&
+    Boolean(operations.workerActivationAt)
+  const workerEvaluation = evaluateScheduledWorkerStatus({
+    configured: workersConfigured,
+    rows: workerRows,
+    now,
+    initialGraceStartedAt: operations.workerActivationAt,
+  })
   const latestWorkerRows = workerEvaluation.latest
   const successfulWorkerRows = workerEvaluation.successful
   const workerStatus = workerEvaluation.status
@@ -361,12 +380,22 @@ export async function getProductionHealthReport(now = new Date()) {
     evidence: SCHEDULED_PRODUCTION_JOBS.map((job) => {
       const row = latestWorkerRows.get(job)
       return `${job}: ${row ? `${row.status} at ${row.completedAt?.toISOString() ?? row.startedAt.toISOString()}` : "never executed"}`
-    }).join("; "),
+    }).join("; ") + (workerStatus === "PENDING" && workerEvaluation.initialGraceExpiresAt
+      ? `; initial activation grace expires ${workerEvaluation.initialGraceExpiresAt.toISOString()}`
+      : ""),
     lastVerifiedAt: workerSuccessTimes.length === SCHEDULED_PRODUCTION_JOBS.length
       ? new Date(Math.min(...workerSuccessTimes.map((value) => value.getTime()))).toISOString()
       : undefined,
-    blockedReason: workerStatus === "READY" ? undefined : "Configured schedules require a successful heartbeat for every automatic job within 48 hours.",
-    remediation: workerStatus === "READY" ? "Monitor daily heartbeats and investigate partial or failed runs." : "Confirm the two Vercel Cron entries are deployed, then inspect the protected execution evidence and runtime logs.",
+    blockedReason: workerStatus === "READY"
+      ? undefined
+      : workerStatus === "PENDING"
+        ? "The first scheduled heartbeat has not occurred, but the initial 48-hour activation grace is still open."
+        : "Configured schedules require a successful heartbeat for every automatic job within 48 hours.",
+    remediation: workerStatus === "READY"
+      ? "Monitor daily heartbeats and investigate partial or failed runs."
+      : workerStatus === "PENDING"
+        ? "Wait for the next registered cron windows, then inspect execution evidence and runtime logs."
+        : "Confirm the two Vercel Cron entries are deployed, then inspect the protected execution evidence and runtime logs.",
     verificationMode: "AUTOMATIC",
   }))
 
