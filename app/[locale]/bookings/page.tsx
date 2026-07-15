@@ -4,7 +4,6 @@ import { BottomNav } from "@/components/bottom-nav"
 import { Badge } from "@/components/ui/badge"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { formatCents } from "@/lib/money"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
@@ -31,6 +30,15 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     where: { userId: currentUser.id },
     include: {
       car: true,
+      pricingSnapshot: true,
+      insuranceSnapshot: true,
+      legalAcceptances: {
+        include: {
+          legalDocumentTranslation: { include: { legalDocumentVersion: true } },
+          legalAcceptanceConfig: { select: { showInConfirmation: true } },
+        },
+        orderBy: { acceptedAt: "asc" },
+      },
       review: {
         select: {
           id: true,
@@ -171,6 +179,8 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
               const canLeaveReview =
                 booking.status === "COMPLETED" &&
                 (booking.paymentStatus === "PAID" || booking.paymentMethod === "PAY_AT_PICKUP")
+              const displayedTotal = booking.pricingSnapshot?.grandTotal ?? booking.totalPrice
+              const displayedCurrency = booking.pricingSnapshot?.currency ?? "EUR"
 
               return (
                 <div key={booking.id} className="bg-background rounded-xl p-4 border border-border">
@@ -223,7 +233,12 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         {showCancellationDeadline && (
                           <div className="flex items-center justify-between pt-2 border-t border-border">
                             <span className="text-muted-foreground flex items-center gap-1">
-                              <svg className="w-4 h-4 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-4 h-4 text-warning"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -240,6 +255,41 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         )}
                       </div>
                     </div>
+
+                    {booking.insuranceSnapshot?.showInConfirmation && booking.insuranceSnapshot.selected && (
+                      <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold">Insurance</p>
+                          <p className="text-xs text-muted-foreground">
+                            {booking.insuranceSnapshot.customerFacingName}
+                          </p>
+                        </div>
+                        <span className="font-medium">
+                          {formatCents(booking.insuranceSnapshot.subtotal, booking.insuranceSnapshot.currency)}
+                        </span>
+                      </div>
+                    )}
+
+                    {booking.legalAcceptances.some(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation) && (
+                      <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                        <p className="font-semibold">Accepted legal versions</p>
+                        {booking.legalAcceptances
+                          .filter(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation)
+                          .map((acceptance) => (
+                            <div key={acceptance.id} className="text-xs text-muted-foreground">
+                              <a
+                                className="font-medium text-primary underline"
+                                href={`/${acceptance.locale}/legal/${acceptance.legalDocumentTranslationId}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {acceptance.legalDocumentTranslation.title} · version {acceptance.documentVersionNumber}
+                              </a>
+                              <span> · accepted {formatDateTime(acceptance.acceptedAt, locale)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
 
                     {/* Booking Dates */}
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -269,7 +319,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <span className="font-semibold">{t("bookings.total")}</span>
-                      <span className="font-bold text-lg">{formatCents(booking.totalPrice)}</span>
+                      <span className="font-bold text-lg">{formatCents(displayedTotal, displayedCurrency)}</span>
                     </div>
                   </div>
 

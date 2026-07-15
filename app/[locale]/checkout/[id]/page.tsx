@@ -2,17 +2,17 @@ import { redirect } from "@/navigation"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { getPaymentDetails } from "@/lib/payment-details"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CheckoutClient } from "./checkout-client"
+import { resolvePublicBookingConfiguration } from "@/lib/booking-configuration/runtime"
 
 export const dynamic = "force-dynamic"
 
-export default async function CheckoutPage({ 
+export default async function CheckoutPage({
   params,
   searchParams,
-}: { 
+}: {
   params: Promise<{ locale: string; id: string }>
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
@@ -34,7 +34,7 @@ export default async function CheckoutPage({
     // Include locale in the redirect URL path
     const redirectPath = `/${locale}/checkout/${id}`
     const currentUrl = new URL(redirectPath, "http://localhost")
-    
+
     // Add all query params to the redirect URL
     if (queryParams) {
       Object.entries(queryParams).forEach(([key, value]) => {
@@ -43,9 +43,12 @@ export default async function CheckoutPage({
         }
       })
     }
-    
+
     const redirectUrl = `${currentUrl.pathname}${currentUrl.search}`
-    redirect({ href: `${signInUrl}?redirect_url=${encodeURIComponent(redirectUrl)}`, locale })
+    redirect({
+      href: `${signInUrl}?redirect_url=${encodeURIComponent(redirectUrl)}`,
+      locale,
+    })
   }
 
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
@@ -53,10 +56,12 @@ export default async function CheckoutPage({
   const reviewStatsByCar = await getCarReviewStatsMap([car.id])
   const reviewStats = getCarReviewStats(reviewStatsByCar, car.id)
 
-  // Fetch payment details and company settings
+  // Payment instructions are display-only; pricing is resolved server-side.
   const paymentDetails = await getPaymentDetails()
-  const companySettings = await prisma.companySettings.findUnique({
-    where: { id: "company-settings" },
+  const bookingConfiguration = await resolvePublicBookingConfiguration({
+    db: prisma,
+    vehicleId: car.id,
+    locale,
   })
 
   return (
@@ -67,19 +72,16 @@ export default async function CheckoutPage({
         name: displayName,
         subtitle: displaySubtitle,
         image: car.image,
-        price: car.price,
         rating: reviewStats.rating,
         reviews: reviewStats.reviewCount,
       }}
       signInUrl={signInUrl}
       paymentDetails={paymentDetails}
-      companySettings={{
-        companyName: companySettings?.companyName || "Car Rental Company",
-        supportEmail: companySettings?.supportEmail || companySettings?.companyEmail || "",
-        depositPercentage: companySettings?.depositPercentage ?? 0.2,
-        guaranteePercentage: companySettings?.guaranteePercentage ?? 0,
-        taxRate: companySettings?.taxRate ?? 0,
-        taxIncluded: companySettings?.taxIncluded ?? false,
+      bookingConfiguration={bookingConfiguration}
+      initialCustomer={{
+        firstName: user!.name?.trim().split(/\s+/)[0] ?? "",
+        lastName: user!.name?.trim().split(/\s+/).slice(1).join(" ") ?? "",
+        email: user!.email,
       }}
     />
   )

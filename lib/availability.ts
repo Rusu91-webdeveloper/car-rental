@@ -85,9 +85,3 @@ export async function getUnavailableDates(carId: string): Promise<{ start: Date;
     ...blockedDates.map((b) => ({ start: b.startDate, end: b.endDate })),
   ]
 }
-
-export function calculateTotalDays(pickupDate: Date, dropoffDate: Date): number {
-  const diffTime = Math.abs(dropoffDate.getTime() - pickupDate.getTime())
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  return Math.max(1, diffDays) // Minimum 1 day
-}

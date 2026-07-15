@@ -11,6 +11,14 @@ interface BookingSuccessModalProps {
   totalPrice: number
   depositAmount: number
   guaranteeAmount: number
+  currency: string
+  depositRateBps: number
+  guaranteeRateBps: number
+  insurance?: {
+    customerFacingName: string
+    subtotal: number
+    showInConfirmation: boolean
+  } | null
   carName: string
   pickupDate: Date
   dropoffDate: Date
@@ -22,12 +30,6 @@ interface BookingSuccessModalProps {
     swiftCode: string
     iban?: string | null
   }
-  companySettings: {
-    companyName: string
-    supportEmail: string
-    depositPercentage: number
-    guaranteePercentage: number
-  }
   onClose: () => void
 }
 
@@ -38,16 +40,19 @@ export function BookingSuccessModal({
   totalPrice,
   depositAmount,
   guaranteeAmount,
+  currency,
+  depositRateBps,
+  guaranteeRateBps,
+  insurance,
   carName,
   pickupDate,
   dropoffDate,
   location,
   paymentDetails,
-  companySettings,
   onClose,
 }: BookingSuccessModalProps) {
-  const depositPercent = Math.round(companySettings.depositPercentage * 100)
-  const guaranteePercent = Math.round(companySettings.guaranteePercentage * 100)
+  const depositPercent = Math.round(depositRateBps / 100)
+  const guaranteePercent = Math.round(guaranteeRateBps / 100)
   const remainingAtPickup = Math.max(totalPrice - depositAmount, 0)
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString("en-US", {
@@ -161,6 +166,14 @@ export function BookingSuccessModal({
                 <span className="text-muted-foreground">Location</span>
                 <span className="font-medium">{location}</span>
               </div>
+              {insurance?.showInConfirmation && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Insurance</span>
+                  <span className="font-medium">
+                    {insurance.customerFacingName} · {formatCents(insurance.subtotal, currency)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -180,41 +193,55 @@ export function BookingSuccessModal({
                     <div className="bg-white rounded-lg p-3 space-y-1 font-mono text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Deposit ({depositPercent}%):</span>
-                        <span className="font-bold">{formatCents(depositAmount)}</span>
+                        <span className="font-bold">{formatCents(depositAmount, currency)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Remaining rental at pickup:</span>
-                        <span className="font-bold">{formatCents(remainingAtPickup)}</span>
+                        <span className="font-bold">{formatCents(remainingAtPickup, currency)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Total Amount:</span>
-                        <span className="font-bold">{formatCents(totalPrice)}</span>
+                        <span className="font-bold">{formatCents(totalPrice, currency)}</span>
                       </div>
                       {guaranteeAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
-                          <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                          <span className="font-bold">{formatCents(guaranteeAmount, currency)}</span>
                         </div>
                       )}
                     </div>
                     <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                       <p className="font-semibold text-amber-900">Bank Details:</p>
-                      <p>Bank Name: <span className="font-medium">{paymentDetails.bankName}</span></p>
-                      <p>Account Name: <span className="font-medium">{paymentDetails.accountName}</span></p>
-                      <p>Account Number: <span className="font-medium">{paymentDetails.accountNumber}</span></p>
-                      <p>Swift Code: <span className="font-medium">{paymentDetails.swiftCode}</span></p>
+                      <p>
+                        Bank Name: <span className="font-medium">{paymentDetails.bankName}</span>
+                      </p>
+                      <p>
+                        Account Name: <span className="font-medium">{paymentDetails.accountName}</span>
+                      </p>
+                      <p>
+                        Account Number: <span className="font-medium">{paymentDetails.accountNumber}</span>
+                      </p>
+                      <p>
+                        Swift Code: <span className="font-medium">{paymentDetails.swiftCode}</span>
+                      </p>
                       {paymentDetails.iban && (
-                        <p>IBAN: <span className="font-medium">{paymentDetails.iban}</span></p>
+                        <p>
+                          IBAN: <span className="font-medium">{paymentDetails.iban}</span>
+                        </p>
                       )}
-                      <p>Reference: <span className="font-mono font-bold text-primary">{transferCode}</span></p>
+                      <p>
+                        Reference: <span className="font-mono font-bold text-primary">{transferCode}</span>
+                      </p>
                     </div>
                     <p className="text-xs mt-2">
-                      <strong>Important:</strong> Include the transfer code <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we can process your booking.
+                      <strong>Important:</strong> Include the transfer code{" "}
+                      <span className="font-mono font-semibold">{transferCode}</span> in your payment reference so we
+                      can process your booking.
                     </p>
                     {guaranteeAmount > 0 && (
                       <p className="text-xs">
-                        The guarantee is a refundable security hold. It is not an extra rental fee and is released
-                        after return if there are no damages, fines, or policy violations.
+                        The guarantee is a refundable security hold. It is not an extra rental fee and is released after
+                        return if there are no damages, fines, or policy violations.
                       </p>
                     )}
                   </div>
@@ -225,17 +252,18 @@ export function BookingSuccessModal({
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
               <h4 className="font-semibold text-amber-900">Pay at Pickup</h4>
               <p className="text-sm text-amber-800">
-                You selected in-person payment at pickup. Please arrive with a valid payment method to complete the booking.
+                You selected in-person payment at pickup. Please arrive with a valid payment method to complete the
+                booking.
               </p>
               <div className="bg-white rounded-lg p-3 space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Amount Due at Pickup:</span>
-                  <span className="font-bold">{formatCents(totalPrice)}</span>
+                  <span className="font-bold">{formatCents(totalPrice, currency)}</span>
                 </div>
                 {guaranteeAmount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Refundable guarantee ({guaranteePercent}%):</span>
-                    <span className="font-bold">{formatCents(guaranteeAmount)}</span>
+                    <span className="font-bold">{formatCents(guaranteeAmount, currency)}</span>
                   </div>
                 )}
               </div>
@@ -265,7 +293,7 @@ export function BookingSuccessModal({
                 <li>Complete the bank transfer within {BOOKING_PAYMENT_WINDOW_HOURS} hours</li>
                 <li>You will receive a confirmation email with payment instructions</li>
                 <li>Once payment is verified, your booking will be confirmed</li>
-                <li>You'll receive a final confirmation email with pickup details</li>
+                <li>You&apos;ll receive a final confirmation email with pickup details</li>
               </ol>
             ) : (
               <ol className="text-sm text-blue-800 space-y-1 ml-7 list-decimal">

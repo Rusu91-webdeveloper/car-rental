@@ -1,9 +1,10 @@
 "use client"
 
 import type React from "react"
+import type { CompanySettings } from "@prisma/client"
 import { useState, useTransition, useEffect } from "react"
 import { useLocale, useTranslations } from "next-intl"
-import { useRouter } from "@/navigation"
+import { Link, useRouter } from "@/navigation"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { formatCents } from "@/lib/money"
-import { createCar as createCarAction, updateCar as updateCarAction, deleteCar as deleteCarAction } from "@/app/actions/cars"
+import {
+  createCar as createCarAction,
+  updateCar as updateCarAction,
+  deleteCar as deleteCarAction,
+} from "@/app/actions/cars"
 import { updateBookingStatus } from "@/app/actions/bookings"
 import { deleteReviewAsAdmin } from "@/app/actions/reviews"
 import {
@@ -91,10 +96,38 @@ interface AdminBooking {
   dropoffDate: string
   location: string
   totalPrice: number
+  currency: string
   guaranteeAmount: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   createdAt: string
+  insurance: { name: string; subtotal: number } | null
+  legalAcceptances: Array<{
+    id: string
+    type: "RENTAL_TERMS" | "PRIVACY_NOTICE"
+    title: string
+    versionNumber: number
+    locale: string
+    translationId: string
+    acceptedAt: string
+    source: "CUSTOMER_CHECKBOX" | "CUSTOMER_SUBMISSION" | "STAFF_RECORDED"
+    hasExactProvenance: boolean
+    hashVerified: boolean
+  }>
+  customer: {
+    name: string
+    email: string
+    phone: string | null
+    dateOfBirth: string | null
+    licenceNumber: string | null
+    validatedAt: string | null
+  } | null
+  provenance: {
+    configurationReleaseId: string | null
+    insuranceConfigVersionId: string | null
+    customerDriverConfigVersionId: string | null
+    legalAcceptanceConfigVersionId: string | null
+  }
 }
 
 interface AdminManualReservation {
@@ -149,7 +182,7 @@ export default function AdminDashboard({
   const [editCarId, setEditCarId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
-  const [settings, setSettings] = useState<any>(null)
+  const [settings, setSettings] = useState<CompanySettings | null>(null)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const locale = useLocale()
   const t = useTranslations()
@@ -219,6 +252,8 @@ export default function AdminDashboard({
   // Load settings when settings tab is opened
   useEffect(() => {
     if (activeTab === "settings" && !settings && !isLoadingSettings) {
+      // Loading state synchronizes this effect with the server request lifecycle.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoadingSettings(true)
       getCompanySettings().then((result) => {
         if (result?.success && result.settings) {
@@ -252,8 +287,7 @@ export default function AdminDashboard({
   })
 
   const filteredUsers = usersState.filter(
-    (u) =>
-      (u.name || "").toLowerCase().includes(normalizedSearch) || u.email.toLowerCase().includes(normalizedSearch),
+    (u) => (u.name || "").toLowerCase().includes(normalizedSearch) || u.email.toLowerCase().includes(normalizedSearch),
   )
 
   const filteredReviews = reviewsState.filter((review) => {
@@ -354,7 +388,9 @@ export default function AdminDashboard({
       }
 
       if (result?.user) {
-        setUsersState((prev) => prev.map((user) => (user.id === targetUser.id ? normalizeAdminUser(result.user) : user)))
+        setUsersState((prev) =>
+          prev.map((user) => (user.id === targetUser.id ? normalizeAdminUser(result.user) : user)),
+        )
         toast({
           title: "Success",
           description: `${displayName} has been ${nextState ? "activated" : "deactivated"}.`,
@@ -750,6 +786,13 @@ export default function AdminDashboard({
         </div>
 
         <nav className="min-h-0 flex-1 space-y-1 p-4">
+          <Link
+            href="/admin/business-configuration"
+            className="mb-3 flex w-full items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary transition hover:bg-primary/10"
+          >
+            <Settings className="h-5 w-5" />
+            <span>Business Configuration</span>
+          </Link>
           {adminTabs.map((tab) => {
             const TabIcon = tab.icon
             const badgeValue = getTabBadgeValue(tab.id)
@@ -810,6 +853,12 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Link
+                href="/admin/business-configuration"
+                className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary"
+              >
+                <Settings className="h-4 w-4" /> Business Configuration
+              </Link>
               {adminTabs.map((tab) => {
                 const TabIcon = tab.icon
                 const badgeValue = getTabBadgeValue(tab.id)
@@ -1028,7 +1077,7 @@ export default function AdminDashboard({
                             </div>
                           </div>
                           <div className="flex items-center justify-between sm:block sm:text-right">
-                            <div className="font-bold">{formatCents(booking.totalPrice)}</div>
+                            <div className="font-bold">{formatCents(booking.totalPrice, booking.currency)}</div>
                             <Badge
                               variant={getBookingStatusBadge(booking.status).variant}
                               className={`${getBookingStatusBadge(booking.status).className} sm:mt-1`}
@@ -1146,7 +1195,10 @@ export default function AdminDashboard({
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            <Dialog open={editCarId === car.id} onOpenChange={(open) => setEditCarId(open ? car.id : null)}>
+                            <Dialog
+                              open={editCarId === car.id}
+                              onOpenChange={(open) => setEditCarId(open ? car.id : null)}
+                            >
                               <DialogTrigger asChild>
                                 <Button variant="outline" size="sm">
                                   Edit
@@ -1205,7 +1257,11 @@ export default function AdminDashboard({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <ManualReservationForm cars={carsState} onSubmit={handleCreateManualReservation} isSubmitting={isPending} />
+                  <ManualReservationForm
+                    cars={carsState}
+                    onSubmit={handleCreateManualReservation}
+                    isSubmitting={isPending}
+                  />
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -1215,44 +1271,42 @@ export default function AdminDashboard({
 
                     {manualReservationsState.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No manual reservations yet.</p>
+                    ) : filteredManualReservations.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No manual reservations match your search.</p>
                     ) : (
-                      filteredManualReservations.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No manual reservations match your search.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {filteredManualReservations.map((reservation) => {
-                            const car = carsState.find((item) => item.id === reservation.carId)
-                            return (
-                              <div key={reservation.id} className="rounded-lg border border-border p-3">
-                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                  <div className="space-y-2">
-                                    <p className="font-semibold">{car ? getCarName(car) : "Unknown car"}</p>
-                                    <p className="text-sm text-muted-foreground">
-                                      Reserved for {reservation.customerName} • {reservation.customerPhone}
-                                    </p>
-                                    <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-                                      <p>Pick-up: {new Date(reservation.pickupDate).toLocaleString()}</p>
-                                      <p>Drop-off: {new Date(reservation.dropoffDate).toLocaleString()}</p>
-                                      <p>Price: {formatCents(reservation.totalPrice)}</p>
-                                      <p>Created: {new Date(reservation.createdAt).toLocaleDateString()}</p>
-                                    </div>
+                      <div className="space-y-3">
+                        {filteredManualReservations.map((reservation) => {
+                          const car = carsState.find((item) => item.id === reservation.carId)
+                          return (
+                            <div key={reservation.id} className="rounded-lg border border-border p-3">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-2">
+                                  <p className="font-semibold">{car ? getCarName(car) : "Unknown car"}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Reserved for {reservation.customerName} • {reservation.customerPhone}
+                                  </p>
+                                  <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                                    <p>Pick-up: {new Date(reservation.pickupDate).toLocaleString()}</p>
+                                    <p>Drop-off: {new Date(reservation.dropoffDate).toLocaleString()}</p>
+                                    <p>Price: {formatCents(reservation.totalPrice)}</p>
+                                    <p>Created: {new Date(reservation.createdAt).toLocaleDateString()}</p>
                                   </div>
-
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={isPending}
-                                    onClick={() => handleDeleteManualReservation(reservation.id)}
-                                  >
-                                    Remove
-                                  </Button>
                                 </div>
+
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={isPending}
+                                  onClick={() => handleDeleteManualReservation(reservation.id)}
+                                >
+                                  Remove
+                                </Button>
                               </div>
-                            )
-                          })}
-                        </div>
-                      )
+                            </div>
+                          )
+                        })}
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -1326,45 +1380,45 @@ export default function AdminDashboard({
                                   <SelectTrigger className="w-full sm:w-36">
                                     <SelectValue />
                                   </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="PENDING">
-                                    <div className="flex items-center gap-2">
-                                      <Clock className="w-4 h-4" />
-                                      Pending
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="CONFIRMED">
-                                    <div className="flex items-center gap-2">
-                                      <CheckCircle className="w-4 h-4" />
-                                      Confirmed
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="IN_PROGRESS">
-                                    <div className="flex items-center gap-2">
-                                      <TrendingUp className="w-4 h-4" />
-                                      In Progress
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="COMPLETED">
-                                    <div className="flex items-center gap-2">
-                                      <CheckCircle className="w-4 h-4" />
-                                      Completed
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="CANCELLED">
-                                    <div className="flex items-center gap-2">
-                                      <XCircle className="w-4 h-4" />
-                                      Cancelled
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="REJECTED">
-                                    <div className="flex items-center gap-2">
-                                      <XCircle className="w-4 h-4" />
-                                      Rejected
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
+                                  <SelectContent>
+                                    <SelectItem value="PENDING">
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="w-4 h-4" />
+                                        Pending
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="CONFIRMED">
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle className="w-4 h-4" />
+                                        Confirmed
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="IN_PROGRESS">
+                                      <div className="flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4" />
+                                        In Progress
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="COMPLETED">
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle className="w-4 h-4" />
+                                        Completed
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="CANCELLED">
+                                      <div className="flex items-center gap-2">
+                                        <XCircle className="w-4 h-4" />
+                                        Cancelled
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="REJECTED">
+                                      <div className="flex items-center gap-2">
+                                        <XCircle className="w-4 h-4" />
+                                        Rejected
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
 
@@ -1398,14 +1452,63 @@ export default function AdminDashboard({
                               {booking.guaranteeAmount > 0 && (
                                 <div>
                                   <span className="text-muted-foreground">Guarantee hold:</span>
-                                  <span className="ml-2 font-medium">{formatCents(booking.guaranteeAmount)}</span>
+                                  <span className="ml-2 font-medium">
+                                    {formatCents(booking.guaranteeAmount, booking.currency)}
+                                  </span>
+                                </div>
+                              )}
+                              {booking.insurance && (
+                                <div>
+                                  <span className="text-muted-foreground">Insurance:</span>
+                                  <span className="ml-2 font-medium">
+                                    {booking.insurance.name} ·{" "}
+                                    {formatCents(booking.insurance.subtotal, booking.currency)}
+                                  </span>
+                                </div>
+                              )}
+                              {booking.customer && (
+                                <div className="sm:col-span-2 rounded-md border p-3 space-y-1">
+                                  <p className="font-medium">Validated customer and driver snapshot</p>
+                                  <p>
+                                    {booking.customer.name} · {booking.customer.email}
+                                  </p>
+                                  {booking.customer.phone && <p>Phone: {booking.customer.phone}</p>}
+                                  {booking.customer.dateOfBirth && (
+                                    <p>Date of birth: {new Date(booking.customer.dateOfBirth).toLocaleDateString()}</p>
+                                  )}
+                                  {booking.customer.licenceNumber && <p>Licence: {booking.customer.licenceNumber}</p>}
+                                  <p className="text-xs text-muted-foreground">
+                                    {booking.customer.validatedAt
+                                      ? `Validated ${new Date(booking.customer.validatedAt).toLocaleString()}`
+                                      : "Legacy snapshot — configuration provenance unavailable"}
+                                  </p>
+                                </div>
+                              )}
+                              {booking.legalAcceptances.length > 0 && (
+                                <div className="sm:col-span-2 rounded-md border p-3 space-y-1">
+                                  <p className="font-medium">Legal acceptance evidence</p>
+                                  {booking.legalAcceptances.map((acceptance) => (
+                                    <p key={acceptance.id} className="text-sm">
+                                      <a className="font-medium text-primary underline" href={`/${acceptance.locale}/legal/${acceptance.translationId}`} target="_blank" rel="noreferrer">{acceptance.title} · v{acceptance.versionNumber}</a> · {acceptance.locale} · accepted {new Date(acceptance.acceptedAt).toLocaleString()} · {acceptance.source}
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        {acceptance.hasExactProvenance ? "Exact release provenance" : "Legacy provenance unavailable"} · {acceptance.hashVerified ? "Hash verified" : "Hash mismatch"}
+                                      </span>
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {booking.provenance.configurationReleaseId && (
+                                <div className="sm:col-span-2 text-xs text-muted-foreground">
+                                  Release {booking.provenance.configurationReleaseId} · insurance version {booking.provenance.insuranceConfigVersionId ?? "not captured"} · customer/driver version {booking.provenance.customerDriverConfigVersionId ?? "legacy"} · legal policy version {booking.provenance.legalAcceptanceConfigVersionId ?? "legacy"}
                                 </div>
                               )}
                             </div>
 
                             <div className="flex items-center justify-between pt-2 border-t border-border">
                               <span className="text-muted-foreground text-sm">Total Amount</span>
-                              <span className="text-xl font-bold">{formatCents(booking.totalPrice)}</span>
+                              <span className="text-xl font-bold">
+                                {formatCents(booking.totalPrice, booking.currency)}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1456,81 +1559,81 @@ export default function AdminDashboard({
 
               <div className="grid gap-3">
                 {filteredUsers.map((user) => {
-                    const userBookings = bookingsState.filter((b) => b.userId === user.id)
-                    const userRevenue = userBookings.reduce((sum, b) => sum + b.totalPrice, 0)
-                    const isCurrentAdmin = user.id === currentUser.id
+                  const userBookings = bookingsState.filter((b) => b.userId === user.id)
+                  const userRevenue = userBookings.reduce((sum, b) => sum + b.totalPrice, 0)
+                  const isCurrentAdmin = user.id === currentUser.id
 
-                    return (
-                      <Card key={user.id}>
-                        <CardContent className="p-4">
-                          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xl font-bold">
-                              {(user.name || user.email).charAt(0).toUpperCase()}
+                  return (
+                    <Card key={user.id}>
+                      <CardContent className="p-4">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xl font-bold">
+                            {(user.name || user.email).charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <h3 className="break-words font-bold text-lg">{user.name || user.email}</h3>
+                              <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
+                              <Badge variant={user.isActive ? "outline" : "destructive"}>
+                                {user.isActive ? "Active" : "Inactive"}
+                              </Badge>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <h3 className="break-words font-bold text-lg">{user.name || user.email}</h3>
-                                <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>{user.role}</Badge>
-                                <Badge variant={user.isActive ? "outline" : "destructive"}>
-                                  {user.isActive ? "Active" : "Inactive"}
-                                </Badge>
+                            <p className="mb-2 break-all text-sm text-muted-foreground">{user.email}</p>
+                            <div className="flex flex-wrap gap-4 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Bookings:</span>
+                                <span className="ml-2 font-bold">{userBookings.length}</span>
                               </div>
-                              <p className="mb-2 break-all text-sm text-muted-foreground">{user.email}</p>
-                              <div className="flex flex-wrap gap-4 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">Bookings:</span>
-                                  <span className="ml-2 font-bold">{userBookings.length}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Total Spent:</span>
-                                  <span className="ml-2 font-bold">{formatCents(userRevenue)}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Joined:</span>
-                                  <span className="ml-2 font-medium">
-                                    {new Date(user.createdAt).toLocaleDateString()}
-                                  </span>
-                                </div>
+                              <div>
+                                <span className="text-muted-foreground">Total Spent:</span>
+                                <span className="ml-2 font-bold">{formatCents(userRevenue)}</span>
                               </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end">
-                              <Button
-                                size="sm"
-                                variant={user.isActive ? "outline" : "default"}
-                                onClick={() => handleToggleUserActive(user)}
-                                disabled={isPending || isCurrentAdmin}
-                                title={isCurrentAdmin ? "You cannot change your own active status" : undefined}
-                                className="w-full sm:w-auto"
-                              >
-                                {user.isActive ? (
-                                  <>
-                                    <UserX className="w-4 h-4 mr-2" />
-                                    Deactivate
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserCheck className="w-4 h-4 mr-2" />
-                                    Activate
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteUser(user)}
-                                disabled={isPending || isCurrentAdmin}
-                                title={isCurrentAdmin ? "You cannot delete your own account" : undefined}
-                                className="w-full sm:w-auto"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete
-                              </Button>
+                              <div>
+                                <span className="text-muted-foreground">Joined:</span>
+                                <span className="ml-2 font-medium">
+                                  {new Date(user.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+                          <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end">
+                            <Button
+                              size="sm"
+                              variant={user.isActive ? "outline" : "default"}
+                              onClick={() => handleToggleUserActive(user)}
+                              disabled={isPending || isCurrentAdmin}
+                              title={isCurrentAdmin ? "You cannot change your own active status" : undefined}
+                              className="w-full sm:w-auto"
+                            >
+                              {user.isActive ? (
+                                <>
+                                  <UserX className="w-4 h-4 mr-2" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="w-4 h-4 mr-2" />
+                                  Activate
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={isPending || isCurrentAdmin}
+                              title={isCurrentAdmin ? "You cannot delete your own account" : undefined}
+                              className="w-full sm:w-auto"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
                 {filteredUsers.length === 0 && (
                   <Card>
                     <CardContent className="p-12 text-center">
@@ -1817,7 +1920,6 @@ export default function AdminDashboard({
             </div>
           )}
         </div>
-
       </main>
     </div>
   )
@@ -1900,6 +2002,8 @@ function ManualReservationForm({
 
   useEffect(() => {
     if (!formData.carId && cars[0]?.id) {
+      // Keep the controlled form aligned when the first async car option arrives.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({ ...prev, carId: cars[0].id }))
     }
   }, [cars, formData.carId])
@@ -2010,7 +2114,12 @@ function ManualReservationForm({
           <Input
             id="reservationCustomerName"
             value={formData.customerName}
-            onChange={(event) => setFormData((prev) => ({ ...prev, customerName: event.target.value }))}
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                customerName: event.target.value,
+              }))
+            }
             placeholder="John Doe"
             disabled={isSubmitting}
           />
@@ -2021,7 +2130,12 @@ function ManualReservationForm({
           <Input
             id="reservationCustomerPhone"
             value={formData.customerPhone}
-            onChange={(event) => setFormData((prev) => ({ ...prev, customerPhone: event.target.value }))}
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                customerPhone: event.target.value,
+              }))
+            }
             placeholder="+49 176 1234567"
             disabled={isSubmitting}
           />
@@ -2034,7 +2148,12 @@ function ManualReservationForm({
             type="datetime-local"
             value={formData.pickupDate}
             min={formatDatetimeLocal(new Date())}
-            onChange={(event) => setFormData((prev) => ({ ...prev, pickupDate: event.target.value }))}
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                pickupDate: event.target.value,
+              }))
+            }
             disabled={isSubmitting}
           />
         </div>
@@ -2046,7 +2165,12 @@ function ManualReservationForm({
             type="datetime-local"
             value={formData.dropoffDate}
             min={formData.pickupDate}
-            onChange={(event) => setFormData((prev) => ({ ...prev, dropoffDate: event.target.value }))}
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                dropoffDate: event.target.value,
+              }))
+            }
             disabled={isSubmitting}
           />
         </div>
@@ -2140,7 +2264,12 @@ function UserForm({
         <Label htmlFor="newUserRole">Role</Label>
         <Select
           value={formData.role}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value as UserFormValues["role"] }))}
+          onValueChange={(value) =>
+            setFormData((prev) => ({
+              ...prev,
+              role: value as UserFormValues["role"],
+            }))
+          }
           disabled={isSubmitting}
         >
           <SelectTrigger id="newUserRole">
@@ -2253,7 +2382,13 @@ function CarForm({
     if (!response.ok) {
       throw new Error(data?.error || "Failed to get upload signature")
     }
-    return data as { cloudName: string; apiKey: string; timestamp: number; signature: string; folder: string }
+    return data as {
+      cloudName: string
+      apiKey: string
+      timestamp: number
+      signature: string
+      folder: string
+    }
   }
 
   const uploadToCloudinary = async (file: File) => {
@@ -2411,7 +2546,12 @@ function CarForm({
         <Label htmlFor="category">Category</Label>
         <Select
           value={formData.category}
-          onValueChange={(value) => setFormData({ ...formData, category: value as AdminCar["category"] })}
+          onValueChange={(value) =>
+            setFormData({
+              ...formData,
+              category: value as AdminCar["category"],
+            })
+          }
         >
           <SelectTrigger>
             <SelectValue />
@@ -2451,7 +2591,11 @@ function CarForm({
         <Input id="imageUpload" type="file" accept="image/*" onChange={handlePrimaryImageUpload} disabled={isBusy} />
         {formData.image ? (
           <div className="rounded-lg border border-border p-2">
-            <img src={formData.image} alt={`${formData.name || "Car"} main`} className="h-32 w-full rounded-md object-cover" />
+            <img
+              src={formData.image}
+              alt={`${formData.name || "Car"} main`}
+              className="h-32 w-full rounded-md object-cover"
+            />
           </div>
         ) : null}
       </div>
@@ -2466,9 +2610,7 @@ function CarForm({
           onChange={handleGalleryUpload}
           disabled={isBusy}
         />
-        <p className="text-xs text-muted-foreground">
-          Upload up to {maxGalleryImages} images, 4MB max each.
-        </p>
+        <p className="text-xs text-muted-foreground">Upload up to {maxGalleryImages} images, 4MB max each.</p>
         {formData.images.length > 0 ? (
           <div className="grid grid-cols-3 gap-2">
             {formData.images.map((src, index) => (
@@ -2606,7 +2748,15 @@ function CarForm({
 }
 
 // Settings Form Component
-function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any) => Promise<void> }) {
+type CompanySettingsInput = Omit<CompanySettings, "id" | "createdAt" | "updatedAt">
+
+function SettingsForm({
+  settings,
+  onSave,
+}: {
+  settings: CompanySettings | null
+  onSave: (data: CompanySettingsInput) => Promise<void>
+}) {
   const [formData, setFormData] = useState({
     // Company Information
     companyName: settings?.companyName || "",
@@ -2617,31 +2767,31 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
     companyState: settings?.companyState || "",
     companyZipCode: settings?.companyZipCode || "",
     companyCountry: settings?.companyCountry || "",
-    
+
     // Legal Information (for Impressum/Imprint)
     managingDirector: settings?.managingDirector || "",
     commercialRegister: settings?.commercialRegister || "",
     registerCourt: settings?.registerCourt || "",
     vatId: settings?.vatId || "",
     responsiblePerson: settings?.responsiblePerson || "",
-    
+
     // Bank/Payment Details
     bankName: settings?.bankName || "",
     accountName: settings?.accountName || "",
     accountNumber: settings?.accountNumber || "",
     swiftCode: settings?.swiftCode || "",
     iban: settings?.iban || "",
-    
+
     // Tax Configuration
     taxRate: settings?.taxRate ?? 0,
     taxIncluded: settings?.taxIncluded ?? false,
     depositPercentage: settings?.depositPercentage ?? 0.2,
     guaranteePercentage: settings?.guaranteePercentage ?? 0,
-    
+
     // Email Configuration
     supportEmail: settings?.supportEmail || "",
     adminEmail: settings?.adminEmail || "",
-    
+
     // Additional Settings
     currency: settings?.currency || "EUR",
     currencySymbol: settings?.currencySymbol || "€",
@@ -2858,7 +3008,12 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               min="0"
               max="1"
               value={formData.taxRate}
-              onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  taxRate: parseFloat(e.target.value) || 0,
+                })
+              }
             />
           </div>
           <div className="space-y-2">
@@ -2888,7 +3043,12 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               min="0"
               max="1"
               value={formData.guaranteePercentage}
-              onChange={(e) => setFormData({ ...formData, guaranteePercentage: parseFloat(e.target.value) || 0 })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  guaranteePercentage: parseFloat(e.target.value) || 0,
+                })
+              }
             />
           </div>
           <div className="space-y-2 flex items-center gap-2">
@@ -2899,7 +3059,9 @@ function SettingsForm({ settings, onSave }: { settings: any; onSave: (data: any)
               onChange={(e) => setFormData({ ...formData, taxIncluded: e.target.checked })}
               className="w-4 h-4"
             />
-            <Label htmlFor="taxIncluded" className="cursor-pointer">Tax included in displayed prices</Label>
+            <Label htmlFor="taxIncluded" className="cursor-pointer">
+              Tax included in displayed prices
+            </Label>
           </div>
         </div>
       </div>

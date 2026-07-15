@@ -105,6 +105,7 @@ export async function getAllBookings() {
       include: {
         user: { select: { id: true, name: true, email: true } },
         car: { select: { id: true, name: true, image: true, category: true } },
+        pricingSnapshot: true,
       },
       orderBy: { createdAt: "desc" },
     })

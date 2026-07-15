@@ -3,23 +3,22 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { requireAuth, requireAdmin } from "@/lib/auth"
-import { createBookingSchema, updateBookingStatusSchema } from "@/lib/validations"
-import { isCarAvailable, calculateTotalDays } from "@/lib/availability"
-// import { stripe } from "@/lib/stripe"
+import { updateBookingStatusSchema } from "@/lib/validations"
 import { config } from "@/lib/config"
 import {
-  sendManualPaymentEmail,
-  sendPayAtPickupEmail,
-  sendAdminBookingNotification,
   sendBookingStatusEmail,
   sendAdminBookingConfirmationNotification,
   sendBookingConfirmationEmail,
   sendBookingCompletionReviewEmail,
 } from "@/lib/email"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
-import crypto from "crypto"
-import { Prisma } from "@prisma/client"
 import { z } from "zod"
+import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
+import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
+import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
+import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
+import { logger } from "@/lib/logger"
+import { loadBookingConfirmationConfiguration } from "@/lib/booking-confirmation-configuration"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -33,296 +32,91 @@ const formatDateForLocale = (date: Date, locale: string) =>
     minute: "2-digit",
   })
 
-export async function createBooking(data: unknown) {
-  try {
-    const user = await requireAuth()
-    await runBookingLifecycleMaintenance()
+const bookingQuoteSchema = z
+  .object({
+    carId: z.string().min(1),
+    pickupDate: z.string().datetime(),
+    dropoffDate: z.string().datetime(),
+    paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
+    insuranceSelected: z.boolean().optional().default(false),
+  })
+  .refine((value) => new Date(value.dropoffDate) > new Date(value.pickupDate), {
+    message: "Drop-off date must be after pickup date",
+    path: ["dropoffDate"],
+  })
 
-    // Validate input
-    const validated = createBookingSchema.parse(data)
-    const bookingLocale = normalizeBookingLocale(validated.locale)
-
-    const pickupDate = new Date(validated.pickupDate)
-    const dropoffDate = new Date(validated.dropoffDate)
-
-    // Check car exists
-    const car = await prisma.car.findUnique({
-      where: { id: validated.carId },
-    })
-
-    if (!car || car.isDeleted) {
-      return { error: "Car not found" }
-    }
-
-    if (car.status === "RENTED" || car.status === "MAINTENANCE") {
-      return { error: "Car is not available for booking" }
-    }
-
-    // Check availability with a transaction lock to prevent race conditions
-    const available = await isCarAvailable(validated.carId, pickupDate, dropoffDate)
-
-    if (!available) {
-      return { error: "Car is not available for the selected dates" }
-    }
-
-    // Calculate pricing
-    const totalDays = calculateTotalDays(pickupDate, dropoffDate)
-    const subtotalPrice = car.price * totalDays
-    const companySettings = await prisma.companySettings.findUnique({
-      where: { id: "company-settings" },
-      select: {
-        taxRate: true,
-        taxIncluded: true,
-        depositPercentage: true,
-        guaranteePercentage: true,
-      },
-    })
-    const configuredTaxRate = companySettings?.taxRate ?? 0
-    const effectiveTaxRate = configuredTaxRate > 0 ? configuredTaxRate : 0.1
-    const taxAmount = companySettings?.taxIncluded ? 0 : Math.round(subtotalPrice * effectiveTaxRate)
-    const totalPrice = subtotalPrice + taxAmount
-    const depositPercentage = companySettings?.depositPercentage ?? 0.2
-    const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
-    const depositAmount = validated.paymentMethod === "TRANSFER" ? Math.round(totalPrice * depositPercentage) : 0
-    const guaranteeAmount = Math.round(totalPrice * guaranteePercentage)
-
-    // Generate unique booking number and transfer code
-    const bookingNumber = `BK${Date.now().toString().slice(-8)}`
-    const transferCode = crypto.randomBytes(4).toString("hex").toUpperCase()
-
-    // Create booking in transaction
-    const booking = await prisma.$transaction(
-      async (tx) => {
-        // Lock the car row to prevent concurrent bookings
-        await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
-
-        // Double-check availability within transaction
-        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, undefined, tx)
-
-        if (!stillAvailable) {
-          throw new Error("Car is no longer available")
+function publicQuote(configured: Awaited<ReturnType<typeof quoteConfiguredVehicleRental>>) {
+  const quote = configured.quote
+  return {
+    currency: quote.currency,
+    pickupAt: quote.pickupAt,
+    returnAt: quote.returnAt,
+    chargeableDays: quote.chargeableDuration.chargeableDays,
+    durationStrategy: quote.durationStrategy,
+    dailyUnits: quote.units.daily,
+    weeklyUnits: quote.units.weekly,
+    monthlyUnits: quote.units.monthly,
+    sourceDailyRate: quote.sourceDailyRate,
+    sourceWeeklyRate: quote.sourceWeeklyRate,
+    sourceMonthlyRate: quote.sourceMonthlyRate,
+    selectedStrategy: quote.selectedStrategy,
+    baseSubtotal: quote.baseSubtotal,
+    adjustmentTotal: quote.adjustmentTotal,
+    insuranceSubtotal: quote.insuranceSubtotal,
+    taxTreatment: quote.taxTreatment,
+    taxRateBps: quote.taxRateBps,
+    taxSubtotal: quote.taxSubtotal,
+    grandTotal: quote.grandTotal,
+    depositAmount: quote.payment.depositAmount,
+    guaranteeAmount: quote.payment.guaranteeAmount,
+    depositRateBps: quote.payment.depositRateBps,
+    guaranteeRateBps: quote.payment.guaranteeRateBps,
+    pricingEngineVersion: quote.pricingEngineVersion,
+    compatibilityMode: quote.compatibilityMode,
+    trace: quote.trace,
+    warnings: quote.warnings,
+    insurance: configured.insurance
+      ? {
+          enabled: configured.insurance.enabled,
+          selected: configured.insurance.selected,
+          requirementMode: configured.insurance.requirementMode,
+          customerFacingName: configured.insurance.customerFacingName,
+          description: configured.insurance.description,
+          unitPrice: configured.insurance.unitPrice,
+          billableDays: configured.insurance.billableDays,
+          subtotal: configured.insurance.subtotal,
+          currency: configured.insurance.currency,
+          availableForVehicle: configured.insurance.availableForVehicle,
+          showCustomerSelection: configured.insurance.showCustomerSelection,
         }
+      : undefined,
+  }
+}
 
-        // Create booking
-        const newBooking = await tx.booking.create({
-          data: {
-            userId: user.id,
-            carId: validated.carId,
-            locale: bookingLocale,
-            pickupDate,
-            dropoffDate,
-            location: validated.location,
-            pricePerDay: car.price,
-            totalDays,
-            totalPrice,
-            depositAmount,
-            guaranteeAmount,
-            transferCode,
-            bookingNumber,
-            status: "PENDING",
-            paymentStatus: "PENDING",
-            paymentMethod: validated.paymentMethod,
-          },
-        })
-
-        return newBooking
+export async function getBookingQuote(data: unknown) {
+  try {
+    await requireAuth()
+    const validated = bookingQuoteSchema.parse(data)
+    const configured = await quoteConfiguredVehicleRental({
+      db: prisma,
+      pricingRepository: new PrismaPricingContextRepository(prisma),
+      locale: "en",
+      insuranceSelected: validated.insuranceSelected,
+      request: {
+        vehicleId: validated.carId,
+        pickupAt: new Date(validated.pickupDate),
+        returnAt: new Date(validated.dropoffDate),
+        paymentMethod: validated.paymentMethod,
       },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      },
-    )
-
-    // Stripe checkout flow is temporarily disabled.
-    // Uncomment this block when you want to re-enable Stripe integration.
-    /*
-    if (stripe && config.features.paymentsEnabled) {
-      const stripeImages = car.image.startsWith("http") ? [car.image] : []
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "eur",
-              product_data: {
-                name: `${car.name} Rental`,
-                description: `${totalDays} day(s) - ${validated.location}`,
-                ...(stripeImages.length > 0 ? { images: stripeImages } : {}),
-              },
-              unit_amount: totalPrice,
-            },
-            quantity: 1,
-          },
-        ],
-        mode: "payment",
-        success_url: `${config.appUrl}/bookings?success=true&booking_id=${booking.id}`,
-        cancel_url: `${config.appUrl}/cars/${car.id}?cancelled=true`,
-        metadata: {
-          bookingId: booking.id,
-          userId: user.id,
-          carId: car.id,
-        },
-        customer_email: user.email,
-      })
-
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: { stripeSessionId: session.id },
-      })
-
-      revalidatePath("/bookings")
-      revalidatePath(`/cars/${car.id}`)
-
-      return {
-        success: true,
-        booking,
-        checkoutUrl: session.url,
-        manualPayment: false,
-      }
-    }
-    */
-
-    // Manual payment flow (no Stripe)
-    // Send email notifications
-    const userEmailLocale = normalizeBookingLocale(booking.locale)
-    const userCarName = userEmailLocale === "de" ? car.nameDe || car.name : car.name
-
-    // Send email notifications
-    console.log("[BOOKING] Email configuration check:", {
-      emailEnabled: config.features.emailEnabled,
-      adminEmails: config.adminEmails,
-      userEmail: user.email,
-      bookingNumber: booking.bookingNumber,
     })
-
-    if (config.features.emailEnabled) {
-      console.log("[BOOKING] Sending emails for new booking:", {
-        bookingNumber: booking.bookingNumber,
-        userEmail: user.email,
-        adminEmails: config.adminEmails,
-      })
-
-      const userEmailResult =
-        validated.paymentMethod === "TRANSFER"
-          ? await sendManualPaymentEmail({
-              to: user.email,
-              userName: user.name || user.email,
-              carName: userCarName,
-              pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
-              dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
-              location: booking.location,
-              totalPrice: booking.totalPrice,
-              depositAmount: booking.depositAmount,
-              guaranteeAmount: booking.guaranteeAmount,
-              transferCode: booking.transferCode,
-              bookingNumber: booking.bookingNumber,
-              locale: userEmailLocale,
-            })
-          : await sendPayAtPickupEmail({
-              to: user.email,
-              userName: user.name || user.email,
-              carName: userCarName,
-              pickupDate: formatDateForLocale(booking.pickupDate, userEmailLocale),
-              dropoffDate: formatDateForLocale(booking.dropoffDate, userEmailLocale),
-              location: booking.location,
-              totalPrice: booking.totalPrice,
-              guaranteeAmount: booking.guaranteeAmount,
-              bookingNumber: booking.bookingNumber,
-              locale: userEmailLocale,
-            })
-
-      if (userEmailResult.error) {
-        console.error("[BOOKING] Failed to send user email:", {
-          bookingNumber: booking.bookingNumber,
-          error: userEmailResult.error,
-        })
-      } else {
-        console.log("[BOOKING] ✅ User email sent successfully:", {
-          bookingNumber: booking.bookingNumber,
-          userEmail: user.email,
-        })
-      }
-
-      // Send notification to admin
-      const adminEmailResult = await sendAdminBookingNotification({
-        adminEmails: config.adminEmails,
-        userName: user.name || user.email,
-        userEmail: user.email,
-        carName: car.name,
-        pickupDate: formatDateForLocale(booking.pickupDate, "en"),
-        dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
-        location: booking.location,
-        totalPrice: booking.totalPrice,
-        depositAmount: booking.depositAmount,
-        guaranteeAmount: booking.guaranteeAmount,
-        transferCode: booking.transferCode,
-        bookingNumber: booking.bookingNumber,
-        bookingId: booking.id,
-        paymentMethod: booking.paymentMethod,
-      })
-
-      if (adminEmailResult.error) {
-        console.error("[BOOKING] Failed to send admin email:", {
-          bookingNumber: booking.bookingNumber,
-          adminEmails: config.adminEmails,
-          error: adminEmailResult.error,
-        })
-      } else {
-        console.log("[BOOKING] ✅ Admin email sent successfully:", {
-          bookingNumber: booking.bookingNumber,
-          adminEmails: config.adminEmails,
-        })
-      }
-    } else {
-      console.warn("[BOOKING] Email is disabled. Skipping email notifications:", {
-        bookingNumber: booking.bookingNumber,
-        userEmail: user.email,
-        adminEmails: config.adminEmails,
-      })
-    }
-
-    revalidatePath("/bookings")
-    revalidatePath(`/cars/${car.id}`)
-    revalidatePath("/admin")
-
-    return {
-      success: true,
-      booking: {
-        id: booking.id,
-        bookingNumber: booking.bookingNumber,
-        transferCode: booking.transferCode,
-        totalPrice: booking.totalPrice,
-        depositAmount: booking.depositAmount,
-        guaranteeAmount: booking.guaranteeAmount,
-        pickupDate: booking.pickupDate,
-        dropoffDate: booking.dropoffDate,
-        location: booking.location,
-        carName: userCarName,
-        paymentMethod: booking.paymentMethod,
-      },
-      manualPayment: true,
-    }
+    return { quote: publicQuote(configured) }
   } catch (error) {
-    console.error("[CREATE_BOOKING_ERROR]", error)
-
-    if (error instanceof z.ZodError) {
-      const firstIssue = error.issues[0]
-      const fallbackMessage = "Please review your booking details and try again."
-      const zodMessage = firstIssue?.message ?? fallbackMessage
-      const messageMap: Record<string, string> = {
-        "Pickup date must be in the future": "Please select a pickup date and time in the future.",
-        "Drop-off date must be after pickup date": "Drop-off must be after pickup.",
-        "Invalid datetime": "Please select valid pickup and drop-off dates.",
-        "Required": "Please fill in all required booking fields.",
-      }
-
-      return { error: messageMap[zodMessage] ?? zodMessage }
+    logger.error("[GET_BOOKING_QUOTE_ERROR]", error)
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid quote request" }
+    if (error instanceof PricingError) return { error: publicPricingErrorMessage(error), code: error.code }
+    return {
+      error: "A valid price could not be calculated. Please try again or contact support.",
     }
-
-    if (error instanceof Error) {
-      return { error: error.message }
-    }
-
-    return { error: "Failed to create booking" }
   }
 }
 
@@ -335,7 +129,7 @@ export async function updateBookingStatus(data: unknown) {
 
     const booking = await prisma.booking.findUnique({
       where: { id: validated.bookingId },
-      include: { car: true, user: true },
+      include: { car: true, user: true, pricingSnapshot: true },
     })
 
     if (!booking) {
@@ -373,14 +167,17 @@ export async function updateBookingStatus(data: unknown) {
           targetId: validated.bookingId,
           bookingId: validated.bookingId,
           oldValue: { status: oldStatus, paymentStatus: booking.paymentStatus },
-          newValue: { status: validated.status, paymentStatus: nextPaymentStatus },
+          newValue: {
+            status: validated.status,
+            paymentStatus: nextPaymentStatus,
+          },
           reason: validated.reason,
         },
       })
     })
 
     // Send email notifications based on status change
-    console.log("[BOOKING] Status update email configuration check:", {
+    logger.info("[BOOKING] Status update email configuration check:", {
       emailEnabled: config.features.emailEnabled,
       userEmail: booking.user?.email,
       adminEmails: config.adminEmails,
@@ -392,14 +189,15 @@ export async function updateBookingStatus(data: unknown) {
     if (config.features.emailEnabled && booking.user?.email) {
       const bookingLocale = normalizeBookingLocale(booking.locale)
       // Send appropriate email based on status
-      if (validated.status === "CONFIRMED") {
-        console.log("[BOOKING] Sending CONFIRMED status emails:", {
+      if (validated.status === "CONFIRMED" && booking.status !== "CONFIRMED") {
+        logger.info("[BOOKING] Sending CONFIRMED status emails:", {
           bookingNumber: booking.bookingNumber,
           userEmail: booking.user.email,
           adminEmails: config.adminEmails,
         })
 
         const userCarName = bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
+        const confirmationConfiguration = await loadBookingConfirmationConfiguration(booking.id)
         const userConfirmationResult = await sendBookingConfirmationEmail({
           to: booking.user.email,
           userName: booking.user.name || booking.user.email,
@@ -407,22 +205,28 @@ export async function updateBookingStatus(data: unknown) {
           pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
           dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
           location: booking.location,
-          totalPrice: booking.totalPrice,
+          totalPrice: bookingTotalFromSnapshot(booking),
+          currency: booking.pricingSnapshot?.currency,
           guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
           paymentMethod: booking.paymentMethod,
           bookingNumber: booking.bookingNumber,
           locale: bookingLocale,
+          confirmationHeading: confirmationConfiguration.heading,
+          confirmationContent: confirmationConfiguration.content,
+          paymentMode: confirmationConfiguration.paymentMode,
+          paymentInstructions: confirmationConfiguration.paymentInstructions,
+          showPaymentInstructions: confirmationConfiguration.showPaymentInstructions,
         })
 
         if (userConfirmationResult.error) {
-          console.error("[BOOKING] Failed to send user confirmation email:", {
+          logger.error("[BOOKING] Failed to send user confirmation email:", {
             bookingNumber: booking.bookingNumber,
             userEmail: booking.user.email,
             error: userConfirmationResult.error,
           })
         } else {
-          console.log("[BOOKING] ✅ User confirmation email sent successfully:", {
+          logger.info("[BOOKING] ✅ User confirmation email sent successfully:", {
             bookingNumber: booking.bookingNumber,
             userEmail: booking.user.email,
           })
@@ -437,7 +241,8 @@ export async function updateBookingStatus(data: unknown) {
           pickupDate: formatDateForLocale(booking.pickupDate, "en"),
           dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
           location: booking.location,
-          totalPrice: booking.totalPrice,
+          totalPrice: bookingTotalFromSnapshot(booking),
+          currency: booking.pricingSnapshot?.currency,
           guaranteeAmount: booking.guaranteeAmount,
           transferCode: booking.transferCode,
           bookingNumber: booking.bookingNumber,
@@ -445,19 +250,19 @@ export async function updateBookingStatus(data: unknown) {
         })
 
         if (adminConfirmationResult.error) {
-          console.error("[BOOKING] Failed to send admin confirmation email:", {
+          logger.error("[BOOKING] Failed to send admin confirmation email:", {
             bookingNumber: booking.bookingNumber,
             adminEmails: config.adminEmails,
             error: adminConfirmationResult.error,
           })
         } else {
-          console.log("[BOOKING] ✅ Admin confirmation email sent successfully:", {
+          logger.info("[BOOKING] ✅ Admin confirmation email sent successfully:", {
             bookingNumber: booking.bookingNumber,
             adminEmails: config.adminEmails,
           })
         }
       } else if (validated.status === "COMPLETED") {
-        console.log("[BOOKING] Sending COMPLETED status email:", {
+        logger.info("[BOOKING] Sending COMPLETED status email:", {
           bookingNumber: booking.bookingNumber,
           userEmail: booking.user.email,
         })
@@ -476,20 +281,20 @@ export async function updateBookingStatus(data: unknown) {
         })
 
         if (completionEmailResult.error) {
-          console.error("[BOOKING] Failed to send booking completion email:", {
+          logger.error("[BOOKING] Failed to send booking completion email:", {
             bookingNumber: booking.bookingNumber,
             userEmail: booking.user.email,
             error: completionEmailResult.error,
           })
         } else {
-          console.log("[BOOKING] ✅ Booking completion email sent successfully:", {
+          logger.info("[BOOKING] ✅ Booking completion email sent successfully:", {
             bookingNumber: booking.bookingNumber,
             userEmail: booking.user.email,
           })
         }
       } else {
         // Send status update email for other statuses (CANCELLED, REJECTED)
-        console.log("[BOOKING] Sending status update email:", {
+        logger.info("[BOOKING] Sending status update email:", {
           bookingNumber: booking.bookingNumber,
           status: validated.status,
           userEmail: booking.user.email,
@@ -505,14 +310,14 @@ export async function updateBookingStatus(data: unknown) {
         )
 
         if (statusEmailResult.error) {
-          console.error("[BOOKING] Failed to send status update email:", {
+          logger.error("[BOOKING] Failed to send status update email:", {
             bookingNumber: booking.bookingNumber,
             status: validated.status,
             userEmail: booking.user.email,
             error: statusEmailResult.error,
           })
         } else {
-          console.log("[BOOKING] ✅ Status update email sent successfully:", {
+          logger.info("[BOOKING] ✅ Status update email sent successfully:", {
             bookingNumber: booking.bookingNumber,
             status: validated.status,
             userEmail: booking.user.email,
@@ -521,12 +326,12 @@ export async function updateBookingStatus(data: unknown) {
       }
     } else {
       if (!config.features.emailEnabled) {
-        console.warn("[BOOKING] Email is disabled. Skipping status update emails:", {
+        logger.warn("[BOOKING] Email is disabled. Skipping status update emails:", {
           bookingNumber: booking.bookingNumber,
           status: validated.status,
         })
       } else if (!booking.user?.email) {
-        console.warn("[BOOKING] User email not found. Skipping status update emails:", {
+        logger.warn("[BOOKING] User email not found. Skipping status update emails:", {
           bookingNumber: booking.bookingNumber,
           status: validated.status,
           userId: booking.userId,
@@ -540,7 +345,7 @@ export async function updateBookingStatus(data: unknown) {
 
     return { success: true }
   } catch (error) {
-    console.error("[UPDATE_BOOKING_STATUS_ERROR]", error)
+    logger.error("[UPDATE_BOOKING_STATUS_ERROR]", error)
 
     if (error instanceof Error) {
       return { error: error.message }
@@ -559,13 +364,14 @@ export async function getUserBookings() {
       where: { userId: user.id },
       include: {
         car: true,
+        pricingSnapshot: true,
       },
       orderBy: { createdAt: "desc" },
     })
 
     return { bookings }
   } catch (error) {
-    console.error("[GET_USER_BOOKINGS_ERROR]", error)
+    logger.error("[GET_USER_BOOKINGS_ERROR]", error)
     return { error: "Failed to fetch bookings" }
   }
 }

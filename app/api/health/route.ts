@@ -1,27 +1,21 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { logger } from "@/lib/logger"
+
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    // Check database connection
     await prisma.$queryRaw`SELECT 1`
-
-    return NextResponse.json({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      database: "connected",
-    })
-  } catch (error) {
-    console.error("[HEALTH_CHECK_ERROR]", error)
-
     return NextResponse.json(
-      {
-        status: "unhealthy",
-        timestamp: new Date().toISOString(),
-        database: "disconnected",
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 503 },
+      { status: "healthy" },
+      { headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } },
+    )
+  } catch (error) {
+    logger.error("health.database_unavailable", { error })
+    return NextResponse.json(
+      { status: "unhealthy" },
+      { status: 503, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } },
     )
   }
 }
