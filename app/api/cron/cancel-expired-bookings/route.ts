@@ -1,28 +1,70 @@
 import { NextResponse } from "next/server"
-import { timingSafeEqual } from "node:crypto"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import { BOOKING_MAINTENANCE_JOB, cronExecutionKey } from "@/lib/production/cron-schedule"
+import { hasValidBearerSecret, manualExecutionKey, validIdempotencyKey } from "@/lib/production/request-auth"
+import { executeProtectedWorker } from "@/lib/production/worker-execution"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const maxDuration = 60
+
+const PATH = "/api/cron/cancel-expired-bookings"
 
 function isAuthorized(request: Request) {
-  const secret = process.env.CRON_SECRET
-  if (!secret || process.env.BOOKING_MAINTENANCE_WORKER_ENABLED !== "true") return false
-
-  const authHeader = request.headers.get("authorization") || ""
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ""
-  if (!token) return false
-  const expected = Buffer.from(secret)
-  const supplied = Buffer.from(token)
-  return expected.length === supplied.length && timingSafeEqual(expected, supplied)
+  return (
+    process.env.BOOKING_MAINTENANCE_WORKER_ENABLED === "true" &&
+    hasValidBearerSecret(request, process.env.CRON_SECRET)
+  )
 }
 
-export async function GET(request: Request) {
+function summarize(result: Awaited<ReturnType<typeof runBookingLifecycleMaintenance>>) {
+  return {
+    examined: result.cancelled + result.completed,
+    succeeded: result.cancelled + result.completed,
+    failed: result.completionEmailsFailed,
+  }
+}
+
+async function run(request: Request, triggerSource: "vercel-cron" | "manual") {
+  if (process.env.VERCEL_ENV !== "production")
+    return NextResponse.json(
+      { code: "CRON_PRODUCTION_ONLY" },
+      { status: 403, headers: { "Cache-Control": "private, no-store" } },
+    )
   if (!isAuthorized(request)) {
     return new NextResponse("Unauthorized", { status: 401, headers: { "Cache-Control": "private, no-store" } })
   }
+  const idempotencyKey = triggerSource === "manual" ? validIdempotencyKey(request) : undefined
+  if (triggerSource === "manual" && !idempotencyKey)
+    return NextResponse.json(
+      { code: "IDEMPOTENCY_KEY_REQUIRED" },
+      { status: 400, headers: { "Cache-Control": "private, no-store" } },
+    )
+  const execution = await executeProtectedWorker({
+    job: BOOKING_MAINTENANCE_JOB,
+    deduplicationKey:
+      triggerSource === "manual"
+        ? manualExecutionKey(BOOKING_MAINTENANCE_JOB, idempotencyKey as string)
+        : cronExecutionKey(PATH, BOOKING_MAINTENANCE_JOB),
+    triggerSource,
+    run: () => runBookingLifecycleMaintenance(),
+    summarize,
+  })
+  const status = execution.status === "FAILED" || execution.status === "PARTIAL"
+    ? 503
+    : execution.status === "DUPLICATE" || execution.status === "CONCURRENT"
+      ? 409
+      : 200
+  return NextResponse.json(
+    { status: execution.status, invocationId: execution.invocationId },
+    { status, headers: { "Cache-Control": "private, no-store" } },
+  )
+}
 
-  const result = await runBookingLifecycleMaintenance()
-  return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } })
+export function GET(request: Request) {
+  return run(request, "vercel-cron")
 }
 
 export async function POST(request: Request) {
-  return GET(request)
+  return run(request, "manual")
 }

@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/cancel-expired-bookings",
+      "schedule": "15 2 * * *"
+    },
+    {
+      "path": "/api/cron/phase8fb-maintenance",
+      "schedule": "15 3 * * *"
+    }
+  ]
+}

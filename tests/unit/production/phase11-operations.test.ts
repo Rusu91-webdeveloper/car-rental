@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  AUTOMATED_PRODUCTION_WORKER_JOBS,
   PRODUCTION_WORKER_JOBS,
   enabledProductionWorkerJobs,
   readProductionOperationsEnvironment,
@@ -13,31 +14,42 @@ describe("production operations environment", () => {
     expect([...enabled]).toEqual(["review-backlog", "deletion-processing"])
   })
 
-  it("requires fresh recovery evidence, alert ownership, and the complete worker rollout", () => {
-    const now = new Date("2026-07-14T12:00:00.000Z")
+  it("requires deliberate ownership, alert configuration, and the complete worker rollout", () => {
     const report = readProductionOperationsEnvironment({
-      PRODUCTION_ALERTING_ATTESTED: "true",
+      PRODUCTION_OWNER: "production-primary",
       PRODUCTION_ALERT_OWNER: "operations-primary",
+      PRODUCTION_ALERT_RECIPIENT: "alerts@example.invalid",
+      RESEND_API_KEY: "re_synthetic",
       DATABASE_RECOVERY_OWNER: "database-primary",
-      DATABASE_BACKUP_VERIFIED_AT: "2026-07-14T11:00:00.000Z",
-      DATABASE_RESTORE_VERIFIED_AT: "2026-06-14T12:00:00.000Z",
+      WORKER_MAINTENANCE_OWNER: "worker-primary",
       PHASE8FB_WORKER_JOBS_ENABLED: PRODUCTION_WORKER_JOBS.join(","),
-    }, now)
+    })
     expect(report).toMatchObject({
-      alertingReady: true,
-      backupReady: true,
-      restoreReady: true,
+      alertingConfigured: true,
+      allOwnersAssigned: true,
       allWorkerJobsEnabled: true,
+      allAutomatedWorkerJobsEnabled: true,
+      legacyAlertAttestation: false,
     })
   })
 
-  it("expires stale backup and restore attestations", () => {
+  it("does not treat legacy timestamp or alert flags as readiness evidence", () => {
     const report = readProductionOperationsEnvironment({
+      PRODUCTION_ALERTING_ATTESTED: "true",
       DATABASE_RECOVERY_OWNER: "database-primary",
-      DATABASE_BACKUP_VERIFIED_AT: "2026-07-12T00:00:00.000Z",
-      DATABASE_RESTORE_VERIFIED_AT: "2026-01-01T00:00:00.000Z",
-    }, new Date("2026-07-14T12:00:00.000Z"))
-    expect(report.backupReady).toBe(false)
-    expect(report.restoreReady).toBe(false)
+      DATABASE_BACKUP_VERIFIED_AT: "2026-07-14T11:00:00.000Z",
+      DATABASE_RESTORE_VERIFIED_AT: "2026-07-14T11:00:00.000Z",
+      PHASE8FB_WORKER_JOBS_ENABLED: AUTOMATED_PRODUCTION_WORKER_JOBS.join(","),
+    })
+    expect(report.legacyAlertAttestation).toBe(true)
+    expect(report.alertingConfigured).toBe(false)
+    expect(report.allAutomatedWorkerJobsEnabled).toBe(true)
+  })
+
+  it("keeps destructive and costly jobs outside the automatic schedule", () => {
+    expect(AUTOMATED_PRODUCTION_WORKER_JOBS).toEqual([
+      "application-expiry",
+      "review-backlog",
+    ])
   })
 })

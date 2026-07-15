@@ -4,9 +4,12 @@ import { getProductionHealthReport } from "@/lib/production/health"
 export const dynamic = "force-dynamic"
 
 const statusClass = {
-  PASS: "bg-emerald-100 text-emerald-900",
-  WARN: "bg-amber-100 text-amber-900",
-  FAIL: "bg-red-100 text-red-900",
+  READY: "bg-emerald-100 text-emerald-900",
+  STALE: "bg-amber-100 text-amber-900",
+  MANUAL_VERIFICATION_REQUIRED: "bg-amber-100 text-amber-900",
+  BLOCKED: "bg-red-100 text-red-900",
+  FAILING: "bg-red-100 text-red-900",
+  NOT_CONFIGURED: "bg-slate-200 text-slate-900",
 } as const
 
 export default async function ProductionHealthPage() {
@@ -30,7 +33,30 @@ export default async function ProductionHealthPage() {
                 {item.status}
               </span>
             </div>
-            <p className="mt-3 text-sm text-muted-foreground">{item.summary}</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div>
+                <dt className="font-medium">Evidence</dt>
+                <dd className="mt-1 text-muted-foreground">{item.evidence}</dd>
+              </div>
+              <div>
+                <dt className="font-medium">Last verified</dt>
+                <dd className="mt-1 text-muted-foreground">{item.lastVerifiedAt ? new Date(item.lastVerifiedAt).toLocaleString() : "No valid evidence"}</dd>
+              </div>
+              {item.blockedReason ? (
+                <div>
+                  <dt className="font-medium">Why blocked</dt>
+                  <dd className="mt-1 text-muted-foreground">{item.blockedReason}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt className="font-medium">Remediation</dt>
+                <dd className="mt-1 text-muted-foreground">{item.remediation}</dd>
+              </div>
+              <div>
+                <dt className="font-medium">Verification</dt>
+                <dd className="mt-1 text-muted-foreground">{item.verificationMode === "AUTOMATIC" ? "Automatic evidence" : "Manual action with durable evidence"}</dd>
+              </div>
+            </dl>
           </section>
         ))}
       </div>

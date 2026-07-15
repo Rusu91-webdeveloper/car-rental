@@ -42,20 +42,24 @@ describe("Phase 9 production hardening", () => {
 
   it("keeps detailed health server-protected and public health responses opaque", async () => {
     const root = resolve(process.cwd())
-    const [dashboard, healthRoute, workerRoute, cronRoute, businessInfo] = await Promise.all([
+    const [dashboard, healthRoute, workerRoute, cronRoute, workerExecution, requestAuth, businessInfo] = await Promise.all([
       readFile(resolve(root, "app/[locale]/admin/health/page.tsx"), "utf8"),
       readFile(resolve(root, "app/api/health/route.ts"), "utf8"),
       readFile(resolve(root, "app/api/internal/phase8fb/[job]/route.ts"), "utf8"),
       readFile(resolve(root, "app/api/cron/cancel-expired-bookings/route.ts"), "utf8"),
+      readFile(resolve(root, "lib/production/worker-execution.ts"), "utf8"),
+      readFile(resolve(root, "lib/production/request-auth.ts"), "utf8"),
       readFile(resolve(root, "lib/business-info.ts"), "utf8"),
     ])
     expect(dashboard).toContain("await requireAdmin()")
     expect(healthRoute).not.toContain("error.message")
     expect(healthRoute).toContain('"Cache-Control": "no-store"')
-    expect(workerRoute).toContain("workerExecution.create")
+    expect(workerRoute).toContain("executeProtectedWorker")
     expect(workerRoute).not.toContain('process.env.NODE_ENV === "production"')
     expect(cronRoute).toContain("BOOKING_MAINTENANCE_WORKER_ENABLED")
-    expect(cronRoute).toContain("timingSafeEqual")
+    expect(requestAuth).toContain("timingSafeEqual")
+    expect(workerExecution).toContain("deduplicationKey")
+    expect(workerExecution).toContain("WorkerLease")
     expect(businessInfo).not.toContain("companySettings.create")
     expect(businessInfo).not.toContain("companySettings.upsert")
     const bookingActions = await readFile(resolve(root, "app/actions/bookings.ts"), "utf8")

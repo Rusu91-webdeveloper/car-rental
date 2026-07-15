@@ -23,8 +23,11 @@ for (const key of [
   "VERCEL_OIDC_TOKEN",
   "PHASE8FB_WORKER_SECRET",
   "CRON_SECRET",
+  "PRODUCTION_OWNER",
   "PRODUCTION_ALERT_OWNER",
+  "PRODUCTION_ALERT_RECIPIENT",
   "DATABASE_RECOVERY_OWNER",
+  "WORKER_MAINTENANCE_OWNER",
 ]) requireValue(key)
 
 if (env.NODE_ENV !== "production") issues.add("NODE_ENV_NOT_PRODUCTION")
@@ -59,9 +62,9 @@ const secretValues = [
 if (new Set(secretValues).size !== secretValues.length) issues.add("OPERATIONAL_SECRETS_NOT_DISTINCT")
 
 const operations = readProductionOperationsEnvironment(env)
-if (!operations.alertingReady) issues.add("PRODUCTION_ALERTING_NOT_VERIFIED")
-if (!operations.backupReady) issues.add("DATABASE_BACKUP_NOT_CURRENT")
-if (!operations.restoreReady) issues.add("DATABASE_RESTORE_NOT_CURRENT")
+if (!operations.alertingConfigured) issues.add("PRODUCTION_ALERTING_NOT_CONFIGURED")
+if (!operations.allOwnersAssigned) issues.add("OPERATIONAL_OWNERSHIP_INCOMPLETE")
+if (operations.legacyAlertAttestation) issues.add("LEGACY_ALERT_ATTESTATION_MUST_REMAIN_FALSE")
 if (env.PHASE8FB_WORKERS_ENABLED !== "true") issues.add("PHASE8FB_WORKERS_DISABLED")
 if (!operations.allWorkerJobsEnabled) issues.add("PHASE8FB_WORKER_ROLLOUT_INCOMPLETE")
 if (env.BOOKING_MAINTENANCE_WORKER_ENABLED !== "true") issues.add("BOOKING_MAINTENANCE_WORKER_DISABLED")
@@ -73,6 +76,12 @@ const result = {
   ready: issues.size === 0,
   issueCodes: [...issues].sort(),
   requiredWorkerJobs: PRODUCTION_WORKER_JOBS,
+  durableEvidenceRequired: [
+    "successful alert-delivery test within 30 days",
+    "successful backup verification within 24 hours",
+    "successful restore rehearsal within 90 days",
+    "successful scheduled-worker heartbeats within 48 hours",
+  ],
 }
 console.log(JSON.stringify(result, null, 2))
 if (!result.ready) process.exitCode = 1

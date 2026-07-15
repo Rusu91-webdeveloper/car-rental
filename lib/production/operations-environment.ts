@@ -1,11 +1,4 @@
-const DAY_MS = 24 * 60 * 60_000
 type OperationsEnvironment = Readonly<Record<string, string | undefined>>
-
-function verifiedWithin(value: string | undefined, maximumAgeMs: number, now: Date) {
-  if (!value) return false
-  const timestamp = Date.parse(value)
-  return Number.isFinite(timestamp) && timestamp <= now.getTime() && now.getTime() - timestamp <= maximumAgeMs
-}
 
 export const PRODUCTION_WORKER_JOBS = [
   "review-backlog",
@@ -20,6 +13,19 @@ export const PRODUCTION_WORKER_JOBS = [
 
 export type ProductionWorkerJob = typeof PRODUCTION_WORKER_JOBS[number]
 
+export function isProductionWorkerJob(value: string): value is ProductionWorkerJob {
+  return PRODUCTION_WORKER_JOBS.includes(value as ProductionWorkerJob)
+}
+
+export const AUTOMATED_PRODUCTION_WORKER_JOBS = [
+  "application-expiry",
+  "review-backlog",
+] as const satisfies readonly ProductionWorkerJob[]
+
+export const MANUAL_PRODUCTION_WORKER_JOBS = PRODUCTION_WORKER_JOBS.filter(
+  (job) => !AUTOMATED_PRODUCTION_WORKER_JOBS.includes(job as typeof AUTOMATED_PRODUCTION_WORKER_JOBS[number]),
+)
+
 export function enabledProductionWorkerJobs(env: OperationsEnvironment = process.env) {
   const configured = new Set(
     (env.PHASE8FB_WORKER_JOBS_ENABLED ?? "")
@@ -32,19 +38,24 @@ export function enabledProductionWorkerJobs(env: OperationsEnvironment = process
 
 export function readProductionOperationsEnvironment(
   env: OperationsEnvironment = process.env,
-  now = new Date(),
 ) {
   const enabledWorkerJobs = enabledProductionWorkerJobs(env)
+  const ownership = {
+    production: Boolean(env.PRODUCTION_OWNER),
+    alertResponder: Boolean(env.PRODUCTION_ALERT_OWNER),
+    databaseRecovery: Boolean(env.DATABASE_RECOVERY_OWNER),
+    workerMaintenance: Boolean(env.WORKER_MAINTENANCE_OWNER),
+  }
   return {
-    alertingReady: env.PRODUCTION_ALERTING_ATTESTED === "true" && Boolean(env.PRODUCTION_ALERT_OWNER),
-    alertOwnerAssigned: Boolean(env.PRODUCTION_ALERT_OWNER),
-    backupReady:
-      Boolean(env.DATABASE_RECOVERY_OWNER) &&
-      verifiedWithin(env.DATABASE_BACKUP_VERIFIED_AT, DAY_MS, now),
-    restoreReady:
-      Boolean(env.DATABASE_RECOVERY_OWNER) &&
-      verifiedWithin(env.DATABASE_RESTORE_VERIFIED_AT, 90 * DAY_MS, now),
+    ownership,
+    allOwnersAssigned: Object.values(ownership).every(Boolean),
+    alertingConfigured:
+      ownership.alertResponder &&
+      Boolean(env.PRODUCTION_ALERT_RECIPIENT) &&
+      Boolean(env.RESEND_API_KEY),
+    legacyAlertAttestation: env.PRODUCTION_ALERTING_ATTESTED === "true",
     enabledWorkerJobs,
     allWorkerJobsEnabled: PRODUCTION_WORKER_JOBS.every((job) => enabledWorkerJobs.has(job)),
+    allAutomatedWorkerJobsEnabled: AUTOMATED_PRODUCTION_WORKER_JOBS.every((job) => enabledWorkerJobs.has(job)),
   }
 }
