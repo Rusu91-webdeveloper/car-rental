@@ -545,7 +545,11 @@ export async function validateDraftRelease(releaseId: string, actorId: string, d
       }
       return { release: updated, result, snapshot }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   )
 }
 
@@ -826,7 +830,11 @@ export async function activateDraftRelease(input: {
           status: "ACTIVE" as const,
         }
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 30_000,
+      },
     )
   } catch (error) {
     if (error instanceof ConfigurationWorkflowError) throw error

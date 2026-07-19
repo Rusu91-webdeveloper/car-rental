@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { BusinessSetupGuide } from "@/components/admin/business-setup-guide";
 import { OwnerSettingsStepContent } from "@/components/admin/owner-settings-step-content";
 import { OwnerSettingsWizard } from "@/components/admin/owner-settings-wizard";
+import { OwnerSetupActivationRecovery } from "@/components/admin/owner-setup-activation-recovery";
 import { StartBusinessSetup } from "@/components/admin/start-business-setup";
 import { requireAdmin } from "@/lib/auth";
 import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide";
@@ -52,6 +53,9 @@ export default async function BusinessSettingsPage({
   const nextStep = currentIndex >= 0 ? guide.steps[currentIndex + 1] : null;
   const nextHref = nextStep?.href ?? "/admin/settings";
   const editing = requested.edit === "1" || currentStep?.state === "complete";
+  const shouldRecoverActivation = Boolean(
+    !overview.activeRelease && overview.draftRelease && guide.completed === guide.total,
+  );
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
@@ -76,6 +80,7 @@ export default async function BusinessSettingsPage({
           ) : null}
         </div>
       </div>
+      {shouldRecoverActivation ? <OwnerSetupActivationRecovery /> : null}
       {!hasSetup ? (
         <StartBusinessSetup />
       ) : currentStep ? (

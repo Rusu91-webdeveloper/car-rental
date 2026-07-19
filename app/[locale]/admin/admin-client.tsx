@@ -3,7 +3,7 @@
 import type React from "react"
 import { useEffect, useState, useTransition } from "react"
 import { useLocale } from "next-intl"
-import { Link } from "@/navigation"
+import { Link, useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,6 +48,7 @@ import {
   MessageSquare,
   FileCheck2,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -186,6 +187,7 @@ export default function AdminDashboard({
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const locale = useLocale()
+  const router = useRouter()
   const { toast } = useToast()
 
   const getLocalizedText = (valueEn: string, valueDe?: string | null) => {
@@ -744,11 +746,22 @@ export default function AdminDashboard({
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Your business at a glance</h1>
               <p className="mt-1 text-sm text-muted-foreground">The numbers and actions that matter today.</p>
             </div>
-            <Button asChild>
-              <Link href="/admin?section=bookings">
-                View bookings <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => startTransition(() => router.refresh())}
+              >
+                <RefreshCw className={isPending ? "animate-spin" : undefined} aria-hidden="true" />
+                Refresh data
+              </Button>
+              <Button asChild>
+                <Link href="/admin?section=bookings">
+                  View bookings <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </header>
 
           {!setup.readyForBookings ? (

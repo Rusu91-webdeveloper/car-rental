@@ -37,12 +37,12 @@ async function tryActivateCompletedSetup(actorId: string) {
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   })
-  if (!draft) return { activated: false as const }
+  if (!draft) return { activated: false as const, activationFailed: false as const }
 
   try {
     const validation = await validateDraftRelease(draft.id, actorId)
     const blockers = validation.result.issues.filter(({ severity }) => severity === "BLOCKER")
-    if (blockers.length > 0) return { activated: false as const }
+    if (blockers.length > 0) return { activated: false as const, activationFailed: false as const }
     const current = await prisma.businessConfigurationRelease.findUniqueOrThrow({
       where: { id: draft.id },
       select: { revision: true },
@@ -53,12 +53,32 @@ async function tryActivateCompletedSetup(actorId: string) {
       actorId,
       warningsAcknowledged: true,
     })
-    return { activated: true as const }
+    return { activated: true as const, activationFailed: false as const }
   } catch (error) {
     console.error("[OWNER_SETUP_ACTIVATION_DEFERRED]", {
       name: error instanceof Error ? error.name : "Unknown",
+      code: typeof error === "object" && error && "code" in error ? error.code : undefined,
     })
-    return { activated: false as const }
+    return { activated: false as const, activationFailed: true as const }
+  }
+}
+
+async function completedOwnerSetupSteps() {
+  return prisma.auditEvent.findMany({
+    where: {
+      category: "CONFIGURATION",
+      action: "owner_setup.step_completed",
+      targetType: "OwnerSetupStep",
+      targetId: { in: ownerSetupStepIds },
+    },
+    distinct: ["targetId"],
+    select: { targetId: true },
+  })
+}
+
+function activationError() {
+  return {
+    error: "Your settings were saved, but online booking could not be enabled. Please try again.",
   }
 }
 
@@ -86,23 +106,46 @@ export async function completeOwnerSetupStepAction(input: unknown) {
         },
       })
     }
-    const completedSteps = await prisma.auditEvent.findMany({
-      where: {
-        category: "CONFIGURATION",
-        action: "owner_setup.step_completed",
-        targetType: "OwnerSetupStep",
-        targetId: { in: ownerSetupStepIds },
-      },
-      distinct: ["targetId"],
-      select: { targetId: true },
-    })
+    const completedSteps = await completedOwnerSetupSteps()
     const activation = completedSteps.length === ownerSetupStepIds.length
       ? await tryActivateCompletedSetup(admin.id)
-      : { activated: false as const }
+      : { activated: false as const, activationFailed: false as const }
+    if (activation.activationFailed) return activationError()
     refreshOwnerSetup()
-    return { success: true as const, ...activation }
+    return { success: true as const, activated: activation.activated }
   } catch (error) {
     console.error("[OWNER_SETUP_STEP_COMPLETE_ERROR]", error)
     return { error: "Your information was saved, but the next step could not be opened. Please return to Settings." }
+  }
+}
+
+export async function recoverCompletedOwnerSetupAction() {
+  try {
+    const admin = await requireAdmin()
+    const activeRelease = await prisma.businessConfigurationRelease.findFirst({
+      where: { status: "ACTIVE" },
+      select: { id: true },
+    })
+    if (activeRelease) return { success: true as const, activated: true as const }
+
+    const completedSteps = await completedOwnerSetupSteps()
+    if (completedSteps.length !== ownerSetupStepIds.length) {
+      return { error: "Finish the remaining settings before enabling online booking." }
+    }
+
+    const activation = await tryActivateCompletedSetup(admin.id)
+    if (activation.activationFailed) return activationError()
+    if (!activation.activated) {
+      return { error: "Review the highlighted settings before enabling online booking." }
+    }
+
+    refreshOwnerSetup()
+    revalidatePath("/")
+    return { success: true as const, activated: true as const }
+  } catch (error) {
+    console.error("[OWNER_SETUP_ACTIVATION_RECOVERY_ERROR]", {
+      name: error instanceof Error ? error.name : "Unknown",
+    })
+    return activationError()
   }
 }

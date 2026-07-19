@@ -181,12 +181,13 @@ export default async function AdminPage({
       complete: step.state === "complete",
     })),
   }
+  const generatedAt = new Date().toISOString()
 
   return (
     <AdminDashboard
-      key={initialSection}
+      key={`${initialSection}:${generatedAt}`}
       initialSection={initialSection}
-      generatedAt={new Date().toISOString()}
+      generatedAt={generatedAt}
       setup={setup}
       documentReviewCount={documentReviewCount}
       currentUser={{
