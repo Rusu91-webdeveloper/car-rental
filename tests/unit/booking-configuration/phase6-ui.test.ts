@@ -16,10 +16,16 @@ describe("Phase 6 focused UI contracts", () => {
     expect(insurance).toContain("Example customer price")
   })
 
-  it("shows eligibility examples, dependency reasons, unavailable workflow steps, and read-only states", () => {
+  it("shows eligibility examples, dependency reasons, guided workflow steps, and read-only states", () => {
     expect(source("components/business-configuration/driver-requirements-form.tsx")).toContain("Would this example driver be allowed?")
     expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("Why")
-    expect(source("components/business-configuration/booking-flow-step-list.tsx")).toContain("This step is not available yet")
+    const workflow = source("components/business-configuration/booking-flow-step-list.tsx")
+    expect(workflow).toContain("Customer booking pages")
+    expect(workflow).toContain("not the setup steps shown on the left")
+    expect(workflow).toContain("Insurance has been fixed automatically")
+    expect(workflow).toContain("Set up in Step 7")
+    expect(workflow).toContain("Set up in Step 10")
+    expect(workflow).not.toContain("This step is not available yet")
     expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("View-only access")
   })
 

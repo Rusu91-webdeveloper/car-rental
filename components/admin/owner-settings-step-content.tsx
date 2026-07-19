@@ -106,18 +106,12 @@ export async function OwnerSettingsStepContent({
 
     if (step.id === "booking-flow") {
       return (
-        <>
-          <BookingFlowStepList
-            key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}`}
-            data={data}
-            canEdit={caps.canManageBookingWorkflow}
-            nextHref={nextHref}
-          />
-          <PricingIssueList
-            title="What needs attention"
-            issues={data.issues.filter((issue) => issue.domain === "booking-workflow")}
-          />
-        </>
+        <BookingFlowStepList
+          key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}`}
+          data={data}
+          canEdit={caps.canManageBookingWorkflow}
+          nextHref={nextHref}
+        />
       )
     }
 

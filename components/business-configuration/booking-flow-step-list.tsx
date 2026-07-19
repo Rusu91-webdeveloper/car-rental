@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button"
 import { updateBookingWorkflowDraftAction } from "@/app/actions/phase6-configuration"
 import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
-import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
+import {
+  synchronizeInsuranceBookingStep,
+  validateBookingWorkflow,
+} from "@/lib/booking-configuration/workflow"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
 const labels = {
   VEHICLE_AND_DATES: "Car and rental dates",
@@ -18,11 +21,24 @@ const labels = {
   REVIEW: "Review",
   CONFIRMATION: "Confirmation",
 } as const
-const unavailable = new Set(["DOCUMENTS", "LEGAL_ACCEPTANCE"])
+const configuredLater = {
+  DOCUMENTS: {
+    label: "Set up in Step 7",
+    description: "Choose the documents customers provide in Required documents.",
+  },
+  LEGAL_ACCEPTANCE: {
+    label: "Set up in Step 10",
+    description: "Choose the terms customers accept in Legal terms and privacy.",
+  },
+} as const
 export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftWorkflow
   const router = useRouter()
-  const [config, setConfig] = useState(draft?.configuration)
+  const [config, setConfig] = useState(() =>
+    draft && data.draftInsurance
+      ? synchronizeInsuranceBookingStep(draft.configuration, data.draftInsurance.configuration)
+      : draft?.configuration,
+  )
   const summary = draft?.changeSummary ?? "Booking journey update"
   const [message, setMessage] = useState<string>()
   const [pending, startTransition] = useTransition()
@@ -32,6 +48,14 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
     insurance: data.draftInsurance.configuration,
     fields: resolveEffectiveBookingFields(data.draftCustomerDriver.configuration),
   })
+  const insuranceWasMatched =
+    draft.configuration.steps.find(({ step }) => step === "INSURANCE")?.requirement !==
+    config.steps.find(({ step }) => step === "INSURANCE")?.requirement
+  const insuranceDescription = !data.draftInsurance.configuration.enabled
+    ? "Hidden because insurance is turned off in Step 3."
+    : data.draftInsurance.configuration.selectionMode === "MANDATORY"
+      ? "Required because insurance is mandatory in Step 3."
+      : "Optional because customers choose insurance in Step 3."
   const save = () =>
     startTransition(async () => {
       const result = await updateBookingWorkflowDraftAction({
@@ -51,43 +75,65 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
   return (
     <div className="space-y-5">
       <section className="rounded-xl border bg-background p-5">
-        <h2 className="font-semibold">Steps customers complete</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Required steps protect the information needed to confirm a rental.</p>
+        <h2 className="font-semibold">Customer booking pages</h2>
+        <p className="mt-1 text-sm text-muted-foreground">These are the pages customers see while booking, not the setup steps shown on the left. We match dependent pages automatically.</p>
+        {insuranceWasMatched ? (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
+            <p className="font-medium">Insurance has been fixed automatically</p>
+            <p className="mt-1">It now matches the choice you saved in Step 3. Save and continue when you are ready.</p>
+          </div>
+        ) : null}
         <div className="mt-4 space-y-2">
           {[...config.steps]
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .map((step) => {
-              const locked = unavailable.has(step.step) || ["VEHICLE_AND_DATES", "CUSTOMER_INFORMATION", "DRIVER_INFORMATION", "REVIEW", "CONFIRMATION"].includes(step.step)
+              const later = step.step === "DOCUMENTS" || step.step === "LEGAL_ACCEPTANCE"
+                ? configuredLater[step.step]
+                : null
+              const locked = later || step.step === "INSURANCE" || ["VEHICLE_AND_DATES", "CUSTOMER_INFORMATION", "DRIVER_INFORMATION", "REVIEW", "CONFIRMATION"].includes(step.step)
               return (
                 <div key={step.step} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium">
-                      {step.displayOrder + 1}. {labels[step.step]}
+                      Customer page {step.displayOrder + 1}: {labels[step.step]}
                     </p>
-                    {unavailable.has(step.step) ? <p className="text-xs text-muted-foreground">This step is not available yet.</p> : locked ? <p className="text-xs text-muted-foreground">Required for a safe booking.</p> : null}
+                    {later ? (
+                      <p className="text-xs text-muted-foreground">{later.description}</p>
+                    ) : step.step === "INSURANCE" ? (
+                      <p className="text-xs text-muted-foreground">{insuranceDescription}</p>
+                    ) : locked ? (
+                      <p className="text-xs text-muted-foreground">Required for a safe booking.</p>
+                    ) : null}
                   </div>
-                  <select
-                    className="rounded border p-2 text-sm"
-                    value={step.requirement}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        steps: config.steps.map((item) =>
-                          item.step === step.step
-                            ? {
-                                ...item,
-                                requirement: e.target.value as typeof item.requirement,
-                              }
-                            : item,
-                        ),
-                      })
-                    }
-                    disabled={!canEdit || locked}
-                  >
-                    <option value="REQUIRED">Required</option>
-                    <option value="OPTIONAL">Optional</option>
-                    <option value="HIDDEN">Hidden</option>
-                  </select>
+                  {later ? (
+                    <span className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {later.label}
+                    </span>
+                  ) : (
+                    <select
+                      className="rounded border p-2 text-sm"
+                      value={step.requirement}
+                      onChange={(event) =>
+                        setConfig({
+                          ...config,
+                          steps: config.steps.map((item) =>
+                            item.step === step.step
+                              ? {
+                                  ...item,
+                                  requirement: event.target.value as typeof item.requirement,
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                      disabled={!canEdit || Boolean(locked)}
+                      aria-label={`${labels[step.step]} requirement`}
+                    >
+                      <option value="REQUIRED">Required</option>
+                      <option value="OPTIONAL">Optional</option>
+                      <option value="HIDDEN">Hidden</option>
+                    </select>
+                  )}
                 </div>
               )
             })}
@@ -106,12 +152,12 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            {ownerSetupSaveLabel(nextHref)}
+            {pending ? "Saving and opening the next step…" : ownerSetupSaveLabel(nextHref)}
           </Button>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">View-only access</p>
         )}
-        {message ? <p className="mt-2 text-sm">{message}</p> : null}
+        {message ? <p className="mt-2 text-sm" role="status">{message}</p> : null}
       </section>
     </div>
   )

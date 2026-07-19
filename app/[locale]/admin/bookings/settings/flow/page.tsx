@@ -2,7 +2,6 @@ import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { BookingFlowStepList } from "@/components/business-configuration/booking-flow-step-list";
-import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
 import { requireAdmin } from "@/lib/auth";
 import {
@@ -30,12 +29,6 @@ export default async function BookingFlowSettingsPage({ searchParams }: { search
         data={data}
         canEdit={caps.canManageBookingWorkflow}
         nextHref={nextHref}
-      />
-      <PricingIssueList
-        title="What needs attention"
-        issues={data.issues.filter(
-          (issue) => issue.domain === "booking-workflow",
-        )}
       />
     </main>
   );

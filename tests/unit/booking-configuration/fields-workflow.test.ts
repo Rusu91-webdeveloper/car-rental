@@ -4,7 +4,11 @@ import {
   normalizeAndValidateBookingFields,
   resolveEffectiveBookingFields,
 } from "@/lib/booking-configuration/field-resolver"
-import { resolveEffectiveBookingFlow, validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
+import {
+  resolveEffectiveBookingFlow,
+  synchronizeInsuranceBookingStep,
+  validateBookingWorkflow,
+} from "@/lib/booking-configuration/workflow"
 import { validBusinessConfigurationDomains } from "../../helpers/configuration-fixtures"
 
 describe("effective customer fields and booking workflow", () => {
@@ -106,5 +110,30 @@ describe("effective customer fields and booking workflow", () => {
       visible: false,
       available: true,
     })
+  })
+
+  it("automatically matches the insurance booking step to the saved insurance choice", () => {
+    const domains = validBusinessConfigurationDomains()
+    const workflow = domains["booking-workflow"]
+
+    const mandatory = synchronizeInsuranceBookingStep(workflow, {
+      ...domains.insurance,
+      enabled: true,
+      selectionMode: "MANDATORY",
+    })
+    expect(mandatory.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("REQUIRED")
+
+    const optional = synchronizeInsuranceBookingStep(workflow, {
+      ...domains.insurance,
+      enabled: true,
+      selectionMode: "OPTIONAL",
+    })
+    expect(optional.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("OPTIONAL")
+
+    const disabled = synchronizeInsuranceBookingStep(mandatory, {
+      ...domains.insurance,
+      enabled: false,
+    })
+    expect(disabled.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("HIDDEN")
   })
 })
