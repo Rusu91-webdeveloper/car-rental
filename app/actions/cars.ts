@@ -6,8 +6,15 @@ import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
 import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import {
+  createCarSlugBase,
+  getNextCarSlug,
+  isSlugUniqueConstraintError,
+} from "@/lib/cars/slug"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+
+const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
 export async function createCar(data: unknown) {
   try {
@@ -16,16 +23,19 @@ export async function createCar(data: unknown) {
     // Validate input
     const validated = createCarSchema.parse(data)
 
-    // Generate slug from name
-    const slug = validated.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
+    const slugBase = createCarSlugBase(validated.name)
+    const matchingSlugs = await prisma.car.findMany({
+      where: {
+        OR: [{ slug: slugBase }, { slug: { startsWith: `${slugBase}-` } }],
+      },
+      select: { slug: true },
+    })
+    const reservedSlugs = new Set(matchingSlugs.map(({ slug }) => slug))
 
-    const { car, inheritedSetup } = await prisma.$transaction(async (tx) => {
+    const createCarRecord = (carSlug: string) => prisma.$transaction(async (tx) => {
       const car = await tx.car.create({
         data: {
-          slug,
+          slug: carSlug,
           name: validated.name,
           nameDe: validated.nameDe,
           subtitle: validated.subtitle,
@@ -90,6 +100,31 @@ export async function createCar(data: unknown) {
       }
       return { car, inheritedSetup: Boolean(fleetDraft) }
     })
+
+    let createdResult: Awaited<ReturnType<typeof createCarRecord>> | undefined
+    let lastSlugConflict: unknown
+
+    for (let attempt = 0; attempt < MAX_CAR_SLUG_CREATE_ATTEMPTS; attempt += 1) {
+      const candidateSlug = getNextCarSlug(slugBase, reservedSlugs)
+
+      try {
+        createdResult = await createCarRecord(candidateSlug)
+        break
+      } catch (error) {
+        if (!isSlugUniqueConstraintError(error)) {
+          throw error
+        }
+
+        lastSlugConflict = error
+        reservedSlugs.add(candidateSlug)
+      }
+    }
+
+    if (!createdResult) {
+      throw lastSlugConflict ?? new Error("Unable to allocate a unique car URL")
+    }
+
+    const { car, inheritedSetup } = createdResult
 
     revalidatePath("/")
     revalidatePath("/admin")
@@ -181,11 +216,13 @@ export async function createCar(data: unknown) {
       }
     }
 
-    if (error instanceof Error) {
-      return { error: error.message }
+    if (isSlugUniqueConstraintError(error)) {
+      return {
+        error: "We could not create a unique page for this car. Please try again.",
+      }
     }
 
-    return { error: "Failed to create car. Please try again." }
+    return { error: "The car could not be added. Please try again." }
   }
 }
 
