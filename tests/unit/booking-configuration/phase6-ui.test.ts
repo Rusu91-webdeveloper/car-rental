@@ -8,19 +8,19 @@ import { Phase6DraftLiveComparison } from "@/components/business-configuration/p
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8")
 
 describe("Phase 6 focused UI contracts", () => {
-  it("uses plain-language insurance controls and identifies preselection as UI state", () => {
+  it("uses plain-language insurance controls and moves uncommon choices under Advanced", () => {
     const insurance = source("components/business-configuration/insurance-configuration-form.tsx")
-    expect(insurance).toContain("Offer Vollkasko insurance")
+    expect(insurance).toContain("Offer full-cover insurance")
     expect(insurance).toContain("Optional — customer chooses")
-    expect(insurance).toContain("not customer-consent evidence")
-    expect(insurance).toContain("Example quote impact")
+    expect(insurance).toContain("Advanced")
+    expect(insurance).toContain("Example customer price")
   })
 
   it("shows eligibility examples, dependency reasons, unavailable workflow steps, and read-only states", () => {
-    expect(source("components/business-configuration/driver-requirements-form.tsx")).toContain("Example eligibility outcome")
-    expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("Reason")
-    expect(source("components/business-configuration/booking-flow-step-list.tsx")).toContain("Available in a later setup phase")
-    expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("Read-only access")
+    expect(source("components/business-configuration/driver-requirements-form.tsx")).toContain("Would this example driver be allowed?")
+    expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("Why")
+    expect(source("components/business-configuration/booking-flow-step-list.tsx")).toContain("This step is not available yet")
+    expect(source("components/business-configuration/customer-field-requirement-table.tsx")).toContain("View-only access")
   })
 
   it("renders explicit live and draft versions without implying activation", () => {

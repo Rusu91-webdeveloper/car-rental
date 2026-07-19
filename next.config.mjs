@@ -21,6 +21,39 @@ const nextConfig = {
       bodySizeLimit: "8mb",
     },
   },
+  async redirects() {
+    const routes = {
+      overview: "advanced/configuration",
+      pricing: "cars/pricing",
+      billing: "bookings/settings/duration",
+      insurance: "bookings/settings/insurance",
+      "driver-requirements": "bookings/driver-rules",
+      "customer-information": "customers/settings",
+      "booking-flow": "bookings/settings/flow",
+      documents: "documents/settings",
+      payments: "payments",
+      confirmations: "settings/notifications",
+      legal: "settings/legal",
+      advanced: "advanced/configuration",
+    }
+    return [
+      {
+        source: "/:locale/admin/business-configuration",
+        destination: "/:locale/admin/settings",
+        permanent: false,
+      },
+      ...Object.entries(routes).map(([source, destination]) => ({
+        source: `/:locale/admin/business-configuration/${source}`,
+        destination: `/:locale/admin/${destination}`,
+        permanent: false,
+      })),
+      {
+        source: "/:locale/admin/business-configuration/:section",
+        destination: "/:locale/admin/settings",
+        permanent: false,
+      },
+    ]
+  },
   async headers() {
     const headers = [
       { key: "X-Content-Type-Options", value: "nosniff" },

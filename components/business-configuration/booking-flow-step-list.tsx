@@ -2,13 +2,12 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { updateBookingWorkflowDraftAction } from "@/app/actions/phase6-configuration"
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
 const labels = {
-  VEHICLE_AND_DATES: "Vehicle and rental dates",
+  VEHICLE_AND_DATES: "Car and rental dates",
   CUSTOMER_INFORMATION: "Customer information",
   DRIVER_INFORMATION: "Driver information",
   INSURANCE: "Insurance",
@@ -23,7 +22,7 @@ export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageDa
   const draft = data.draftWorkflow
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
-  const [summary, setSummary] = useState(draft?.changeSummary ?? "Booking flow update")
+  const summary = draft?.changeSummary ?? "Booking journey update"
   const [message, setMessage] = useState<string>()
   const [pending, startTransition] = useTransition()
   if (!draft || !config || !data.draftInsurance || !data.draftCustomerDriver) return null
@@ -46,31 +45,20 @@ export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageDa
   return (
     <div className="space-y-5">
       <section className="rounded-xl border bg-background p-5">
-        <h2 className="font-semibold">Supported booking steps</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Ordering remains constrained to approved typed steps.</p>
+        <h2 className="font-semibold">Steps customers complete</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Required steps protect the information needed to confirm a rental.</p>
         <div className="mt-4 space-y-2">
           {[...config.steps]
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .map((step) => {
-              const locked =
-                unavailable.has(step.step) ||
-                ["VEHICLE_AND_DATES", "CUSTOMER_INFORMATION", "DRIVER_INFORMATION", "REVIEW", "CONFIRMATION"].includes(
-                  step.step,
-                )
+              const locked = unavailable.has(step.step) || ["VEHICLE_AND_DATES", "CUSTOMER_INFORMATION", "DRIVER_INFORMATION", "REVIEW", "CONFIRMATION"].includes(step.step)
               return (
-                <div
-                  key={step.step}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-                >
+                <div key={step.step} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
                   <div>
                     <p className="font-medium">
                       {step.displayOrder + 1}. {labels[step.step]}
                     </p>
-                    {unavailable.has(step.step) ? (
-                      <p className="text-xs text-amber-700">Available in a later setup phase.</p>
-                    ) : locked ? (
-                      <p className="text-xs text-muted-foreground">Required for a safe booking.</p>
-                    ) : null}
+                    {unavailable.has(step.step) ? <p className="text-xs text-muted-foreground">This step is not available yet.</p> : locked ? <p className="text-xs text-muted-foreground">Required for a safe booking.</p> : null}
                   </div>
                   <select
                     className="rounded border p-2 text-sm"
@@ -101,24 +89,21 @@ export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageDa
       </section>
       {issues.length ? (
         <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
-          <h2 className="font-semibold">Workflow blockers</h2>
+          <h2 className="font-semibold">Please fix these choices</h2>
           <ul className="mt-2 list-disc pl-5 text-sm">
             {issues.map((issue) => (
-              <li key={issue.code}>
-                {issue.adminMessage} <code className="text-xs">{issue.code}</code>
-              </li>
+              <li key={issue.code}>{issue.adminMessage}</li>
             ))}
           </ul>
         </section>
       ) : null}
       <section className="rounded-xl border bg-background p-5">
-        <Input value={summary} onChange={(e) => setSummary(e.target.value)} disabled={!canEdit} />
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save booking flow
+            Save changes
           </Button>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">Read-only access</p>
+          <p className="mt-3 text-sm text-muted-foreground">View-only access</p>
         )}
         {message ? <p className="mt-2 text-sm">{message}</p> : null}
       </section>

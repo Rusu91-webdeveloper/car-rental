@@ -8,16 +8,13 @@ export function DomainStatusCard({ domain }: { domain: DomainStatusView }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{domain.label}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Live: {domain.liveVersion ? `Version ${domain.liveVersion}` : "Not configured"} · Draft:{" "}
-            {domain.draftVersion ? `Version ${domain.draftVersion}` : "None"}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{domain.draftVersion ? "Has unpublished changes" : domain.liveVersion ? "No unpublished changes" : "Not set up"}</p>
         </div>
         <ConfigurationStatusBadge status={domain.status} />
       </div>
       <div className="mt-4 flex gap-3 text-xs text-muted-foreground">
-        <span>{domain.blockerCount} blocker{domain.blockerCount === 1 ? "" : "s"}</span>
-        <span>{domain.warningCount} warning{domain.warningCount === 1 ? "" : "s"}</span>
+        <span>{domain.blockerCount} must fix</span>
+        <span>{domain.warningCount} worth checking</span>
       </div>
     </Link>
   )

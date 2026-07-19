@@ -11,7 +11,7 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
   const draft = data.draftCustomerDriver
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
-  const [summary, setSummary] = useState(draft?.changeSummary ?? "Driver requirements update")
+  const summary = draft?.changeSummary ?? "Driver rules update"
   const [birth, setBirth] = useState("2000-01-01")
   const [issue, setIssue] = useState("2020-01-01")
   const [expiry, setExpiry] = useState("2035-01-01")
@@ -77,10 +77,7 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
               disabled={!canEdit}
             />
           </Field>
-          <Field
-            label="Minimum time holding a licence (months)"
-            hint={`${config.minimumLicenceHeldMonths} months at pickup.`}
-          >
+          <Field label="Minimum time holding a licence (months)" hint={`${config.minimumLicenceHeldMonths} months at pickup.`}>
             <Input
               type="number"
               min={0}
@@ -96,32 +93,33 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
             />
           </Field>
           <label className="flex gap-2 rounded border p-3 text-sm">
-            <Checkbox
-              checked={config.licenceMustCoverRentalEnd}
-              onCheckedChange={(v) => setConfig({ ...config, licenceMustCoverRentalEnd: v === true })}
-              disabled={!canEdit}
-            />
+            <Checkbox checked={config.licenceMustCoverRentalEnd} onCheckedChange={(v) => setConfig({ ...config, licenceMustCoverRentalEnd: v === true })} disabled={!canEdit} />
             Licence must remain valid through return
           </label>
-          <Field label="Allowed issuing countries" hint="Comma-separated two-letter codes; empty means any country.">
-            <Input
-              value={config.allowedLicenceCountries.join(", ")}
-              onChange={(e) =>
-                setConfig({
-                  ...config,
-                  allowedLicenceCountries: e.target.value
-                    .split(",")
-                    .map((v) => v.trim().toUpperCase())
-                    .filter(Boolean),
-                })
-              }
-              disabled={!canEdit}
-            />
-          </Field>
         </div>
+        <details className="mt-4 rounded-lg border p-4 text-sm">
+          <summary className="cursor-pointer font-medium">Advanced country restrictions</summary>
+          <div className="mt-4">
+            <Field label="Allowed licence countries" hint="Enter two-letter country codes separated by commas, such as RO, DE. Leave empty to accept any country.">
+              <Input
+                value={config.allowedLicenceCountries.join(", ")}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    allowedLicenceCountries: e.target.value
+                      .split(",")
+                      .map((v) => v.trim().toUpperCase())
+                      .filter(Boolean),
+                  })
+                }
+                disabled={!canEdit}
+              />
+            </Field>
+          </div>
+        </details>
       </section>
       <section className="rounded-xl border bg-background p-5">
-        <h2 className="font-semibold">Example eligibility outcome</h2>
+        <h2 className="font-semibold">Would this example driver be allowed?</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <Field label="Date of birth" hint="Sample only">
             <Input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} />
@@ -133,20 +131,15 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
             <Input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
           </Field>
         </div>
-        <p className={`mt-3 font-medium ${eligibility.eligible ? "text-emerald-700" : "text-destructive"}`}>
-          {eligibility.eligible
-            ? `Eligible · age ${eligibility.ageAtPickup} · licence held ${eligibility.licenceHeldMonthsAtPickup} months`
-            : eligibility.issues[0]?.message}
-        </p>
+        <p className={`mt-3 font-medium ${eligibility.eligible ? "text-emerald-700" : "text-destructive"}`}>{eligibility.eligible ? `Eligible · age ${eligibility.ageAtPickup} · licence held ${eligibility.licenceHeldMonthsAtPickup} months` : eligibility.issues[0]?.message}</p>
       </section>
       <section className="rounded-xl border bg-background p-5">
-        <Input value={summary} onChange={(e) => setSummary(e.target.value)} disabled={!canEdit} />
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save driver requirements
+            Save changes
           </Button>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">Read-only access</p>
+          <p className="mt-3 text-sm text-muted-foreground">View-only access</p>
         )}
         {message ? <p className="mt-2 text-sm">{message}</p> : null}
       </section>

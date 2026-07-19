@@ -168,6 +168,29 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
   }
 }
 
+export async function sendProductionAlertTest(input: {
+  to: string
+  requestedAt: Date
+  environment: string
+}) {
+  return sendEmail({
+    to: input.to,
+    subject: "[TEST ONLY] Car Rental production alert delivery verification",
+    html: `
+      <!doctype html>
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
+          <h1>TEST ONLY — production alert delivery verification</h1>
+          <p>This message verifies that the configured operational alert path can deliver a test notification.</p>
+          <p><strong>Environment:</strong> ${escapeHtml(input.environment)}</p>
+          <p><strong>Requested at:</strong> ${escapeHtml(input.requestedAt.toISOString())}</p>
+          <p>No production incident has been detected.</p>
+        </body>
+      </html>
+    `,
+  })
+}
+
 interface BookingEmailData {
   to: string
   userName: string

@@ -48,7 +48,7 @@ describe("Phase 8F-B application and UI integration", () => {
     const workers = read("app/api/internal/phase8fb/[job]/route.ts")
     expect(uploads).toContain("environment.production || !environment.featureEnabled")
     expect(workers).toContain('process.env.PHASE8FB_WORKERS_ENABLED !== "true"')
-    expect(workers).toContain("timingSafeEqual")
+    expect(workers).toContain("hasValidBearerSecret")
     expect(workers).toContain("PHASE8FB_WORKER_SECRET")
   })
 

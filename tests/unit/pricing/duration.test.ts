@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { calculateChargeableDuration, calculateDateOnlyDuration } from "@/lib/pricing/duration"
+import { PricingError, publicPricingErrorMessage } from "@/lib/pricing/errors"
 
 const duration = (pickupAt: string, returnAt: string, overrides = {}) =>
   calculateChargeableDuration({
@@ -31,6 +32,20 @@ describe("chargeable duration", () => {
     expect(() => duration("invalid", "2026-01-01T10:00:00Z")).toThrow(/valid timestamp/)
     expect(() => duration("2026-01-01T10:00:00Z", "2026-01-01T10:30:00Z", { minimumRentalMinutes: 60 })).toThrow(/shorter/)
     expect(() => duration("2026-01-01T10:00:00Z", "2026-01-02T10:00:00Z", { businessTimeZone: "Mars/Olympus" })).toThrow(/IANA/)
+  })
+
+  it("explains a minimum booking failure to the customer", () => {
+    try {
+      duration("2026-01-01T10:00:00Z", "2026-01-02T10:00:00Z", {
+        minimumRentalMinutes: 2_880,
+      })
+      throw new Error("Expected the rental to be rejected")
+    } catch (error) {
+      expect(error).toBeInstanceOf(PricingError)
+      expect(publicPricingErrorMessage(error as PricingError)).toBe(
+        "This booking is shorter than the minimum rental period. Choose a later drop-off date.",
+      )
+    }
   })
 
   it("handles DST spring and autumn transitions explicitly", () => {

@@ -10,9 +10,14 @@ export default async function DocumentReviewQueuePage() {
     | { error: string }
   try {
     const context = await loadRestrictedDocumentActor()
-    state = await context.reviews.listReviewQueue({ actor: context.actor, limit: 25 })
+    state = await context.reviews.listReviewQueue({
+      actor: context.actor,
+      limit: 25,
+    })
   } catch (error) {
-    state = { error: error instanceof PrivateDocumentError ? error.message : "The restricted review queue is unavailable." }
+    state = {
+      error: error instanceof PrivateDocumentError ? error.message : "The restricted review queue is unavailable.",
+    }
   }
   if ("error" in state)
     return (
@@ -24,10 +29,10 @@ export default async function DocumentReviewQueuePage() {
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <header>
-        <p className="text-sm font-medium text-primary">Restricted document operations</p>
-        <h1 className="text-2xl font-semibold">Manual review queue</h1>
+        <p className="text-sm font-medium text-primary">Documents</p>
+        <h1 className="text-2xl font-semibold">Which documents need a decision?</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Only explicitly assigned document roles can access this queue. Legacy administrator roles are not sufficient.
+          Review customer uploads and either approve them or ask for a replacement.
         </p>
       </header>
       <DocumentReviewQueue initialItems={state.items} initialCursor={state.nextCursor} />

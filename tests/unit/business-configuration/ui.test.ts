@@ -14,8 +14,8 @@ describe("Business Configuration UI foundations", () => {
 
   it("renders the no-configuration empty state without fake controls", () => {
     const markup = renderToStaticMarkup(createElement(ConfigurationEmptyState))
-    expect(markup).toContain("not set up yet")
-    expect(markup).not.toContain("Save")
+    expect(markup).toContain("no business settings to publish yet")
+    expect(markup).not.toContain("<button")
   })
 
   it("does not render capability-controlled actions when denied", () => {

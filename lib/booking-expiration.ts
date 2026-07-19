@@ -61,6 +61,7 @@ export async function completeFinishedBookings(now = new Date()) {
 
   let completedCount = 0
   let completionEmailsSent = 0
+  let completionEmailsFailed = 0
 
   for (const booking of bookingsToComplete) {
     const updated = await prisma.booking.updateMany({
@@ -101,6 +102,8 @@ export async function completeFinishedBookings(now = new Date()) {
 
     if (!completionEmailResult?.error) {
       completionEmailsSent += 1
+    } else {
+      completionEmailsFailed += 1
     }
   }
 
@@ -118,6 +121,7 @@ export async function completeFinishedBookings(now = new Date()) {
   return {
     completed: completedCount,
     completionEmailsSent,
+    completionEmailsFailed,
     normalizedCompletedPayments: normalizedCompletedPayments.count,
   }
 }
