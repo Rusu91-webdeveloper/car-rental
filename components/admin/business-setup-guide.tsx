@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { LinkLoadingIndicator } from "@/components/admin/link-loading-indicator"
 import { cn } from "@/lib/utils"
 
 const stateMeta: Record<
@@ -141,7 +142,7 @@ function CompletedSettings({ steps }: { steps: OwnerSettingsStep[] }) {
             </div>
             <Button asChild variant="ghost" size="sm">
               <Link href={editHref(step.href)}>
-                <Pencil className="h-3.5 w-3.5" /> Edit
+                <Pencil className="h-3.5 w-3.5" /> Edit <LinkLoadingIndicator />
               </Link>
             </Button>
           </div>
@@ -251,7 +252,7 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
               {previousStep ? (
                 <Button asChild variant="ghost" className="w-full sm:w-auto">
                   <Link href={previousStep.href}>
-                    <ArrowLeft className="h-4 w-4" /> Back
+                    <ArrowLeft className="h-4 w-4" /> Back <LinkLoadingIndicator />
                   </Link>
                 </Button>
               ) : (
@@ -261,7 +262,7 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
               )}
               <Button asChild size="lg" className="w-full sm:w-auto">
                 <Link href={currentStep.href} aria-current="step">
-                  {continueLabel(currentStep)} <ArrowRight className="h-4 w-4" />
+                  {continueLabel(currentStep)} <ArrowRight className="h-4 w-4" /> <LinkLoadingIndicator />
                 </Link>
               </Button>
             </CardFooter>
