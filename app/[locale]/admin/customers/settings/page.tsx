@@ -1,33 +1,34 @@
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server";
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Phase6DraftControls } from "@/components/business-configuration/phase6-draft-controls";
 import { CustomerFieldRequirementTable } from "@/components/business-configuration/customer-field-requirement-table";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { requireAdmin } from "@/lib/auth";
+import {
+  ownerSettingsPageMode,
+  prepareOwnerBookingExperienceEdit,
+  type OwnerSettingsPageSearchParams,
+} from "@/lib/admin/owner-settings-edit";
 
-export default async function CustomerSettingsPage() {
+export default async function CustomerSettingsPage({ searchParams }: { searchParams: Promise<OwnerSettingsPageSearchParams> }) {
   const caps = await getBusinessConfigurationCapabilities();
   if (!caps.canView) return <ConfigurationAccessDenied />;
-  const data = await loadPhase6ConfigurationPage();
+  const { editing, nextHref } = await ownerSettingsPageMode(searchParams, "/admin/documents/settings");
+  const data = editing
+    ? await prepareOwnerBookingExperienceEdit((await requireAdmin()).id)
+    : await loadPhase6ConfigurationPage();
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
       <AdminPageHeader
-        eyebrow="Customers"
+        eyebrow={editing ? "Edit settings" : "Business setup"}
         title="What information do you need from customers?"
         description="Choose which customer and driver details are required, optional, or hidden."
-      />
-      <Phase6DraftControls
-        data={data}
-        domain="CUSTOMER_DRIVER_REQUIREMENTS"
-        hasDraft={Boolean(data.draftCustomerDriver)}
-        canCreate={caps.canManageCustomerFields}
-        canValidate={caps.canValidate}
-        canAttach={caps.canEdit}
       />
       <CustomerFieldRequirementTable
         key={`${data.draftCustomerDriver?.id}-${data.draftCustomerDriver?.revision}`}
         data={data}
         canEdit={caps.canManageCustomerFields}
+        nextHref={nextHref}
       />
     </main>
   );

@@ -4,7 +4,7 @@ import type { ConfigurationOverview } from "@/lib/business-configuration/workflo
 
 type GuideOverview = Pick<
   ConfigurationOverview,
-  "activeRelease" | "blockers" | "domainStatuses" | "fleetCoverage" | "legalHealth"
+  "activeRelease" | "blockers" | "domainStatuses" | "legalHealth"
 >
 
 const company = {
@@ -23,14 +23,6 @@ function overview(overrides: Partial<GuideOverview> = {}): GuideOverview {
     activeRelease: null,
     blockers: [],
     domainStatuses: [],
-    fleetCoverage: {
-      totalVehicles: 0,
-      dailyRates: 0,
-      missingDailyRates: 0,
-      missingWeeklyRates: 0,
-      missingMonthlyRates: 0,
-      missingAllReleaseRates: 0,
-    },
     legalHealth: {
       requiredTypes: ["RENTAL_TERMS", "PRIVACY_NOTICE"],
       publishedLanguages: [],
@@ -55,7 +47,6 @@ describe("owner settings guide", () => {
         supportEmail: "support@rentcar.com",
         adminEmail: "admin@rentcar.com",
       },
-      activeCarCount: 0,
       overview: overview(),
     })
 
@@ -67,7 +58,6 @@ describe("owner settings guide", () => {
   it("surfaces blocking validation as a needs-attention step", () => {
     const guide = buildOwnerSettingsGuide({
       company,
-      activeCarCount: 1,
       overview: overview({
         domainStatuses: [
           {
@@ -90,28 +80,19 @@ describe("owner settings guide", () => {
     expect(guide.attentionCount).toBeGreaterThan(0)
   })
 
-  it("keeps car pricing unfinished until every car has a daily rate", () => {
-    const guide = buildOwnerSettingsGuide({
-      company,
-      activeCarCount: 2,
-      overview: overview({
-        fleetCoverage: {
-          totalVehicles: 2,
-          dailyRates: 1,
-          missingDailyRates: 1,
-          missingWeeklyRates: 0,
-          missingMonthlyRates: 0,
-          missingAllReleaseRates: 1,
-        },
-      }),
-    })
+  it("keeps cars and per-car pricing outside business settings", () => {
+    const guide = buildOwnerSettingsGuide({ company, overview: overview() })
+    const ids = guide.steps.map((step) => step.id)
+    const hrefs = guide.steps.map((step) => step.href)
 
-    expect(guide.steps.find((step) => step.id === "fleet")?.state).toBe("complete")
-    expect(guide.steps.find((step) => step.id === "car-pricing")?.state).toBe("attention")
+    expect(ids).not.toContain("fleet")
+    expect(ids).not.toContain("car-pricing")
+    expect(hrefs).not.toContain("/admin?section=cars")
+    expect(hrefs).not.toContain("/admin/cars/pricing")
   })
 
   it("shows every setup destination once without routing through another menu", () => {
-    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+    const guide = buildOwnerSettingsGuide({ company, overview: overview() })
     const hrefs = guide.steps.map((step) => step.href)
 
     expect(hrefs).toEqual([
@@ -125,30 +106,59 @@ describe("owner settings guide", () => {
       "/admin/payments",
       "/admin/settings/notifications",
       "/admin/settings/legal",
-      "/admin?section=cars",
-      "/admin/cars/pricing",
-      "/admin/advanced/configuration",
     ])
     expect(new Set(hrefs).size).toBe(hrefs.length)
     expect(hrefs).not.toContain("/admin/bookings/settings")
   })
 
   it("selects the first unfinished step while keeping completed steps editable", () => {
-    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+    const guide = buildOwnerSettingsGuide({ company, overview: overview() })
 
     expect(guide.steps[0]).toMatchObject({ id: "business-profile", state: "complete" })
     expect(guide.nextStep?.id).toBe("rental-rules")
   })
 
-  it("organizes the checklist into five simple business phases", () => {
-    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+  it("resumes after the last successfully saved owner step", () => {
+    const guide = buildOwnerSettingsGuide({
+      company,
+      overview: overview({
+        domainStatuses: [
+          {
+            domain: "pricing-billing",
+            label: "Pricing and billing",
+            route: "/admin/bookings/settings/duration",
+            configured: true,
+            validationStatus: "NOT_VALIDATED",
+            warningCount: 0,
+            blockerCount: 0,
+            status: "Draft changes",
+          },
+          {
+            domain: "insurance",
+            label: "Insurance",
+            route: "/admin/bookings/settings/insurance",
+            configured: true,
+            validationStatus: "NOT_VALIDATED",
+            warningCount: 0,
+            blockerCount: 0,
+            status: "Draft changes",
+          },
+        ],
+      }),
+      completedStepIds: ["rental-rules"],
+    })
+
+    expect(guide.steps.find((step) => step.id === "rental-rules")?.state).toBe("complete")
+    expect(guide.nextStep?.id).toBe("insurance")
+  })
+
+  it("organizes the checkout into three simple business phases", () => {
+    const guide = buildOwnerSettingsGuide({ company, overview: overview() })
 
     expect([...new Set(guide.steps.map((step) => step.phase))]).toEqual([
       "business-basics",
       "booking-experience",
       "payments-communication",
-      "fleet",
-      "launch",
     ])
   })
 })

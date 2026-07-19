@@ -1,35 +1,60 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
+import { AlertCircle, LoaderCircle } from "lucide-react"
 import { useRouter } from "@/navigation"
 import { startBusinessSetupAction } from "@/app/actions/business-setup"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 
 export function StartBusinessSetup() {
   const router = useRouter()
+  const started = useRef(false)
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string>()
 
+  const prepareSetup = useCallback(() => {
+    setMessage(undefined)
+    startTransition(async () => {
+      const result = await startBusinessSetupAction()
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      router.refresh()
+    })
+  }, [router])
+
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    prepareSetup()
+  }, [prepareSetup])
+
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-5">
-      <h2 className="font-semibold">Start with one guided setup</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        This prepares one unpublished setup for your tax, minimum booking length, insurance, payments, messages, and cars.
-      </p>
-      <Button
-        className="mt-4"
-        disabled={pending}
-        onClick={() =>
-          startTransition(async () => {
-            const result = await startBusinessSetupAction()
-            setMessage("error" in result ? result.error : "Your business setup is ready to complete.")
-            if (!("error" in result)) router.refresh()
-          })
-        }
-      >
-        {pending ? "Preparing…" : "Start business setup"}
-      </Button>
-      {message ? <p className="mt-3 text-sm" role="status">{message}</p> : null}
-    </div>
+    <Card className="mx-auto max-w-2xl border-primary/20">
+      <CardContent className="flex flex-col items-center px-6 py-8 text-center sm:py-12">
+        {message ? (
+          <>
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-700">
+              <AlertCircle className="h-6 w-6" />
+            </span>
+            <h2 className="mt-4 text-lg font-semibold">We couldn’t prepare your settings</h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground" role="alert">{message}</p>
+            <Button className="mt-5" onClick={prepareSetup} disabled={pending}>Try again</Button>
+          </>
+        ) : (
+          <>
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <LoaderCircle className="h-6 w-6 animate-spin" />
+            </span>
+            <h2 className="mt-4 text-lg font-semibold">Getting your settings ready</h2>
+            <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+              This will only take a moment. Your first setup step will open automatically.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

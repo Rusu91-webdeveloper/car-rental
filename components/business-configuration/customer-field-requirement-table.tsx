@@ -3,9 +3,10 @@ import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
 import { updateCustomerFieldDraftAction } from "@/app/actions/phase6-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
-export function CustomerFieldRequirementTable({ data, canEdit }: { data: Phase6AdminPageData; canEdit: boolean }) {
+export function CustomerFieldRequirementTable({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftCustomerDriver
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
@@ -22,8 +23,13 @@ export function CustomerFieldRequirementTable({ data, canEdit }: { data: Phase6A
         configuration: config,
         changeSummary: summary,
       })
-      setMessage("error" in result ? result.error : "Customer information choices saved.")
-      if (!("error" in result)) router.refresh()
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      setMessage("Customer information saved.")
+      const navigationError = await completeOwnerSetupStep("customer-information", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   return (
     <div className="space-y-5">
@@ -75,7 +81,7 @@ export function CustomerFieldRequirementTable({ data, canEdit }: { data: Phase6A
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save changes
+            {ownerSetupSaveLabel(nextHref)}
           </Button>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">View-only access</p>

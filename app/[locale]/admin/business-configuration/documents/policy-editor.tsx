@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { saveDocumentPolicyDraftAction } from "@/app/actions/document-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import type { DocumentConfigurationPageData, DocumentPolicyDraftInput } from "@/lib/document-configuration/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-export function DocumentPolicyEditor({ data }: { data: DocumentConfigurationPageData }) {
+export function DocumentPolicyEditor({ data, nextHref }: { data: DocumentConfigurationPageData; nextHref?: string }) {
   const router = useRouter()
   const [configuration, setConfiguration] = useState<DocumentPolicyDraftInput>(
     data.active?.configuration ?? {
@@ -56,7 +57,10 @@ export function DocumentPolicyEditor({ data }: { data: DocumentConfigurationPage
         configuration,
       })
       setMessage(result.success ? "Document requirements saved." : result.error)
-      if (result.success) router.refresh()
+      if (result.success) {
+        const navigationError = await completeOwnerSetupStep("documents", nextHref, router)
+        if (navigationError) setMessage(navigationError)
+      }
     })
   }
   return (
@@ -155,7 +159,7 @@ export function DocumentPolicyEditor({ data }: { data: DocumentConfigurationPage
           </p>
         ) : null}
         <Button disabled={!data.canEdit || !data.draftRelease || isPending} onClick={save}>
-          Save changes
+          {ownerSetupSaveLabel(nextHref)}
         </Button>
         {!data.draftRelease ? <p className="text-sm text-amber-700">Go to More → Publish changes to prepare a new set of business changes first.</p> : null}
       </section>

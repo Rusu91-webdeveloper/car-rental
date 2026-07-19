@@ -50,7 +50,7 @@ describe("owner setup progress", () => {
       "/admin/bookings/settings",
       "/admin?section=cars",
       "/admin/cars/pricing",
-      "/admin/advanced/configuration",
+      "/admin/settings",
     ])
     expect(result.steps.some((step) => step.href.includes("business-configuration"))).toBe(false)
   })

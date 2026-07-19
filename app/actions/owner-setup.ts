@@ -1,0 +1,108 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { z } from "zod"
+import { requireAdmin } from "@/lib/auth"
+import { prisma } from "@/lib/db"
+import {
+  activateDraftRelease,
+  validateDraftRelease,
+} from "@/lib/business-configuration/workflow-service"
+
+const ownerSetupStepSchema = z.enum([
+  "business-profile",
+  "rental-rules",
+  "insurance",
+  "booking-flow",
+  "driver-rules",
+  "customer-information",
+  "documents",
+  "payments",
+  "customer-messages",
+  "legal",
+])
+
+const ownerSetupStepIds = ownerSetupStepSchema.options
+
+export type OwnerSetupStepId = z.infer<typeof ownerSetupStepSchema>
+
+function refreshOwnerSetup() {
+  revalidatePath("/admin/settings")
+  revalidatePath("/admin")
+}
+
+async function tryActivateCompletedSetup(actorId: string) {
+  const draft = await prisma.businessConfigurationRelease.findFirst({
+    where: { status: { in: ["DRAFT", "VALIDATED"] } },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  })
+  if (!draft) return { activated: false as const }
+
+  try {
+    const validation = await validateDraftRelease(draft.id, actorId)
+    const blockers = validation.result.issues.filter(({ severity }) => severity === "BLOCKER")
+    if (blockers.length > 0) return { activated: false as const }
+    const current = await prisma.businessConfigurationRelease.findUniqueOrThrow({
+      where: { id: draft.id },
+      select: { revision: true },
+    })
+    await activateDraftRelease({
+      releaseId: draft.id,
+      expectedRevision: current.revision,
+      actorId,
+      warningsAcknowledged: true,
+    })
+    return { activated: true as const }
+  } catch (error) {
+    console.error("[OWNER_SETUP_ACTIVATION_DEFERRED]", {
+      name: error instanceof Error ? error.name : "Unknown",
+    })
+    return { activated: false as const }
+  }
+}
+
+export async function completeOwnerSetupStepAction(input: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const stepId = ownerSetupStepSchema.parse(input)
+    const existing = await prisma.auditEvent.findFirst({
+      where: {
+        category: "CONFIGURATION",
+        action: "owner_setup.step_completed",
+        targetType: "OwnerSetupStep",
+        targetId: stepId,
+      },
+      select: { id: true },
+    })
+    if (!existing) {
+      await prisma.auditEvent.create({
+        data: {
+          actorUserId: admin.id,
+          category: "CONFIGURATION",
+          action: "owner_setup.step_completed",
+          targetType: "OwnerSetupStep",
+          targetId: stepId,
+        },
+      })
+    }
+    const completedSteps = await prisma.auditEvent.findMany({
+      where: {
+        category: "CONFIGURATION",
+        action: "owner_setup.step_completed",
+        targetType: "OwnerSetupStep",
+        targetId: { in: ownerSetupStepIds },
+      },
+      distinct: ["targetId"],
+      select: { targetId: true },
+    })
+    const activation = completedSteps.length === ownerSetupStepIds.length
+      ? await tryActivateCompletedSetup(admin.id)
+      : { activated: false as const }
+    refreshOwnerSetup()
+    return { success: true as const, ...activation }
+  } catch (error) {
+    console.error("[OWNER_SETUP_STEP_COMPLETE_ERROR]", error)
+    return { error: "Your information was saved, but the next step could not be opened. Please return to Settings." }
+  }
+}
