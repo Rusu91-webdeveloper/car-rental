@@ -47,6 +47,18 @@ describe("owner-facing admin information architecture", () => {
     expect(wizard).not.toContain("ConfigurationHealthFinding")
   })
 
+  it("keeps the owner legal step bilingual and hides the advanced publication console", () => {
+    const stepContent = source("components/admin/owner-settings-step-content.tsx")
+    const legalSetup = source("components/legal/owner-legal-setup-form.tsx")
+    const action = source("app/actions/legal-configuration.ts")
+    expect(stepContent).toContain("<OwnerLegalSetupForm")
+    expect(stepContent).not.toContain("<LegalDocumentList")
+    expect(stepContent).not.toContain("<LegalAcceptanceConfigurationForm")
+    expect(legalSetup).toContain('OWNER_LEGAL_LOCALES')
+    expect(legalSetup).toContain('Save and finish')
+    expect(action).toContain("saveOwnerLegalSetupAction")
+  })
+
   it("keeps every owner setup step inside the settings URL", () => {
     const guide = source("lib/admin/owner-settings-guide.ts")
     const wizard = source("components/admin/owner-settings-wizard.tsx")

@@ -12,8 +12,7 @@ import { DriverRequirementsForm } from "@/components/business-configuration/driv
 import { InsuranceConfigurationForm } from "@/components/business-configuration/insurance-configuration-form"
 import { PaymentInstructionForm } from "@/components/business-configuration/notification-configuration-form"
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list"
-import { LegalAcceptanceConfigurationForm } from "@/components/legal/legal-acceptance-configuration-form"
-import { LegalDocumentList } from "@/components/legal/legal-document-list"
+import { OwnerLegalSetupForm } from "@/components/legal/owner-legal-setup-form"
 import {
   ensureOwnerDraftRelease,
   prepareOwnerBookingExperienceEdit,
@@ -25,7 +24,6 @@ import type { OwnerSettingsStep } from "@/lib/admin/owner-settings-guide"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { prisma } from "@/lib/db"
 import { PrismaDocumentConfigurationRepository } from "@/lib/document-configuration/prisma-repository"
-import { loadLegalAdministrationPage } from "@/lib/legal/service"
 import { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 import { loadPricingConfigurationPage } from "@/lib/pricing-admin/service"
@@ -203,27 +201,15 @@ export async function OwnerSettingsStepContent({
   }
 
   if (step.id === "legal") {
-    const data = editing
-      ? await prepareOwnerLegalEdit(adminId)
-      : await loadLegalAdministrationPage()
+    const data = await prepareOwnerLegalEdit(adminId)
     return (
-      <>
-        <LegalDocumentList
-          data={data}
-          canEdit={caps.canEditLegal}
-          canPublish={caps.canPublishLegal}
-          canValidate={caps.canValidate}
-        />
-        <LegalAcceptanceConfigurationForm
-          data={data}
-          canEdit={caps.canEditLegal}
-          canValidate={caps.canValidate}
-          canAttach={caps.canEdit}
-          nextHref={nextHref}
-          editing={editing}
-        />
-        <PricingIssueList title="What needs attention" issues={data.issues} />
-      </>
+      <OwnerLegalSetupForm
+        key={`${data.documents.map(({ id, revision }) => `${id}:${revision}`).join("|")}-${data.draftAcceptance?.revision ?? "none"}`}
+        data={data}
+        canComplete={caps.canEditLegal && caps.canPublishLegal && caps.canValidate && caps.canEdit}
+        nextHref={nextHref}
+        editing={editing}
+      />
     )
   }
 

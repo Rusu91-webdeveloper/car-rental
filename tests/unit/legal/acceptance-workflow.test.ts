@@ -67,4 +67,30 @@ describe("legal acceptance release and workflow validation", () => {
     )
     expect(result.outcome).toBe("VALID")
   })
+
+  it("turns draft document references into owner-friendly publication guidance", () => {
+    const domains = validBusinessConfigurationDomains()
+    const result = validateLegalAcceptanceConfiguration(
+      {
+        ...domains["legal-acceptance"],
+        termsDocument: {
+          ...domains["legal-acceptance"].termsDocument,
+          publicationStatus: "DRAFT" as never,
+        },
+        privacyDocument: {
+          ...domains["legal-acceptance"].privacyDocument,
+          publicationStatus: "DRAFT" as never,
+        },
+      },
+      ["de", "en"],
+    )
+
+    expect(result.issues.map(({ adminMessage }) => adminMessage)).toEqual(
+      expect.arrayContaining([
+        "Publish the Rental Terms before finishing this step.",
+        "Publish the Privacy Notice before finishing this step.",
+      ]),
+    )
+    expect(result.issues.some(({ adminMessage }) => adminMessage.includes("Invalid enum value"))).toBe(false)
+  })
 })

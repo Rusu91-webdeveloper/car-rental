@@ -2,22 +2,40 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { ensureOwnerDraftRelease } from "@/lib/admin/owner-settings-edit"
+import { requireAdmin } from "@/lib/auth"
 import { CAPABILITIES } from "@/lib/authorization/capabilities"
 import { requireCapability } from "@/lib/authorization/server"
 import { legalAcceptanceConfigurationSchema } from "@/lib/business-configuration/schema"
 import { ConfigurationWorkflowError, publicConfigurationWorkflowMessage } from "@/lib/business-configuration/workflow-errors"
 import { archiveLegalVersion, attachLegalDraftToRelease, createLegalAcceptanceDraft, createLegalDraft, discardLegalDraft, loadLegalAdministrationPage, publishLegalVersion, updateLegalAcceptanceDraft, updateLegalDraft, validateLegalAcceptanceDraft, validateLegalDocumentDraft } from "@/lib/legal/service"
+import { OwnerLegalSetupError, saveOwnerLegalSetup } from "@/lib/legal/owner-setup"
+import { ownerLegalSetupSchema } from "@/lib/legal/owner-setup-schema"
 
 const translation = z.object({ locale: z.string().trim().min(2).max(10), title: z.string().max(300), canonicalContent: z.string().max(500_000) })
-const refresh = () => { revalidatePath("/admin/business-configuration/legal"); revalidatePath("/admin/business-configuration/overview") }
+const refresh = () => { revalidatePath("/admin/settings"); revalidatePath("/admin/settings/legal"); revalidatePath("/admin/business-configuration/legal"); revalidatePath("/admin/business-configuration/overview") }
 function failure(error: unknown) {
   console.error("[LEGAL_CONFIGURATION_ACTION_ERROR]", {
     name: error instanceof Error ? error.name : "Unknown",
     code: error instanceof ConfigurationWorkflowError ? error.code : error instanceof z.ZodError ? "INVALID_INPUT" : "LEGAL_OPERATION_FAILED",
   })
+  if (error instanceof OwnerLegalSetupError) return { error: error.message, code: "OWNER_LEGAL_SETUP_INVALID" }
   if (error instanceof ConfigurationWorkflowError) return { error: publicConfigurationWorkflowMessage(error), code: error.code }
   if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid legal request.", code: "INVALID_INPUT" }
   return { error: "The legal action could not be completed safely.", code: "LEGAL_OPERATION_FAILED" }
+}
+
+export async function saveOwnerLegalSetupAction(input: unknown) {
+  try {
+    const actor = await requireAdmin()
+    const value = ownerLegalSetupSchema.parse(input)
+    await ensureOwnerDraftRelease(actor.id)
+    await saveOwnerLegalSetup({ actorId: actor.id, value })
+    refresh()
+    return { success: true as const }
+  } catch (error) {
+    return failure(error)
+  }
 }
 
 export async function createLegalDraftAction(input: unknown) { try { const actor = await requireCapability(CAPABILITIES.LEGAL_EDIT, { auditDenied: true }); const values = z.object({ type: z.enum(["RENTAL_TERMS", "PRIVACY_NOTICE"]), primaryLocale: z.string().min(2).max(10), changeSummary: z.string().trim().min(3).max(500), sourceDocumentId: z.string().optional() }).parse(input); const id = await createLegalDraft({ actorId: actor.id, ...values }); refresh(); return { success: true as const, id } } catch (error) { return failure(error) } }

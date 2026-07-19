@@ -1,8 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import {
-  attachLegalDraftToRelease,
-  createLegalAcceptanceDraft,
+  createLegalDraft,
   loadLegalAdministrationPage,
 } from "@/lib/legal/service"
 import {
@@ -160,17 +159,16 @@ export async function prepareOwnerNotificationEdit(actorId: string) {
 export async function prepareOwnerLegalEdit(actorId: string) {
   await ensureOwnerDraftRelease(actorId)
   let data = await loadLegalAdministrationPage()
-  let createdAcceptance = false
-  if (!data.draftAcceptance) {
-    await createLegalAcceptanceDraft({
+  for (const type of ["RENTAL_TERMS", "PRIVACY_NOTICE"] as const) {
+    const documents = data.documents.filter((document) => document.type === type)
+    if (documents.some((document) => document.status === "DRAFT") || documents.some((document) => document.status === "PUBLISHED")) continue
+    await createLegalDraft({
       actorId,
-      source: data.liveAcceptance ? "LIVE" : "DEFAULT",
+      type,
+      primaryLocale: "en",
+      changeSummary: `${type === "RENTAL_TERMS" ? "Rental Terms" : "Privacy Notice"} setup`,
     })
     data = await loadLegalAdministrationPage()
-    createdAcceptance = true
   }
-  if (createdAcceptance && data.draftAcceptance) {
-    await attachLegalDraftToRelease({ actorId, versionId: data.draftAcceptance.id })
-  }
-  return loadLegalAdministrationPage()
+  return data
 }
