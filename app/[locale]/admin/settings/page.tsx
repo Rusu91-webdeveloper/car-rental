@@ -22,8 +22,10 @@ export default async function BusinessSettingsPage({
 }) {
   const admin = await requireAdmin();
   const requested = await searchParams;
-  const [overview, settingsResult, completedSteps] = await Promise.all([
-    loadConfigurationOverview(),
+  // The overview already performs several bounded read batches. Finish it
+  // before the small page-level reads to avoid exhausting the serverless pool.
+  const overview = await loadConfigurationOverview();
+  const [settingsResult, completedSteps] = await Promise.all([
     getCompanySettings(),
     prisma.auditEvent.findMany({
       where: {

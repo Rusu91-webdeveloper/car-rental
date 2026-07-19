@@ -269,23 +269,20 @@ export async function loadConfigurationOverview(options?: {
   includeAudit?: boolean
 }): Promise<ConfigurationOverview> {
   const repository = new PrismaBusinessConfigurationRepository(options?.db ?? prisma)
-  const [
-    activeRelease,
-    draftRelease,
-    vehicles,
-    legalEvidence,
-    recentAuditEvents,
-    pricingDraftEvidence,
-    phase6DraftEvidence,
-  ] = await Promise.all([
+  // Keep each read batch below the production Prisma pool limit. This overview is
+  // rendered alongside the admin layout, so an unbounded fan-out can otherwise
+  // starve authentication and step-specific queries on serverless instances.
+  const [activeRelease, draftRelease, vehicles] = await Promise.all([
     repository.findActiveRelease(),
     repository.findLatestDraftRelease(),
     repository.listBookableVehicles(),
+  ])
+  const [legalEvidence, recentAuditEvents, pricingDraftEvidence] = await Promise.all([
     repository.listPublishedLegalEvidence(),
     options?.includeAudit === false ? [] : repository.listRecentConfigurationEvents(20),
     repository.findLatestPricingDraftEvidence(),
-    loadPhase6ConfigurationPage(options?.db ?? prisma),
   ])
+  const phase6DraftEvidence = await loadPhase6ConfigurationPage(options?.db ?? prisma)
   const changed = changedDomains(activeRelease, draftRelease)
   const pricingDraftIsIndependent = Boolean(
     pricingDraftEvidence && pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,

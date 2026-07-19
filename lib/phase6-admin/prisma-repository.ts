@@ -189,7 +189,7 @@ export class PrismaPhase6AdminRepository {
 
   async loadPageData(): Promise<Phase6AdminPageData> {
     const base = new PrismaBusinessConfigurationRepository(this.db)
-    const [active, draftRelease, insuranceDraft, customerDraft, workflowDraft, vehicles, settings] = await Promise.all([
+    const [active, draftRelease, insuranceDraft] = await Promise.all([
       base.findActiveRelease(),
       base.findLatestDraftRelease(),
       this.db.configurationVersion.findFirst({
@@ -205,6 +205,10 @@ export class PrismaPhase6AdminRepository {
         },
         orderBy: { updatedAt: "desc" },
       }),
+    ])
+    // Bound read concurrency so this repository remains safe with small
+    // serverless connection pools while preserving parallelism within batches.
+    const [customerDraft, workflowDraft, vehicles] = await Promise.all([
       this.db.configurationVersion.findFirst({
         where: {
           domain: "CUSTOMER_DRIVER_REQUIREMENTS",
@@ -232,11 +236,11 @@ export class PrismaPhase6AdminRepository {
         select: { id: true, name: true, slug: true, status: true },
         orderBy: { name: "asc" },
       }),
-      this.db.companySettings.findUnique({
-        where: { id: "company-settings" },
-        select: { currency: true },
-      }),
     ])
+    const settings = await this.db.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: { currency: true },
+    })
     const liveInsurance = active ? releaseVersion(active.versions.insurance, active.domains.insurance!) : undefined
     const liveCustomer = active
       ? releaseVersion(active.versions["customer-driver-requirements"], active.domains["customer-driver-requirements"]!)

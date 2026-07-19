@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, User } from "@prisma/client"
+import { cache } from "react"
 import { getCurrentUser, requireAuth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
@@ -79,7 +80,7 @@ export async function requireAllCapabilities(capabilities: readonly Capability[]
   return requireDecision(capabilities, checkAllCapabilities(principal, capabilities), db, options?.auditDenied ?? false)
 }
 
-export async function getBusinessConfigurationCapabilities() {
+export const getBusinessConfigurationCapabilities = cache(async function getBusinessConfigurationCapabilities() {
   const principal = await getCapabilityPrincipal()
   const allowed = (capability: Capability) => checkCapability(principal, capability).allowed
   return {
@@ -101,4 +102,4 @@ export async function getBusinessConfigurationCapabilities() {
     canViewDocuments: allowed(CAPABILITIES.DOCUMENTS_VIEW),
     canViewAudit: allowed(CAPABILITIES.SECURITY_AUDIT_VIEW),
   }
-}
+})

@@ -14,10 +14,10 @@ export default async function AdminLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const [user, capabilities] = await Promise.all([
-    getCurrentUser(),
-    getBusinessConfigurationCapabilities(),
-  ]);
+  // These request-memoized reads are intentionally sequential so navigation
+  // never spends the full production connection pool on authorization alone.
+  const user = await getCurrentUser();
+  const capabilities = await getBusinessConfigurationCapabilities();
 
   if (!user) redirect({ href: "/sign-in?redirect_url=/admin", locale });
   if (
