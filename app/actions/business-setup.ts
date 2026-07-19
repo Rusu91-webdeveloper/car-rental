@@ -17,7 +17,7 @@ export async function startBusinessSetupAction() {
   } catch (error) {
     console.error("[START_BUSINESS_SETUP_ERROR]", error)
     return {
-      error: error instanceof Error ? error.message : "Business setup could not be started.",
+      error: "Business setup could not be started. Please try again.",
     }
   }
 }

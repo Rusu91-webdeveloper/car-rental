@@ -75,6 +75,14 @@ export async function initializeBusinessConfiguration(
   actorId: string,
   db: PrismaClient,
 ) {
+  await db.confirmationSectionDefinition.createMany({
+    data: CONFIRMATION_SECTIONS.map((section) => ({
+      key: section,
+      name: section.replaceAll("_", " ").toLowerCase(),
+    })),
+    skipDuplicates: true,
+  })
+
   return db.$transaction(
     async (tx) => {
       const existingRelease = await tx.businessConfigurationRelease.findFirst({
@@ -214,13 +222,6 @@ export async function initializeBusinessConfiguration(
           },
         }))
 
-      for (const section of CONFIRMATION_SECTIONS) {
-        await tx.confirmationSectionDefinition.upsert({
-          where: { key: section },
-          update: {},
-          create: { key: section, name: section.replaceAll("_", " ").toLowerCase() },
-        })
-      }
       const sectionDefinitions = await tx.confirmationSectionDefinition.findMany({
         where: { key: { in: [...CONFIRMATION_SECTIONS] } },
         select: { id: true },
@@ -324,6 +325,10 @@ export async function initializeBusinessConfiguration(
       })
       return { releaseId: release.id, created: true }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   )
 }
