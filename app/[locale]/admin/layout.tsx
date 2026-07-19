@@ -3,6 +3,7 @@ import { redirect } from "@/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
+import { AdminNavigationFeedback } from "@/components/admin/admin-navigation-feedback";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-muted/25">
+      <AdminNavigationFeedback />
       <AdminNavigation
         canViewDocuments={capabilities.canViewDocuments}
         canViewConfiguration={capabilities.canView}

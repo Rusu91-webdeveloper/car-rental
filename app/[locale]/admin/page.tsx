@@ -1,11 +1,10 @@
 import { redirect } from "@/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
-import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service"
 import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide"
+import { loadOwnerSettingsOverview } from "@/lib/admin/owner-settings-overview"
 import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
@@ -71,7 +70,6 @@ export default async function AdminPage({
   const adminUser = user!
   const capabilities = await getBusinessConfigurationCapabilities()
 
-  await runBookingLifecycleMaintenance()
   const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
     await Promise.all([
       prisma.car.findMany({
@@ -124,7 +122,7 @@ export default async function AdminPage({
         },
       }),
       prisma.companySettings.findUnique({ where: { id: "company-settings" } }),
-      loadConfigurationOverview({ includeAudit: false }),
+      loadOwnerSettingsOverview(),
       capabilities.canViewDocuments
         ? prisma.bookingApplication.count({
             where: { status: "AWAITING_DOCUMENT_REVIEW" },

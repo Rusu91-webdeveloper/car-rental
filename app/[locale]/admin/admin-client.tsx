@@ -151,6 +151,8 @@ interface AdminReview {
   userEmail: string
 }
 
+const ADMIN_SECTIONS = new Set(["overview", "cars", "bookings", "users", "reviews", "analytics"])
+
 export default function AdminDashboard({
   currentUser,
   cars,
@@ -189,6 +191,40 @@ export default function AdminDashboard({
   const locale = useLocale()
   const router = useRouter()
   const { toast } = useToast()
+
+  const selectSection = (section: string) => {
+    if (!ADMIN_SECTIONS.has(section)) return
+    setActiveTab(section)
+    setSearchTerm("")
+    setFilterStatus("all")
+
+    const destination = new URL(window.location.href)
+    if (section === "overview") destination.searchParams.delete("section")
+    else destination.searchParams.set("section", section)
+    window.history.pushState(null, "", `${destination.pathname}${destination.search}`)
+  }
+
+  useEffect(() => {
+    const applySection = (section: string | null) => {
+      const nextSection = section && ADMIN_SECTIONS.has(section) ? section : "overview"
+      setActiveTab(nextSection)
+      setSearchTerm("")
+      setFilterStatus("all")
+    }
+    const handleSectionChange = (event: Event) => {
+      applySection((event as CustomEvent<{ section?: string }>).detail?.section ?? null)
+    }
+    const handleHistoryChange = () => {
+      applySection(new URL(window.location.href).searchParams.get("section"))
+    }
+
+    window.addEventListener("admin:section-change", handleSectionChange)
+    window.addEventListener("popstate", handleHistoryChange)
+    return () => {
+      window.removeEventListener("admin:section-change", handleSectionChange)
+      window.removeEventListener("popstate", handleHistoryChange)
+    }
+  }, [])
 
   const getLocalizedText = (valueEn: string, valueDe?: string | null) => {
     return locale === "de" ? valueDe || valueEn : valueEn
@@ -756,10 +792,8 @@ export default function AdminDashboard({
                 <RefreshCw className={isPending ? "animate-spin" : undefined} aria-hidden="true" />
                 Refresh data
               </Button>
-              <Button asChild>
-                <Link href="/admin?section=bookings">
-                  View bookings <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+              <Button type="button" onClick={() => selectSection("bookings")}>
+                View bookings <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </header>
@@ -848,14 +882,14 @@ export default function AdminDashboard({
             </CardHeader>
             {attentionCount > 0 ? (
               <CardContent className="grid gap-3 sm:grid-cols-3">
-                <Link href="/admin?section=bookings" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                <button type="button" onClick={() => selectSection("bookings")} className="flex items-center justify-between rounded-lg border p-4 text-left transition hover:bg-muted/50">
                   <span><span className="block text-sm font-medium">Bookings to approve</span><span className="text-xs text-muted-foreground">Review customer requests</span></span>
                   <Badge variant={pendingBookings > 0 ? "destructive" : "secondary"}>{pendingBookings}</Badge>
-                </Link>
-                <Link href="/admin?section=cars" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                </button>
+                <button type="button" onClick={() => selectSection("cars")} className="flex items-center justify-between rounded-lg border p-4 text-left transition hover:bg-muted/50">
                   <span><span className="block text-sm font-medium">Unavailable cars</span><span className="text-xs text-muted-foreground">Check status or maintenance</span></span>
                   <Badge variant={unavailableCars > 0 ? "destructive" : "secondary"}>{unavailableCars}</Badge>
-                </Link>
+                </button>
                 <Link href="/admin/documents" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
                   <span><span className="block text-sm font-medium">Documents to review</span><span className="text-xs text-muted-foreground">Check customer uploads</span></span>
                   <Badge variant={(documentReviewCount ?? 0) > 0 ? "destructive" : "secondary"}>{documentReviewCount ?? "—"}</Badge>
@@ -895,7 +929,7 @@ export default function AdminDashboard({
                 <Button
                   variant="outline"
                   className="relative h-auto py-4 flex-col gap-2 bg-transparent"
-                  onClick={() => setActiveTab("bookings")}
+                  onClick={() => selectSection("bookings")}
                 >
                   <AlertCircle className="w-6 h-6" />
                   <span>Review bookings</span>

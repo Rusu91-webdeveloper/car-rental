@@ -14,6 +14,7 @@ import {
   type InsuranceConfiguration,
 } from "@/lib/business-configuration/domains"
 import type { Phase6AdminPageData, Phase6Version } from "./types"
+import type { ReleaseAggregate } from "@/lib/business-configuration/repositories"
 
 const userSelect = { name: true, email: true } as const
 const actorName = (user: { name: string | null; email: string }) => user.name || user.email
@@ -187,11 +188,19 @@ function releaseVersion<T>(
 export class PrismaPhase6AdminRepository {
   constructor(readonly db: ConfigurationDbClient) {}
 
-  async loadPageData(): Promise<Phase6AdminPageData> {
+  async loadPageData(preloaded?: {
+    activeRelease?: ReleaseAggregate | null
+    draftRelease?: ReleaseAggregate | null
+    bookableVehicles?: Array<{ id: string; name: string }>
+  }): Promise<Phase6AdminPageData> {
     const base = new PrismaBusinessConfigurationRepository(this.db)
     const [active, draftRelease, insuranceDraft] = await Promise.all([
-      base.findActiveRelease(),
-      base.findLatestDraftRelease(),
+      preloaded?.activeRelease === undefined
+        ? base.findActiveRelease()
+        : Promise.resolve(preloaded.activeRelease),
+      preloaded?.draftRelease === undefined
+        ? base.findLatestDraftRelease()
+        : Promise.resolve(preloaded.draftRelease),
       this.db.configurationVersion.findFirst({
         where: { domain: "INSURANCE", status: { in: ["DRAFT", "VALIDATED"] } },
         include: {
@@ -231,11 +240,19 @@ export class PrismaPhase6AdminRepository {
         },
         orderBy: { updatedAt: "desc" },
       }),
-      this.db.car.findMany({
-        where: { isDeleted: false },
-        select: { id: true, name: true, slug: true, status: true },
-        orderBy: { name: "asc" },
-      }),
+      preloaded?.bookableVehicles === undefined
+        ? this.db.car.findMany({
+            where: { isDeleted: false },
+            select: { id: true, name: true, slug: true, status: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve(
+            preloaded.bookableVehicles.map((vehicle) => ({
+              ...vehicle,
+              slug: vehicle.id,
+              status: "AVAILABLE" as const,
+            })),
+          ),
     ])
     const settings = await this.db.companySettings.findUnique({
       where: { id: "company-settings" },

@@ -282,7 +282,11 @@ export async function loadConfigurationOverview(options?: {
     options?.includeAudit === false ? [] : repository.listRecentConfigurationEvents(20),
     repository.findLatestPricingDraftEvidence(),
   ])
-  const phase6DraftEvidence = await loadPhase6ConfigurationPage(options?.db ?? prisma)
+  const phase6DraftEvidence = await loadPhase6ConfigurationPage(options?.db ?? prisma, {
+    activeRelease,
+    draftRelease,
+    bookableVehicles: vehicles,
+  })
   const changed = changedDomains(activeRelease, draftRelease)
   const pricingDraftIsIndependent = Boolean(
     pricingDraftEvidence && pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,
