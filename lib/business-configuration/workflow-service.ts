@@ -327,6 +327,23 @@ export async function loadConfigurationOverview(options?: {
         ...fleetIssues(pricingEvidenceRelease, vehicles),
       ])
     : undefined
+  const validationForDomain = (domain: ConfigurationDomainId) => {
+    const releaseIssues = validation?.issues.filter((issue) => issue.domain === domain) ?? []
+    const evidenceIssues = domain === "pricing-billing"
+      ? (pricingEvidenceValidation?.issues ?? [])
+      : domain in phase6DraftByDomain && phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain]
+        ? phase6DraftEvidence.issues.filter((issue) => issue.domain === domain)
+        : []
+    if (!validation && evidenceIssues.length === 0) return undefined
+
+    const unique = new Map(
+      [...releaseIssues, ...evidenceIssues].map((issue) => [
+        `${issue.domain}:${issue.code}:${issue.field ?? ""}:${issue.affectedResource ?? ""}`,
+        issue,
+      ]),
+    )
+    return configurationValidationResult([...unique.values()])
+  }
   const health = evaluateConfigurationHealth(
     CONFIGURATION_DOMAIN_IDS.map((domain) => ({
       domain,
@@ -341,14 +358,7 @@ export async function loadConfigurationOverview(options?: {
               )
             : Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
       hasDraftChanges: changed.includes(domain),
-      validation:
-        domain === "pricing-billing" && pricingEvidenceValidation
-          ? pricingEvidenceValidation
-          : domain in phase6DraftByDomain && phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain]
-            ? configurationValidationResult(phase6DraftEvidence.issues.filter((issue) => issue.domain === domain))
-            : validation
-              ? configurationValidationResult(validation.issues.filter((issue) => issue.domain === domain))
-              : undefined,
+      validation: validationForDomain(domain),
       adminRoute: routeFor(domain),
     })),
   )

@@ -1,6 +1,7 @@
 import type {
   BookingStepConfiguration,
   BookingWorkflowConfiguration,
+  DocumentPolicyConfiguration,
   InsuranceConfiguration,
   LegalAcceptanceConfiguration,
 } from "@/lib/business-configuration/domains"
@@ -37,6 +38,50 @@ export function synchronizeInsuranceBookingStep(
     steps: workflow.steps.map((step) =>
       step.step === "INSURANCE" ? { ...step, requirement } : step,
     ),
+  }
+}
+
+export function synchronizeConfiguredBookingSteps(
+  workflow: BookingWorkflowConfiguration,
+  input: {
+    insurance: InsuranceConfiguration
+    documents: DocumentPolicyConfiguration
+    legal: LegalAcceptanceConfiguration
+  },
+): BookingWorkflowConfiguration {
+  const documentRequirement = input.documents.requirements.some(
+    ({ requirement }) => requirement === "REQUIRED",
+  )
+    ? "REQUIRED"
+    : input.documents.requirements.some(({ requirement }) => requirement === "OPTIONAL")
+      ? "OPTIONAL"
+      : "HIDDEN"
+  const legalRequirement = !input.legal.bookingEnforcementEnabled
+    ? "HIDDEN"
+    : [input.legal.termsAcceptance, input.legal.privacyAcknowledgment].includes("REQUIRED")
+      ? "REQUIRED"
+      : "OPTIONAL"
+  const insuranceRequirement = !input.insurance.enabled
+    ? "HIDDEN"
+    : input.insurance.selectionMode === "MANDATORY"
+      ? "REQUIRED"
+      : "OPTIONAL"
+  const requirements = new Map<BookingStepConfiguration["step"], BookingStepConfiguration["requirement"]>([
+    ["INSURANCE", insuranceRequirement],
+    ["DOCUMENTS", documentRequirement],
+    ["LEGAL_ACCEPTANCE", legalRequirement],
+  ])
+  const changed = workflow.steps.some(
+    (step) => requirements.has(step.step) && requirements.get(step.step) !== step.requirement,
+  )
+  if (!changed) return workflow
+
+  return {
+    ...workflow,
+    steps: workflow.steps.map((step) => {
+      const requirement = requirements.get(step.step)
+      return requirement ? { ...step, requirement } : step
+    }),
   }
 }
 

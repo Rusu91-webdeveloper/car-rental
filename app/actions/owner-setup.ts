@@ -8,6 +8,10 @@ import {
   activateDraftRelease,
   validateDraftRelease,
 } from "@/lib/business-configuration/workflow-service"
+import { CONFIGURATION_DOMAIN_METADATA } from "@/lib/business-configuration/domain-metadata"
+import { PrismaBusinessConfigurationRepository } from "@/lib/business-configuration/prisma-repository"
+import { synchronizeConfiguredBookingSteps } from "@/lib/booking-configuration/workflow"
+import { updateBookingWorkflowDraft } from "@/lib/phase6-admin/service"
 
 const ownerSetupStepSchema = z.enum([
   "business-profile",
@@ -31,18 +35,70 @@ function refreshOwnerSetup() {
   revalidatePath("/admin")
 }
 
+type OwnerSetupActivationIssue = {
+  code: string
+  message: string
+  action: string
+  href: string
+}
+
+async function synchronizeCompletedSetupWorkflow(releaseId: string, actorId: string) {
+  const release = await new PrismaBusinessConfigurationRepository(prisma).findReleaseAggregate(releaseId)
+  if (!release) throw new Error("The completed setup release could not be loaded.")
+
+  const workflow = release.domains["booking-workflow"]
+  const insurance = release.domains.insurance
+  const documents = release.domains["document-policy"]
+  const legal = release.domains["legal-acceptance"]
+  if (!workflow || !insurance || !documents || !legal) {
+    throw new Error("The completed setup is missing required booking settings.")
+  }
+  const synchronized = synchronizeConfiguredBookingSteps(workflow, {
+    insurance,
+    documents,
+    legal,
+  })
+  if (synchronized === workflow) return
+
+  await updateBookingWorkflowDraft({
+    actorId,
+    versionId: release.versions["booking-workflow"].id,
+    expectedRevision: release.versions["booking-workflow"].revision,
+    configuration: synchronized,
+    changeSummary: "Match booking pages to completed business settings",
+  })
+}
+
 async function tryActivateCompletedSetup(actorId: string) {
   const draft = await prisma.businessConfigurationRelease.findFirst({
     where: { status: { in: ["DRAFT", "VALIDATED"] } },
     orderBy: { updatedAt: "desc" },
     select: { id: true },
   })
-  if (!draft) return { activated: false as const, activationFailed: false as const }
+  if (!draft) {
+    return {
+      activated: false as const,
+      activationFailed: false as const,
+      issues: [] as OwnerSetupActivationIssue[],
+    }
+  }
 
   try {
+    await synchronizeCompletedSetupWorkflow(draft.id, actorId)
     const validation = await validateDraftRelease(draft.id, actorId)
     const blockers = validation.result.issues.filter(({ severity }) => severity === "BLOCKER")
-    if (blockers.length > 0) return { activated: false as const, activationFailed: false as const }
+    if (blockers.length > 0) {
+      return {
+        activated: false as const,
+        activationFailed: false as const,
+        issues: blockers.map((issue) => ({
+          code: issue.code,
+          message: issue.adminMessage,
+          action: issue.remediation ?? "Review this setting and try again.",
+          href: CONFIGURATION_DOMAIN_METADATA[issue.domain].route,
+        })),
+      }
+    }
     const current = await prisma.businessConfigurationRelease.findUniqueOrThrow({
       where: { id: draft.id },
       select: { revision: true },
@@ -53,13 +109,21 @@ async function tryActivateCompletedSetup(actorId: string) {
       actorId,
       warningsAcknowledged: true,
     })
-    return { activated: true as const, activationFailed: false as const }
+    return {
+      activated: true as const,
+      activationFailed: false as const,
+      issues: [] as OwnerSetupActivationIssue[],
+    }
   } catch (error) {
     console.error("[OWNER_SETUP_ACTIVATION_DEFERRED]", {
       name: error instanceof Error ? error.name : "Unknown",
       code: typeof error === "object" && error && "code" in error ? error.code : undefined,
     })
-    return { activated: false as const, activationFailed: true as const }
+    return {
+      activated: false as const,
+      activationFailed: true as const,
+      issues: [] as OwnerSetupActivationIssue[],
+    }
   }
 }
 
@@ -109,7 +173,11 @@ export async function completeOwnerSetupStepAction(input: unknown) {
     const completedSteps = await completedOwnerSetupSteps()
     const activation = completedSteps.length === ownerSetupStepIds.length
       ? await tryActivateCompletedSetup(admin.id)
-      : { activated: false as const, activationFailed: false as const }
+      : {
+          activated: false as const,
+          activationFailed: false as const,
+          issues: [] as OwnerSetupActivationIssue[],
+        }
     if (activation.activationFailed) return activationError()
     refreshOwnerSetup()
     return { success: true as const, activated: activation.activated }
@@ -136,7 +204,10 @@ export async function recoverCompletedOwnerSetupAction() {
     const activation = await tryActivateCompletedSetup(admin.id)
     if (activation.activationFailed) return activationError()
     if (!activation.activated) {
-      return { error: "Review the highlighted settings before enabling online booking." }
+      return {
+        error: activation.issues[0]?.message ?? "Review the highlighted settings before enabling online booking.",
+        issues: activation.issues,
+      }
     }
 
     refreshOwnerSetup()
