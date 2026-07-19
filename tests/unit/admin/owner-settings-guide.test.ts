@@ -109,4 +109,46 @@ describe("owner settings guide", () => {
     expect(guide.steps.find((step) => step.id === "fleet")?.state).toBe("complete")
     expect(guide.steps.find((step) => step.id === "car-pricing")?.state).toBe("attention")
   })
+
+  it("shows every setup destination once without routing through another menu", () => {
+    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+    const hrefs = guide.steps.map((step) => step.href)
+
+    expect(hrefs).toEqual([
+      "/admin/settings/profile",
+      "/admin/bookings/settings/duration",
+      "/admin/bookings/settings/insurance",
+      "/admin/bookings/settings/flow",
+      "/admin/bookings/driver-rules",
+      "/admin/customers/settings",
+      "/admin/documents/settings",
+      "/admin/payments",
+      "/admin/settings/notifications",
+      "/admin/settings/legal",
+      "/admin?section=cars",
+      "/admin/cars/pricing",
+      "/admin/advanced/configuration",
+    ])
+    expect(new Set(hrefs).size).toBe(hrefs.length)
+    expect(hrefs).not.toContain("/admin/bookings/settings")
+  })
+
+  it("selects the first unfinished step while keeping completed steps editable", () => {
+    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+
+    expect(guide.steps[0]).toMatchObject({ id: "business-profile", state: "complete" })
+    expect(guide.nextStep?.id).toBe("rental-rules")
+  })
+
+  it("organizes the checklist into five simple business phases", () => {
+    const guide = buildOwnerSettingsGuide({ company, activeCarCount: 0, overview: overview() })
+
+    expect([...new Set(guide.steps.map((step) => step.phase))]).toEqual([
+      "business-basics",
+      "booking-experience",
+      "payments-communication",
+      "fleet",
+      "launch",
+    ])
+  })
 })

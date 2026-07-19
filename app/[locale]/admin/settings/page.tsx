@@ -20,12 +20,12 @@ export default async function BusinessSettingsPage() {
   const hasSetup = Boolean(overview.activeRelease || overview.draftRelease);
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <div className="rounded-2xl border bg-background p-5 shadow-sm sm:p-7">
+      <div className="overflow-hidden rounded-3xl border bg-gradient-to-br from-background via-background to-primary/[0.045] p-5 shadow-sm sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <AdminPageHeader
             eyebrow="Business settings"
             title="Set up your rental business"
-            description="A simple checklist for everything customers need. Follow it once, then return anytime to make changes."
+            description="Start with the highlighted step. We will guide you through the rest, and you can edit completed settings anytime."
           />
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">

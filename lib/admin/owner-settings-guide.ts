@@ -8,19 +8,44 @@ export type OwnerSettingsStepState =
   | "in-progress"
   | "not-started"
 
-export interface OwnerSettingsStepLink {
-  label: string
-  href: string
-}
+export const OWNER_SETTINGS_PHASES = [
+  {
+    id: "business-basics",
+    label: "Business basics",
+    description: "Your identity and the rental rules used across the business.",
+  },
+  {
+    id: "booking-experience",
+    label: "Booking experience",
+    description: "What customers complete and what information you collect.",
+  },
+  {
+    id: "payments-communication",
+    label: "Payments and communication",
+    description: "How customers pay, what they receive, and what they accept.",
+  },
+  {
+    id: "fleet",
+    label: "Fleet and pricing",
+    description: "The cars customers can rent and what each one costs.",
+  },
+  {
+    id: "launch",
+    label: "Final review",
+    description: "Resolve remaining items and publish the setup.",
+  },
+] as const
+
+export type OwnerSettingsPhaseId = (typeof OWNER_SETTINGS_PHASES)[number]["id"]
 
 export interface OwnerSettingsStep {
   id: string
   title: string
   description: string
   href: string
+  phase: OwnerSettingsPhaseId
   state: OwnerSettingsStepState
   issueCount: number
-  links?: OwnerSettingsStepLink[]
 }
 
 export interface OwnerSettingsGuide {
@@ -103,13 +128,12 @@ function combineStates(...states: OwnerSettingsStepState[]): OwnerSettingsStepSt
 export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSettingsGuide {
   const pricing = domainState(input.overview, ["pricing-billing"])
   const insurance = domainState(input.overview, ["insurance"])
-  const booking = domainState(input.overview, [
-    "booking-workflow",
-    "customer-driver-requirements",
-    "document-policy",
-  ])
+  const bookingFlow = domainState(input.overview, ["booking-workflow"])
+  const customerDriver = domainState(input.overview, ["customer-driver-requirements"])
+  const documents = domainState(input.overview, ["document-policy"])
   const payments = domainState(input.overview, ["payments"])
-  const communication = domainState(input.overview, ["confirmations", "legal-acceptance"])
+  const confirmations = domainState(input.overview, ["confirmations"])
+  const legalAcceptance = domainState(input.overview, ["legal-acceptance"])
 
   const hasProfile = Boolean(
     input.company && isRealValue(input.company.companyName) && isRealValue(input.company.companyEmail),
@@ -141,6 +165,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       title: "Business details",
       description: "Your business name, customer contact details, address, and currency.",
       href: "/admin/settings/profile",
+      phase: "business-basics",
       state: hasProfile ? "complete" : "not-started",
       issueCount: 0,
     },
@@ -149,6 +174,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       title: "Rental rules and tax",
       description: "Set the minimum booking length and tax rules used for every car.",
       href: "/admin/bookings/settings/duration",
+      phase: "business-basics",
       state: pricing.state,
       issueCount: pricing.issueCount,
     },
@@ -157,49 +183,79 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       title: "Insurance",
       description: "Decide whether insurance is offered and what customers pay per day.",
       href: "/admin/bookings/settings/insurance",
+      phase: "business-basics",
       state: insurance.state,
       issueCount: insurance.issueCount,
     },
     {
-      id: "booking-experience",
-      title: "Booking experience",
-      description: "Choose the customer steps, driver rules, required information, and documents.",
-      href: "/admin/bookings/settings",
-      state: booking.state,
-      issueCount: booking.issueCount,
-      links: [
-        { label: "Booking steps", href: "/admin/bookings/settings/flow" },
-        { label: "Driver rules", href: "/admin/bookings/driver-rules" },
-        { label: "Customer details", href: "/admin/customers/settings" },
-        { label: "Documents", href: "/admin/documents/settings" },
-      ],
+      id: "booking-flow",
+      title: "Customer booking steps",
+      description: "Choose which steps customers complete during the booking journey.",
+      href: "/admin/bookings/settings/flow",
+      phase: "booking-experience",
+      state: bookingFlow.state,
+      issueCount: bookingFlow.issueCount,
+    },
+    {
+      id: "driver-rules",
+      title: "Driver rules",
+      description: "Set the minimum age and driving-licence requirements.",
+      href: "/admin/bookings/driver-rules",
+      phase: "booking-experience",
+      state: customerDriver.state,
+      issueCount: customerDriver.issueCount,
+    },
+    {
+      id: "customer-information",
+      title: "Customer information",
+      description: "Choose which customer and driver details are required.",
+      href: "/admin/customers/settings",
+      phase: "booking-experience",
+      state: customerDriver.state,
+      issueCount: 0,
+    },
+    {
+      id: "documents",
+      title: "Required documents",
+      description: "Choose which documents customers provide and when they provide them.",
+      href: "/admin/documents/settings",
+      phase: "booking-experience",
+      state: documents.state,
+      issueCount: documents.issueCount,
     },
     {
       id: "payments",
       title: "Payments and deposits",
       description: "Set payment methods, bank details, booking deposits, and customer instructions.",
       href: "/admin/payments",
+      phase: "payments-communication",
       state: combineStates(hasPaymentDetails ? "complete" : "not-started", payments.state),
       issueCount: payments.issueCount,
     },
     {
-      id: "communication-legal",
-      title: "Customer messages and legal",
-      description: "Set confirmation messages and keep your terms and privacy notice ready.",
+      id: "customer-messages",
+      title: "Customer messages",
+      description: "Set notification addresses and the messages customers receive.",
       href: "/admin/settings/notifications",
-      state: combineStates(hasNotificationContacts ? "complete" : "not-started", communication.state, legalState),
-      issueCount:
-        communication.issueCount + input.overview.legalHealth.missingTranslations.length,
-      links: [
-        { label: "Customer messages", href: "/admin/settings/notifications" },
-        { label: "Legal terms", href: "/admin/settings/legal" },
-      ],
+      phase: "payments-communication",
+      state: combineStates(hasNotificationContacts ? "complete" : "not-started", confirmations.state),
+      issueCount: confirmations.issueCount,
+    },
+    {
+      id: "legal",
+      title: "Legal terms and privacy",
+      description: "Publish the terms and privacy notice customers must accept.",
+      href: "/admin/settings/legal",
+      phase: "payments-communication",
+      state: combineStates(legalAcceptance.state, legalState),
+      issueCount: legalAcceptance.issueCount + input.overview.legalHealth.missingTranslations.length,
     },
     {
       id: "fleet",
       title: "Add your cars",
       description: "Add at least one active car so customers have something to book.",
       href: "/admin?section=cars",
+      phase: "fleet",
       state: hasCars ? "complete" : "not-started",
       issueCount: 0,
     },
@@ -208,9 +264,9 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       title: "Car pricing",
       description: "Give every active car a daily price and any longer-rental prices you offer.",
       href: "/admin/cars/pricing",
+      phase: "fleet",
       state: hasCompletePricing ? pricing.state : hasCars ? "attention" : "not-started",
       issueCount:
-        pricing.issueCount +
         input.overview.fleetCoverage.missingDailyRates +
         input.overview.fleetCoverage.missingWeeklyRates +
         input.overview.fleetCoverage.missingMonthlyRates,
@@ -220,6 +276,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       title: "Review and publish",
       description: "See exactly what needs fixing, then make the complete setup live.",
       href: "/admin/advanced/configuration",
+      phase: "launch",
       state:
         input.overview.blockers.length > 0
           ? "attention"
