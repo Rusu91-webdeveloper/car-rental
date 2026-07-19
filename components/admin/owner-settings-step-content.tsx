@@ -143,14 +143,6 @@ export async function OwnerSettingsStepContent({
   }
 
   if (step.id === "documents") {
-    if (!caps.canViewDocuments) {
-      return (
-        <div className="rounded-xl border bg-card p-6">
-          <h2 className="text-lg font-semibold">You do not have access to customer documents</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Ask an owner to grant document access.</p>
-        </div>
-      )
-    }
     if (editing) await ensureOwnerDraftRelease(adminId)
     const environment = readPrivateDocumentEnvironment()
     const data = await new PrismaDocumentConfigurationRepository(prisma).load(

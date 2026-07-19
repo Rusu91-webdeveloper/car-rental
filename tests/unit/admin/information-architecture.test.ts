@@ -82,10 +82,13 @@ describe("owner-facing admin information architecture", () => {
     const layout = source("app/[locale]/admin/layout.tsx")
     const navigation = source("components/admin/admin-navigation.tsx")
     const documentSettings = source("app/[locale]/admin/documents/settings/page.tsx")
+    const ownerStepContent = source("components/admin/owner-settings-step-content.tsx")
     expect(layout).toContain('user!.role !== "ADMIN"')
     expect(navigation).toContain("canViewDocuments")
     expect(documentSettings).toContain("caps.canViewDocuments")
     expect(documentSettings).toContain("Ask an owner to grant document access")
+    expect(ownerStepContent).not.toContain("if (!caps.canViewDocuments)")
+    expect(ownerStepContent).toContain("<DocumentPolicyEditor")
   })
 
   it("gives each owner destination one plain business question", () => {
