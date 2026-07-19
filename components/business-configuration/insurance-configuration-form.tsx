@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { updateInsuranceDraftAction } from "@/app/actions/phase6-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { formatAdminMoneyInput } from "@/lib/pricing-admin/money-input"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
 import { formatCents } from "@/lib/money"
 
-export function InsuranceConfigurationForm({ data, canEdit }: { data: Phase6AdminPageData; canEdit: boolean }) {
+export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftInsurance
   const router = useRouter()
   const [message, setMessage] = useState<string>()
@@ -26,8 +27,13 @@ export function InsuranceConfigurationForm({ data, canEdit }: { data: Phase6Admi
         changeSummary: summary,
         configuration: { ...config, pricePerDay: price },
       })
-      setMessage("error" in result ? result.error : "Insurance changes saved.")
-      if (!("error" in result)) router.refresh()
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      setMessage("Insurance saved.")
+      const navigationError = await completeOwnerSetupStep("insurance", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   const set = <K extends keyof typeof config>(key: K, value: (typeof config)[K]) => setConfig((current) => (current ? { ...current, [key]: value } : current))
   return (
@@ -150,7 +156,7 @@ export function InsuranceConfigurationForm({ data, canEdit }: { data: Phase6Admi
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save changes
+            {ownerSetupSaveLabel(nextHref)}
           </Button>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">View-only access</p>

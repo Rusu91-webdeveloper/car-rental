@@ -236,7 +236,10 @@ export default function AdminDashboard({
     }
   }
 
-  const totalRevenueCents = bookingsState.reduce((sum, booking) => sum + booking.totalPrice, 0)
+  const revenueBookings = bookingsState.filter((booking) =>
+    ["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(booking.status),
+  )
+  const totalRevenueCents = revenueBookings.reduce((sum, booking) => sum + booking.totalPrice, 0)
   const activeBookings = bookingsState.filter((b) => b.status === "CONFIRMED").length
   const pendingBookings = bookingsState.filter((b) => b.status === "PENDING").length
   const completedBookings = bookingsState.filter((b) => b.status === "COMPLETED").length
@@ -251,13 +254,15 @@ export default function AdminDashboard({
         !["CANCELLED", "REJECTED", "COMPLETED"].includes(booking.status),
     )
     .sort((a, b) => new Date(a.pickupDate).getTime() - new Date(b.pickupDate).getTime())
-  const revenueThisMonthCents = bookingsState
+  const now = new Date(generatedAt)
+  const revenueThisMonthCents = revenueBookings
     .filter((b) => {
       const bookingDate = new Date(b.createdAt)
-      const now = new Date()
       return bookingDate.getMonth() === now.getMonth() && bookingDate.getFullYear() === now.getFullYear()
     })
     .reduce((sum, booking) => sum + booking.totalPrice, 0)
+  const customerCount = usersState.filter((user) => user.role === "USER").length
+  const attentionCount = pendingBookings + unavailableCars + (documentReviewCount ?? 0)
 
   const filteredCars = carsState.filter((car) => {
     const matchesSearch =
@@ -736,8 +741,8 @@ export default function AdminDashboard({
           <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-medium text-primary">Today</p>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">What needs your attention today?</h1>
-              <p className="mt-1 text-sm text-muted-foreground">See what needs attention and keep daily work moving.</p>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Your business at a glance</h1>
+              <p className="mt-1 text-sm text-muted-foreground">The numbers and actions that matter today.</p>
             </div>
             <Button asChild>
               <Link href="/admin?section=bookings">
@@ -747,42 +752,26 @@ export default function AdminDashboard({
           </header>
 
           {!setup.readyForBookings ? (
-            <Card className="overflow-hidden border-primary/20">
-              <CardHeader className="bg-primary/[0.04]">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <CardTitle>Finish setting up your business</CardTitle>
-                    <CardDescription className="mt-1">
-                      {setup.completed} of {setup.total} completed · your progress is saved automatically.
-                    </CardDescription>
+            <Card className="overflow-hidden border-primary/20 bg-primary/[0.025]">
+              <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{setup.percent}% complete</Badge>
+                    <span className="text-sm text-muted-foreground">Your progress is saved</span>
                   </div>
-                  <Badge variant="secondary">{setup.percent}% complete</Badge>
+                  <h2 className="mt-3 text-xl font-semibold">Finish setting up your business</h2>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Continue the guided setup. You will only see one clear step at a time.
+                  </p>
+                  <div className="mt-4 h-2 max-w-lg overflow-hidden rounded-full bg-primary/10" aria-label={`${setup.percent}% setup complete`}>
+                    <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
+                  </div>
                 </div>
-                <div
-                  className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
-                  aria-label={`${setup.percent}% setup complete`}
-                >
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${setup.percent}%` }} />
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-2 p-4 sm:grid-cols-2">
-                {setup.steps.map((step) => (
-                  <Link
-                    key={step.id}
-                    href={step.href}
-                    className="flex items-start gap-3 rounded-lg border p-3 transition hover:bg-muted/50"
-                  >
-                    {step.complete ? (
-                      <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-                    ) : (
-                      <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                    )}
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{step.title}</span>
-                      <span className="block text-xs text-muted-foreground">{step.description}</span>
-                    </span>
+                <Button asChild size="lg" className="shrink-0">
+                  <Link href="/admin/settings">
+                    Continue setup <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
-                ))}
+                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -793,89 +782,74 @@ export default function AdminDashboard({
             </Alert>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Upcoming bookings</p>
-                <p className="mt-1 text-2xl font-bold">{upcomingBookings.length}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{pendingBookings} waiting for approval</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Cars currently rented</p>
-                <p className="mt-1 text-2xl font-bold">{rentedCars}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{availableCars} available now</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Cars unavailable</p>
-                <p className="mt-1 text-2xl font-bold">{unavailableCars}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Maintenance or limited stock</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Documents waiting for review</p>
-                <p className="mt-1 text-2xl font-bold">{documentReviewCount ?? "—"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {documentReviewCount == null ? "Restricted to document reviewers" : "Open the review queue"}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <DollarSign className="w-8 h-8 text-green-500" />
-                  <TrendingUp className="w-4 h-4 text-green-500" />
-                </div>
-                <div className="text-2xl font-bold mb-1">{formatCents(totalRevenueCents)}</div>
-                <div className="text-sm text-muted-foreground">Total Revenue</div>
-                <div className="text-xs text-green-600 mt-2">{formatCents(revenueThisMonthCents)} this month</div>
-              </CardContent>
-            </Card>
+          <section aria-labelledby="business-numbers-title">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 id="business-numbers-title" className="text-lg font-semibold">Key numbers</h2>
+              <span className="text-xs text-muted-foreground">Updated now</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Card>
+                <CardContent className="p-5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><DollarSign className="h-5 w-5" /></span>
+                  <p className="mt-4 text-sm text-muted-foreground">Income this month</p>
+                  <p className="mt-1 text-2xl font-bold">{formatCents(revenueThisMonthCents)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatCents(totalRevenueCents)} total confirmed income</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Calendar className="h-5 w-5" /></span>
+                  <p className="mt-4 text-sm text-muted-foreground">Upcoming bookings</p>
+                  <p className="mt-1 text-2xl font-bold">{upcomingBookings.length}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{pendingBookings} waiting for your approval</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700"><CarIcon className="h-5 w-5" /></span>
+                  <p className="mt-4 text-sm text-muted-foreground">Cars</p>
+                  <p className="mt-1 text-2xl font-bold">{carsState.length}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{availableCars} available · {rentedCars} rented</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-700"><Users className="h-5 w-5" /></span>
+                  <p className="mt-4 text-sm text-muted-foreground">Customers</p>
+                  <p className="mt-1 text-2xl font-bold">{customerCount}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Registered customer accounts</p>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
 
-            <Card>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <Calendar className="w-8 h-8 text-blue-500" />
-                  <Badge variant="secondary">{activeBookings}</Badge>
+          <Card className={attentionCount > 0 ? "border-amber-200" : "border-emerald-200"}>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle>{attentionCount > 0 ? "What needs attention" : "Everything is under control"}</CardTitle>
+                  <CardDescription>{attentionCount > 0 ? `${attentionCount} items may need you today.` : "There are no urgent actions right now."}</CardDescription>
                 </div>
-                <div className="text-2xl font-bold mb-1">{bookingsState.length}</div>
-                <div className="text-sm text-muted-foreground">Total Bookings</div>
-                <div className="text-xs text-muted-foreground mt-2">{pendingBookings} pending approval</div>
+                <Badge variant={attentionCount > 0 ? "secondary" : "outline"}>{attentionCount}</Badge>
+              </div>
+            </CardHeader>
+            {attentionCount > 0 ? (
+              <CardContent className="grid gap-3 sm:grid-cols-3">
+                <Link href="/admin?section=bookings" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                  <span><span className="block text-sm font-medium">Bookings to approve</span><span className="text-xs text-muted-foreground">Review customer requests</span></span>
+                  <Badge variant={pendingBookings > 0 ? "destructive" : "secondary"}>{pendingBookings}</Badge>
+                </Link>
+                <Link href="/admin?section=cars" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                  <span><span className="block text-sm font-medium">Unavailable cars</span><span className="text-xs text-muted-foreground">Check status or maintenance</span></span>
+                  <Badge variant={unavailableCars > 0 ? "destructive" : "secondary"}>{unavailableCars}</Badge>
+                </Link>
+                <Link href="/admin/documents" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                  <span><span className="block text-sm font-medium">Documents to review</span><span className="text-xs text-muted-foreground">Check customer uploads</span></span>
+                  <Badge variant={(documentReviewCount ?? 0) > 0 ? "destructive" : "secondary"}>{documentReviewCount ?? "—"}</Badge>
+                </Link>
               </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <CarIcon className="w-8 h-8 text-purple-500" />
-                  <Badge variant="secondary">{availableCars}</Badge>
-                </div>
-                <div className="text-2xl font-bold mb-1">{carsState.length}</div>
-                <div className="text-sm text-muted-foreground">Total Cars</div>
-                <div className="text-xs text-green-600 mt-2">{availableCars} available now</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <Users className="w-8 h-8 text-orange-500" />
-                </div>
-                <div className="text-2xl font-bold mb-1">{usersState.length}</div>
-                <div className="text-sm text-muted-foreground">Total Users</div>
-                <div className="text-xs text-muted-foreground mt-2">
-                  {usersState.filter((u) => u.role === "ADMIN").length} administrators
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            ) : null}
+          </Card>
 
           {/* Quick Actions */}
           <Card>
@@ -884,7 +858,7 @@ export default function AdminDashboard({
               <CardDescription>Go straight to the work you do most often.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="h-auto py-4 flex-col gap-2">
@@ -917,13 +891,6 @@ export default function AdminDashboard({
                       {pendingBookings}
                     </Badge>
                   )}
-                </Button>
-
-                <Button variant="outline" className="h-auto py-4 flex-col gap-2 bg-transparent" asChild>
-                  <Link href="/admin/cars/pricing">
-                    <DollarSign className="w-6 h-6" />
-                    <span>Update pricing</span>
-                  </Link>
                 </Button>
 
                 <Button variant="outline" className="h-auto py-4 flex-col gap-2 bg-transparent" asChild>

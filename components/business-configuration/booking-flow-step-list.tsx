@@ -3,6 +3,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
 import { updateBookingWorkflowDraftAction } from "@/app/actions/phase6-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
@@ -18,7 +19,7 @@ const labels = {
   CONFIRMATION: "Confirmation",
 } as const
 const unavailable = new Set(["DOCUMENTS", "LEGAL_ACCEPTANCE"])
-export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageData; canEdit: boolean }) {
+export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftWorkflow
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
@@ -39,8 +40,13 @@ export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageDa
         configuration: config,
         changeSummary: summary,
       })
-      setMessage("error" in result ? result.error : "Booking flow saved.")
-      if (!("error" in result)) router.refresh()
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      setMessage("Booking steps saved.")
+      const navigationError = await completeOwnerSetupStep("booking-flow", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   return (
     <div className="space-y-5">
@@ -100,7 +106,7 @@ export function BookingFlowStepList({ data, canEdit }: { data: Phase6AdminPageDa
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save changes
+            {ownerSetupSaveLabel(nextHref)}
           </Button>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">View-only access</p>

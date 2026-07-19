@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "@/navigation"
 import { updateBusinessProfile } from "@/app/actions/settings"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,7 +21,8 @@ interface BusinessProfileValue {
   currencySymbol: string
 }
 
-export function BusinessProfileForm({ value }: { value: BusinessProfileValue }) {
+export function BusinessProfileForm({ value, nextHref }: { value: BusinessProfileValue; nextHref?: string }) {
+  const router = useRouter()
   const [form, setForm] = useState({
     companyName: value.companyName,
     companyEmail: value.companyEmail,
@@ -43,7 +46,13 @@ export function BusinessProfileForm({ value }: { value: BusinessProfileValue }) 
         event.preventDefault()
         startTransition(async () => {
           const result = await updateBusinessProfile(form)
-          setMessage("error" in result ? result.error : "Business details saved.")
+          if ("error" in result) {
+            setMessage(result.error)
+            return
+          }
+          setMessage("Business details saved.")
+          const navigationError = await completeOwnerSetupStep("business-profile", nextHref, router)
+          if (navigationError) setMessage(navigationError)
         })
       }}
     >
@@ -70,7 +79,7 @@ export function BusinessProfileForm({ value }: { value: BusinessProfileValue }) 
         </div>
       </details>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save business details"}</Button>
+        <Button type="submit" disabled={pending}>{pending ? "Saving…" : ownerSetupSaveLabel(nextHref)}</Button>
         {message ? <p className="text-sm text-muted-foreground" role="status">{message}</p> : null}
       </div>
     </form>

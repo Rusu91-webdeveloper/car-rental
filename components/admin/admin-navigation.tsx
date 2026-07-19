@@ -6,7 +6,6 @@ import {
   FileCheck2,
   LayoutDashboard,
   Settings2,
-  ShieldCheck,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -18,14 +17,12 @@ interface NavigationItem {
   icon: LucideIcon;
 }
 
-const everydayItems: NavigationItem[] = [
+const ownerItems: NavigationItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Bookings", href: "/admin?section=bookings", icon: CalendarDays },
   { label: "Cars", href: "/admin?section=cars", icon: Car },
   { label: "Customers", href: "/admin?section=users", icon: Users },
-  { label: "Payments", href: "/admin/payments", icon: WalletCards },
   { label: "Settings", href: "/admin/settings", icon: Settings2 },
-  { label: "Team", href: "/admin/team", icon: ShieldCheck },
 ];
 
 const configurationItems: NavigationItem[] = [
@@ -75,20 +72,18 @@ export function AdminNavigation({
   isAdmin: boolean;
   userName: string;
 }) {
-  const baseItems = isAdmin
-    ? everydayItems
+  const roleItems = isAdmin
+    ? ownerItems
     : canViewConfiguration
       ? configurationItems
       : [];
-  const items = canViewDocuments
+  const items = !isAdmin && canViewDocuments
     ? [
-        ...baseItems,
+        ...roleItems,
         { label: "Documents", href: "/admin/documents", icon: FileCheck2 },
       ]
-    : baseItems;
-  const advancedHref = isAdmin
-    ? "/admin/advanced"
-    : "/admin/advanced/configuration";
+    : roleItems;
+  const showAdvancedConfiguration = !isAdmin && canViewConfiguration;
 
   return (
     <>
@@ -113,12 +108,14 @@ export function AdminNavigation({
           <NavigationLinks items={items} />
         </nav>
         <div className="border-t p-3">
-          <Link
-            href={advancedHref}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <CircleGauge className="h-4 w-4" /> More
-          </Link>
+          {showAdvancedConfiguration ? (
+            <Link
+              href="/admin/advanced/configuration"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <CircleGauge className="h-4 w-4" /> More
+            </Link>
+          ) : null}
           <div className="mt-2 px-3 py-2">
             <p className="truncate text-sm font-medium">{userName}</p>
             <Link
@@ -144,12 +141,14 @@ export function AdminNavigation({
           className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]"
         >
           <NavigationLinks items={items} />
-          <Link
-            href={advancedHref}
-            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground"
-          >
-            <CircleGauge className="h-4 w-4" /> More
-          </Link>
+          {showAdvancedConfiguration ? (
+            <Link
+              href="/admin/advanced/configuration"
+              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground"
+            >
+              <CircleGauge className="h-4 w-4" /> More
+            </Link>
+          ) : null}
         </nav>
       </header>
     </>

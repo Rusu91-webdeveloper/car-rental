@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { attachLegalDraftToReleaseAction, createLegalAcceptanceDraftAction, updateLegalAcceptanceDraftAction, validateLegalAcceptanceDraftAction } from "@/app/actions/legal-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import type { LegalAdministrationPageData } from "@/lib/legal/admin-types"
 
-export function LegalAcceptanceConfigurationForm({ data, canEdit, canValidate, canAttach }: { data: LegalAdministrationPageData; canEdit: boolean; canValidate: boolean; canAttach: boolean }) {
+export function LegalAcceptanceConfigurationForm({ data, canEdit, canValidate, canAttach, nextHref, editing = false }: { data: LegalAdministrationPageData; canEdit: boolean; canValidate: boolean; canAttach: boolean; nextHref?: string; editing?: boolean }) {
   const router = useRouter()
   const draft = data.draftAcceptance
   const [config, setConfig] = useState(draft?.configuration)
@@ -21,6 +22,22 @@ export function LegalAcceptanceConfigurationForm({ data, canEdit, canValidate, c
       const error = "error" in result ? result.error : undefined
       setMessage(error ?? success)
       if (!error) router.refresh()
+    })
+  const saveAndContinue = () =>
+    startTransition(async () => {
+      const result = await updateLegalAcceptanceDraftAction({
+        versionId: draft!.id,
+        expectedRevision: draft!.revision,
+        changeSummary: summary,
+        configuration: config!,
+      })
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      setMessage("Legal settings saved.")
+      const navigationError = await completeOwnerSetupStep("legal", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   if (!draft || !config)
     return (
@@ -171,30 +188,24 @@ export function LegalAcceptanceConfigurationForm({ data, canEdit, canValidate, c
       </label>
       <div className="flex flex-wrap gap-2">
         {canEdit ? (
-          <Button
-            onClick={() =>
-              run(
-                () =>
-                  updateLegalAcceptanceDraftAction({
-                    versionId: draft.id,
-                    expectedRevision: draft.revision,
-                    changeSummary: summary,
-                    configuration: config,
-                  }),
-                "Booking agreement saved.",
-              )
-            }
-            disabled={pending}
-          >
-            Save changes
+          <Button onClick={nextHref ? saveAndContinue : () => run(
+            () => updateLegalAcceptanceDraftAction({
+              versionId: draft.id,
+              expectedRevision: draft.revision,
+              changeSummary: summary,
+              configuration: config,
+            }),
+            "Booking agreement saved.",
+          )} disabled={pending}>
+            {editing ? ownerSetupSaveLabel(nextHref) : nextHref ? "Save and finish" : "Save changes"}
           </Button>
         ) : null}
-        {canValidate ? (
+        {canValidate && !nextHref ? (
           <Button variant="outline" onClick={() => run(() => validateLegalAcceptanceDraftAction(), "The booking agreement looks ready.")} disabled={pending}>
             Check for problems
           </Button>
         ) : null}
-        {canAttach ? (
+        {canAttach && !nextHref ? (
           <Button variant="outline" onClick={() => run(() => attachLegalDraftToReleaseAction({ versionId: draft.id }), "Booking agreement added to the next update.")} disabled={pending}>
             Add to next update
           </Button>

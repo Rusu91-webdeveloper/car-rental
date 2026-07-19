@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { updatePaymentInstructionDraftAction } from "@/app/actions/notification-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import type { loadNotificationConfigurationPage, ManualPaymentMethod } from "@/lib/notification-configuration/service"
 
 type PageData = Awaited<ReturnType<typeof loadNotificationConfigurationPage>>
@@ -31,7 +32,7 @@ const methods: Array<{
   },
 ]
 
-export function PaymentInstructionForm({ data, canEdit }: { data: PageData; canEdit: boolean }) {
+export function PaymentInstructionForm({ data, canEdit, nextHref }: { data: PageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftPayment
   const source = draft?.configuration ?? data.activePayment?.configuration
   const router = useRouter()
@@ -124,12 +125,17 @@ export function PaymentInstructionForm({ data, canEdit }: { data: PageData; canE
               enabledMethods: enabled,
               instructions: values,
             })
-            setMessage("error" in result ? result.error : "Payment instructions saved.")
-            if (!("error" in result)) router.refresh()
+            if ("error" in result) {
+              setMessage(result.error)
+              return
+            }
+            setMessage("Payment settings saved.")
+            const navigationError = await completeOwnerSetupStep("payments", nextHref, router)
+            if (navigationError) setMessage(navigationError)
           })
         }
       >
-        Save changes
+        {ownerSetupSaveLabel(nextHref)}
       </Button>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
     </section>

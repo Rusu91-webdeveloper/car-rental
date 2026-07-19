@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { updateDriverRequirementsDraftAction } from "@/app/actions/phase6-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-eligibility"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
-export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPageData; canEdit: boolean }) {
+export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftCustomerDriver
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
@@ -40,8 +41,13 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
         configuration: config,
         changeSummary: summary,
       })
-      setMessage("error" in result ? result.error : "Driver requirements saved.")
-      if (!("error" in result)) router.refresh()
+      if ("error" in result) {
+        setMessage(result.error)
+        return
+      }
+      setMessage("Driver rules saved.")
+      const navigationError = await completeOwnerSetupStep("driver-rules", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   return (
     <div className="space-y-5">
@@ -136,7 +142,7 @@ export function DriverRequirementsForm({ data, canEdit }: { data: Phase6AdminPag
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            Save changes
+            {ownerSetupSaveLabel(nextHref)}
           </Button>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">View-only access</p>

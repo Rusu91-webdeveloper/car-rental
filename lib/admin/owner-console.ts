@@ -97,10 +97,10 @@ export function buildOwnerSetupProgress(input: OwnerSetupInput): OwnerSetupProgr
       complete: hasCompletePricing,
     },
     {
-      id: "publish",
-      title: "Review and publish",
-      description: "Resolve required items, then make the settings live.",
-      href: "/admin/advanced/configuration",
+      id: "settings",
+      title: "Finish business settings",
+      description: "Complete the guided setup so the business is ready for bookings.",
+      href: "/admin/settings",
       complete: Boolean(input.overview.activeRelease) && input.overview.blockers.length === 0,
     },
   ]

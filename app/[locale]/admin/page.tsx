@@ -5,7 +5,7 @@ import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service"
-import { buildOwnerSetupProgress } from "@/lib/admin/owner-console"
+import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide"
 import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
@@ -72,7 +72,7 @@ export default async function AdminPage({
   const capabilities = await getBusinessConfigurationCapabilities()
 
   await runBookingLifecycleMaintenance()
-  const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount] =
+  const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
     await Promise.all([
       prisma.car.findMany({
         where: { isDeleted: false },
@@ -130,6 +130,15 @@ export default async function AdminPage({
             where: { status: "AWAITING_DOCUMENT_REVIEW" },
           })
         : Promise.resolve(null),
+      prisma.auditEvent.findMany({
+        where: {
+          category: "CONFIGURATION",
+          action: "owner_setup.step_completed",
+          targetType: "OwnerSetupStep",
+        },
+        distinct: ["targetId"],
+        select: { targetId: true },
+      }),
     ])
 
   const manualReservations = blockedDates
@@ -154,11 +163,24 @@ export default async function AdminPage({
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
   const allowedSections = new Set(["overview", "cars", "bookings", "users", "reviews", "analytics"])
   const initialSection = requestedSection && allowedSections.has(requestedSection) ? requestedSection : "overview"
-  const setup = buildOwnerSetupProgress({
+  const settingsGuide = buildOwnerSettingsGuide({
     company: companySettings,
-    activeCarCount: cars.length,
     overview: configurationOverview,
+    completedStepIds: completedSetupSteps.map(({ targetId }) => targetId),
   })
+  const setup = {
+    completed: settingsGuide.completed,
+    total: settingsGuide.total,
+    percent: settingsGuide.percent,
+    readyForBookings: settingsGuide.nextStep === null,
+    steps: settingsGuide.steps.map((step) => ({
+      id: step.id,
+      title: step.title,
+      description: step.description,
+      href: step.href,
+      complete: step.state === "complete",
+    })),
+  }
 
   return (
     <AdminDashboard

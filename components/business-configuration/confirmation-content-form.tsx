@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { updateConfirmationContentDraftAction } from "@/app/actions/notification-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -11,7 +12,7 @@ import type { loadNotificationConfigurationPage } from "@/lib/notification-confi
 
 type PageData = Awaited<ReturnType<typeof loadNotificationConfigurationPage>>
 
-export function ConfirmationContentForm({ data, canEdit }: { data: PageData; canEdit: boolean }) {
+export function ConfirmationContentForm({ data, canEdit, nextHref }: { data: PageData; canEdit: boolean; nextHref?: string }) {
   const draft = data.draftConfirmation
   const source = draft?.configuration ?? data.activeConfirmation?.configuration
   const router = useRouter()
@@ -73,12 +74,17 @@ export function ConfirmationContentForm({ data, canEdit }: { data: PageData; can
                 })),
               },
             })
-            setMessage("error" in result ? result.error : "Booking confirmation saved.")
-            if (!("error" in result)) router.refresh()
+            if ("error" in result) {
+              setMessage(result.error)
+              return
+            }
+            setMessage("Customer messages saved.")
+            const navigationError = await completeOwnerSetupStep("customer-messages", nextHref, router)
+            if (navigationError) setMessage(navigationError)
           })
         }
       >
-        Save changes
+        {ownerSetupSaveLabel(nextHref)}
       </Button>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
     </section>

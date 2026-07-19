@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { updatePricingRulesAction } from "@/app/actions/pricing-configuration"
+import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import type { PricingBillingConfiguration } from "@/lib/business-configuration/domains"
 import type { PricingAdminPageData } from "@/lib/pricing-admin/types"
 import { PricingStrategySelector } from "./pricing-strategy-selector"
 import { UnsavedChangesWarning } from "./unsaved-changes-warning"
 
-export function BillingRuleForm({ data, canManage }: { data: PricingAdminPageData; canManage: boolean }) {
+export function BillingRuleForm({ data, canManage, nextHref }: { data: PricingAdminPageData; canManage: boolean; nextHref?: string }) {
   const router = useRouter()
   const draft = data.draftPricing
   const [configuration, setConfiguration] = useState<PricingBillingConfiguration | undefined>(draft?.configuration)
@@ -39,15 +40,22 @@ export function BillingRuleForm({ data, canManage }: { data: PricingAdminPageDat
   const dirty = JSON.stringify(configuration) !== JSON.stringify(draft.configuration) || timeZone !== data.businessTimeZone
   const save = () =>
     startTransition(async () => {
-      const result = await updatePricingRulesAction({
-        pricingVersionId: draft.id,
-        expectedRevision: draft.revision,
-        configuration,
-        changeSummary,
-        businessTimeZone: timeZone,
-      })
-      setMessage("error" in result ? result.error : "Rental duration changes saved.")
-      if (!("error" in result)) router.refresh()
+      if (dirty) {
+        const result = await updatePricingRulesAction({
+          pricingVersionId: draft.id,
+          expectedRevision: draft.revision,
+          configuration,
+          changeSummary,
+          businessTimeZone: timeZone,
+        })
+        if ("error" in result) {
+          setMessage(result.error)
+          return
+        }
+      }
+      setMessage("Rental rules saved.")
+      const navigationError = await completeOwnerSetupStep("rental-rules", nextHref, router)
+      if (navigationError) setMessage(navigationError)
     })
   return (
     <div className="space-y-5">
@@ -105,8 +113,8 @@ export function BillingRuleForm({ data, canManage }: { data: PricingAdminPageDat
       <section className="rounded-xl border bg-background p-5">
         <div className="flex items-center gap-3">
           {canManage ? (
-            <Button onClick={save} disabled={!dirty || pending}>
-              Save changes
+            <Button onClick={save} disabled={pending || (!dirty && !nextHref)}>
+              {ownerSetupSaveLabel(nextHref)}
             </Button>
           ) : (
             <span className="text-sm text-muted-foreground">View-only access</span>
