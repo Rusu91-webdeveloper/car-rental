@@ -32,15 +32,29 @@ describe("owner-facing admin information architecture", () => {
   })
 
   it("presents settings as one checkout-style step instead of a card dashboard", () => {
-    const guide = source("components/admin/business-setup-guide.tsx")
-    expect(guide).toContain("Step {currentIndex + 1} of {guide.total}")
-    expect(guide).toContain("Complete each part in order.")
-    expect(guide).toContain("Completed settings")
-    expect(guide).toContain("Fix and continue")
-    expect(guide).toContain("<ArrowLeft")
-    expect(guide).not.toContain("Draft saved")
-    expect(guide).not.toContain("Before you publish")
-    expect(guide).not.toContain("ConfigurationHealthFinding")
+    const settingsPage = source("app/[locale]/admin/settings/page.tsx")
+    const wizard = source("components/admin/owner-settings-wizard.tsx")
+    const stepContent = source("components/admin/owner-settings-step-content.tsx")
+    expect(settingsPage).toContain("<OwnerSettingsWizard")
+    expect(settingsPage).toContain("<OwnerSettingsStepContent")
+    expect(settingsPage).toContain("requestedStep ?? guide.nextStep")
+    expect(wizard).toContain("Step {currentIndex + 1} of {guide.total}")
+    expect(wizard).toContain("Select any step to review or change it.")
+    expect(wizard).toContain("<ArrowLeft")
+    expect(stepContent).toContain("nextHref={nextHref}")
+    expect(wizard).not.toContain("Draft saved")
+    expect(wizard).not.toContain("Before you publish")
+    expect(wizard).not.toContain("ConfigurationHealthFinding")
+  })
+
+  it("keeps every owner setup step inside the settings URL", () => {
+    const guide = source("lib/admin/owner-settings-guide.ts")
+    const wizard = source("components/admin/owner-settings-wizard.tsx")
+    expect(guide).toContain("`/admin/settings?step=${stepId}`")
+    expect(wizard).toContain("href={step.href}")
+    expect(wizard).not.toContain("/admin/bookings/settings/")
+    expect(wizard).not.toContain("/admin/documents/settings")
+    expect(wizard).not.toContain("/admin/payments")
   })
 
   it("saves setup progress and advances after successful form submissions", () => {

@@ -47,6 +47,10 @@ export interface OwnerSettingsGuide {
   attentionCount: number
 }
 
+export function ownerSettingsStepHref(stepId: string) {
+  return `/admin/settings?step=${stepId}`
+}
+
 interface CompanySetupDetails {
   companyName: string
   companyEmail: string
@@ -150,7 +154,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "business-profile",
       title: "Business details",
       description: "Your business name, customer contact details, address, and currency.",
-      href: "/admin/settings/profile",
+      href: ownerSettingsStepHref("business-profile"),
       phase: "business-basics",
       state: hasProfile ? "complete" : "not-started",
       issueCount: 0,
@@ -159,7 +163,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "rental-rules",
       title: "Rental rules and tax",
       description: "Set the minimum booking length and tax rules used for every car.",
-      href: "/admin/bookings/settings/duration",
+      href: ownerSettingsStepHref("rental-rules"),
       phase: "business-basics",
       state: savedState("rental-rules", pricing.state),
       issueCount: pricing.issueCount,
@@ -168,7 +172,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "insurance",
       title: "Insurance",
       description: "Decide whether insurance is offered and what customers pay per day.",
-      href: "/admin/bookings/settings/insurance",
+      href: ownerSettingsStepHref("insurance"),
       phase: "business-basics",
       state: savedState("insurance", insurance.state),
       issueCount: insurance.issueCount,
@@ -177,7 +181,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "booking-flow",
       title: "Customer booking steps",
       description: "Choose which steps customers complete during the booking journey.",
-      href: "/admin/bookings/settings/flow",
+      href: ownerSettingsStepHref("booking-flow"),
       phase: "booking-experience",
       state: savedState("booking-flow", bookingFlow.state),
       issueCount: bookingFlow.issueCount,
@@ -186,7 +190,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "driver-rules",
       title: "Driver rules",
       description: "Set the minimum age and driving-licence requirements.",
-      href: "/admin/bookings/driver-rules",
+      href: ownerSettingsStepHref("driver-rules"),
       phase: "booking-experience",
       state: savedState("driver-rules", customerDriver.state),
       issueCount: customerDriver.issueCount,
@@ -195,7 +199,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "customer-information",
       title: "Customer information",
       description: "Choose which customer and driver details are required.",
-      href: "/admin/customers/settings",
+      href: ownerSettingsStepHref("customer-information"),
       phase: "booking-experience",
       state: savedState("customer-information", customerDriver.state),
       issueCount: 0,
@@ -204,7 +208,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "documents",
       title: "Required documents",
       description: "Choose which documents customers provide and when they provide them.",
-      href: "/admin/documents/settings",
+      href: ownerSettingsStepHref("documents"),
       phase: "booking-experience",
       state: savedState("documents", documents.state),
       issueCount: documents.issueCount,
@@ -213,7 +217,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "payments",
       title: "Payments and deposits",
       description: "Set payment methods, bank details, booking deposits, and customer instructions.",
-      href: "/admin/payments",
+      href: ownerSettingsStepHref("payments"),
       phase: "payments-communication",
       state: savedState("payments", combineStates(hasPaymentDetails ? "complete" : "not-started", payments.state)),
       issueCount: payments.issueCount,
@@ -222,7 +226,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "customer-messages",
       title: "Customer messages",
       description: "Set notification addresses and the messages customers receive.",
-      href: "/admin/settings/notifications",
+      href: ownerSettingsStepHref("customer-messages"),
       phase: "payments-communication",
       state: savedState("customer-messages", combineStates(hasNotificationContacts ? "complete" : "not-started", confirmations.state)),
       issueCount: confirmations.issueCount,
@@ -231,7 +235,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       id: "legal",
       title: "Legal terms and privacy",
       description: "Publish the terms and privacy notice customers must accept.",
-      href: "/admin/settings/legal",
+      href: ownerSettingsStepHref("legal"),
       phase: "payments-communication",
       state: savedState("legal", combineStates(legalAcceptance.state, legalState)),
       issueCount: legalAcceptance.issueCount + input.overview.legalHealth.missingTranslations.length,

@@ -96,19 +96,20 @@ describe("owner settings guide", () => {
     const hrefs = guide.steps.map((step) => step.href)
 
     expect(hrefs).toEqual([
-      "/admin/settings/profile",
-      "/admin/bookings/settings/duration",
-      "/admin/bookings/settings/insurance",
-      "/admin/bookings/settings/flow",
-      "/admin/bookings/driver-rules",
-      "/admin/customers/settings",
-      "/admin/documents/settings",
-      "/admin/payments",
-      "/admin/settings/notifications",
-      "/admin/settings/legal",
+      "/admin/settings?step=business-profile",
+      "/admin/settings?step=rental-rules",
+      "/admin/settings?step=insurance",
+      "/admin/settings?step=booking-flow",
+      "/admin/settings?step=driver-rules",
+      "/admin/settings?step=customer-information",
+      "/admin/settings?step=documents",
+      "/admin/settings?step=payments",
+      "/admin/settings?step=customer-messages",
+      "/admin/settings?step=legal",
     ])
     expect(new Set(hrefs).size).toBe(hrefs.length)
     expect(hrefs).not.toContain("/admin/bookings/settings")
+    expect(hrefs.every((href) => href.startsWith("/admin/settings?step="))).toBe(true)
   })
 
   it("selects the first unfinished step while keeping completed steps editable", () => {

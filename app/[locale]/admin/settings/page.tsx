@@ -2,14 +2,26 @@ import { CheckCircle2, CircleAlert } from "lucide-react";
 import { getCompanySettings } from "@/app/actions/settings";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { BusinessSetupGuide } from "@/components/admin/business-setup-guide";
+import { OwnerSettingsStepContent } from "@/components/admin/owner-settings-step-content";
+import { OwnerSettingsWizard } from "@/components/admin/owner-settings-wizard";
 import { StartBusinessSetup } from "@/components/admin/start-business-setup";
 import { requireAdmin } from "@/lib/auth";
 import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide";
 import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service";
 import { prisma } from "@/lib/db";
 
-export default async function BusinessSettingsPage() {
-  await requireAdmin();
+interface BusinessSettingsSearchParams {
+  step?: string;
+  edit?: string;
+}
+
+export default async function BusinessSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<BusinessSettingsSearchParams>;
+}) {
+  const admin = await requireAdmin();
+  const requested = await searchParams;
   const [overview, settingsResult, completedSteps] = await Promise.all([
     loadConfigurationOverview(),
     getCompanySettings(),
@@ -30,6 +42,15 @@ export default async function BusinessSettingsPage() {
     completedStepIds: completedSteps.map(({ targetId }) => targetId),
   });
   const hasSetup = Boolean(overview.activeRelease || overview.draftRelease);
+  const requestedStep = guide.steps.find((step) => step.id === requested.step);
+  const currentStep = requestedStep ?? guide.nextStep;
+  const currentIndex = currentStep
+    ? guide.steps.findIndex((step) => step.id === currentStep.id)
+    : -1;
+  const nextStep = currentIndex >= 0 ? guide.steps[currentIndex + 1] : null;
+  const nextHref = nextStep?.href ?? "/admin/settings";
+  const editing = requested.edit === "1" || currentStep?.state === "complete";
+
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="rounded-2xl border bg-card p-5 shadow-sm sm:p-7">
@@ -53,7 +74,20 @@ export default async function BusinessSettingsPage() {
           ) : null}
         </div>
       </div>
-      {hasSetup ? <BusinessSetupGuide guide={guide} /> : <StartBusinessSetup />}
+      {!hasSetup ? (
+        <StartBusinessSetup />
+      ) : currentStep ? (
+        <OwnerSettingsWizard guide={guide} currentStepId={currentStep.id}>
+          <OwnerSettingsStepContent
+            step={currentStep}
+            adminId={admin.id}
+            nextHref={nextHref}
+            editing={editing}
+          />
+        </OwnerSettingsWizard>
+      ) : (
+        <BusinessSetupGuide guide={guide} />
+      )}
     </main>
   );
 }
