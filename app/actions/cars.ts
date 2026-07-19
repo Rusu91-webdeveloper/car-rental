@@ -7,6 +7,7 @@ import { createCarSchema, updateCarSchema } from "@/lib/validations"
 import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 
 export async function createCar(data: unknown) {
   try {
@@ -21,43 +22,81 @@ export async function createCar(data: unknown) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "")
 
-    const car = await prisma.car.create({
-      data: {
-        slug,
-        name: validated.name,
-        nameDe: validated.nameDe,
-        subtitle: validated.subtitle,
-        subtitleDe: validated.subtitleDe,
-        description: validated.description,
-        descriptionDe: validated.descriptionDe,
-        category: validated.category,
-        price: validated.price,
-        image: validated.image,
-        images: validated.images || [],
-        status: validated.status,
-        gearbox: validated.gearbox,
-        seats: validated.seats,
-        fuelType: validated.fuelType,
-        acceleration: validated.acceleration,
-        year: validated.year,
-      },
-    })
+    const { car, inheritedSetup } = await prisma.$transaction(async (tx) => {
+      const car = await tx.car.create({
+        data: {
+          slug,
+          name: validated.name,
+          nameDe: validated.nameDe,
+          subtitle: validated.subtitle,
+          subtitleDe: validated.subtitleDe,
+          description: validated.description,
+          descriptionDe: validated.descriptionDe,
+          category: validated.category,
+          price: validated.price,
+          image: validated.image,
+          images: validated.images || [],
+          status: validated.status,
+          gearbox: validated.gearbox,
+          seats: validated.seats,
+          fuelType: validated.fuelType,
+          acceleration: validated.acceleration,
+          year: validated.year,
+        },
+      })
 
-    // Create audit log
-    await prisma.adminAuditLog.create({
-      data: {
-        adminId: admin.id,
-        action: "CAR_CREATED",
-        targetType: "car",
-        targetId: car.id,
-        newValue: validated,
-      },
+      const fleetDraft = await tx.fleetRateSet.findFirst({
+        where: { status: { in: ["DRAFT", "VALIDATED"] } },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (fleetDraft) {
+        await tx.vehicleRentalRate.upsert({
+          where: { fleetRateSetId_carId: { fleetRateSetId: fleetDraft.id, carId: car.id } },
+          create: { fleetRateSetId: fleetDraft.id, carId: car.id, dailyRate: car.price },
+          update: { dailyRate: car.price },
+        })
+        await tx.fleetRateSet.update({
+          where: { id: fleetDraft.id },
+          data: {
+            revision: { increment: 1 },
+            status: "DRAFT",
+            validationStatus: "NOT_VALIDATED",
+            validationSnapshot: Prisma.JsonNull,
+            updatedById: admin.id,
+          },
+        })
+      }
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "CAR_CREATED",
+          targetType: "car",
+          targetId: car.id,
+          newValue: validated,
+        },
+      })
+      if (fleetDraft) {
+        await tx.auditEvent.create({
+          data: {
+            actorUserId: admin.id,
+            category: "PRICING",
+            action: "pricing.new_car_inherited_business_rules",
+            targetType: "VehicleRentalRate",
+            targetId: car.id,
+            afterSummary: { fleetRateSetId: fleetDraft.id, dailyRate: car.price },
+          },
+        })
+      }
+      return { car, inheritedSetup: Boolean(fleetDraft) }
     })
 
     revalidatePath("/")
     revalidatePath("/admin")
+    revalidatePath("/admin/cars/pricing")
+    revalidatePath("/admin/advanced/configuration")
 
-    return { success: true, car }
+    return { success: true, car, inheritedSetup }
   } catch (error) {
     console.error("[CREATE_CAR_ERROR]", error)
 
@@ -170,6 +209,32 @@ export async function updateCar(carId: string, data: unknown) {
       data: validated,
     })
 
+    if (validated.price !== undefined) {
+      const fleetDraft = await prisma.fleetRateSet.findFirst({
+        where: { status: { in: ["DRAFT", "VALIDATED"] } },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (fleetDraft) {
+        await prisma.$transaction([
+          prisma.vehicleRentalRate.upsert({
+            where: { fleetRateSetId_carId: { fleetRateSetId: fleetDraft.id, carId } },
+            create: { fleetRateSetId: fleetDraft.id, carId, dailyRate: validated.price },
+            update: { dailyRate: validated.price },
+          }),
+          prisma.fleetRateSet.update({
+            where: { id: fleetDraft.id },
+            data: {
+              revision: { increment: 1 },
+              status: "DRAFT",
+              validationStatus: "NOT_VALIDATED",
+              validationSnapshot: Prisma.JsonNull,
+              updatedById: admin.id,
+            },
+          }),
+        ])
+      }
+    }
+
     // Create audit log
     await prisma.adminAuditLog.create({
       data: {
@@ -185,6 +250,8 @@ export async function updateCar(carId: string, data: unknown) {
     revalidatePath("/")
     revalidatePath("/admin")
     revalidatePath(`/cars/${carId}`)
+    revalidatePath("/admin/cars/pricing")
+    revalidatePath("/admin/advanced/configuration")
 
     return { success: true, car }
   } catch (error) {

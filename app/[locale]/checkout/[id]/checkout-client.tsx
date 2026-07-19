@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from "@/navigation"
 import { useState, useTransition, useEffect, useMemo } from "react"
+import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { getBookingQuote } from "@/app/actions/bookings"
 import { beginBookingApplication } from "@/app/actions/booking-applications"
@@ -542,6 +543,7 @@ export function CheckoutClient({
   const depositCents = quote?.depositAmount ?? 0
   const guaranteeCents = quote?.guaranteeAmount ?? 0
   const quoteCurrency = quote?.currency ?? "EUR"
+  const bookingSetupUnavailable = bookingConfiguration.mode !== "ACTIVE_RELEASE"
 
   const handleConfirmBooking = () => {
     setError(null)
@@ -636,7 +638,13 @@ export function CheckoutClient({
           {/* Car Summary */}
           <div className="bg-background rounded-xl p-4 border border-border">
             <div className="flex gap-4">
-              <img src={car.image || "/placeholder.svg"} alt={car.name} className="w-24 h-24 rounded-lg object-cover" />
+              <Image
+                src={car.image || "/placeholder.svg"}
+                alt={car.name}
+                width={96}
+                height={96}
+                className="h-24 w-24 rounded-lg object-cover"
+              />
               <div className="flex-1">
                 <h3 className="font-bold text-lg mb-1">{car.name}</h3>
                 <p className="text-sm text-muted-foreground mb-2">{car.subtitle}</p>
@@ -1019,13 +1027,19 @@ export function CheckoutClient({
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
           )}
+          {bookingSetupUnavailable ? (
+            <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p className="font-medium">Online booking is not available yet.</p>
+              <p className="mt-1">The rental company is still completing its booking settings. Please contact support for help.</p>
+            </div>
+          ) : null}
         </div>
 
         {/* Bottom Bar */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
           <Button
             onClick={handleConfirmBooking}
-            disabled={isPending || isQuoteLoading || !quote}
+            disabled={isPending || isQuoteLoading || !quote || bookingSetupUnavailable}
             className="w-full h-12 text-base font-semibold"
           >
             {isPending ? "Saving application..." : "Continue to document upload"}

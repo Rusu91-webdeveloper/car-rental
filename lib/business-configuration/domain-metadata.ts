@@ -7,47 +7,47 @@ export const CONFIGURATION_DOMAIN_METADATA: Record<
   "general-rental": {
     label: "General rental",
     description: "Timezone, currency, and supported customer languages.",
-    route: "/admin/business-configuration/advanced",
+    route: "/admin/advanced/configuration",
   },
   "pricing-billing": {
     label: "Pricing and billing",
     description: "Rental duration, rate selection, tax, and billing rules.",
-    route: "/admin/business-configuration/pricing",
+    route: "/admin/cars/pricing",
   },
   insurance: {
     label: "Insurance",
     description: "Customer-facing insurance availability and pricing.",
-    route: "/admin/business-configuration/insurance",
+    route: "/admin/bookings/settings/insurance",
   },
   "customer-driver-requirements": {
     label: "Driver and customer information",
     description: "Eligibility rules and required booking information.",
-    route: "/admin/business-configuration/driver-requirements",
+    route: "/admin/bookings/driver-rules",
   },
   "booking-workflow": {
     label: "Booking flow",
     description: "The supported steps customers complete while booking.",
-    route: "/admin/business-configuration/booking-flow",
+    route: "/admin/bookings/settings/flow",
   },
   "document-policy": {
     label: "Documents",
     description: "Document requirements, access, and retention preferences.",
-    route: "/admin/business-configuration/documents",
+    route: "/admin/documents/settings",
   },
   payments: {
     label: "Payments",
     description: "Supported payment methods and deposit rules.",
-    route: "/admin/business-configuration/payments",
+    route: "/admin/payments",
   },
   confirmations: {
     label: "Confirmations",
     description: "Safe content included in customer confirmations.",
-    route: "/admin/business-configuration/confirmations",
+    route: "/admin/settings/notifications",
   },
   "legal-acceptance": {
     label: "Legal",
     description: "Published terms, privacy notice, and acknowledgement rules.",
-    route: "/admin/business-configuration/legal",
+    route: "/admin/settings/legal",
   },
 }
 

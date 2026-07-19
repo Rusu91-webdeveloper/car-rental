@@ -24,6 +24,9 @@ const base = z.object({
 
 function refresh() {
   revalidatePath("/admin/business-configuration")
+  revalidatePath("/admin/payments")
+  revalidatePath("/admin/settings/notifications")
+  revalidatePath("/admin/advanced/configuration")
 }
 
 function failure(error: unknown) {

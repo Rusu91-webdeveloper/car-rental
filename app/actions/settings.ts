@@ -6,45 +6,153 @@ import { requireAdmin } from "@/lib/auth"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
 
-const companySettingsSchema = z.object({
-  // Company Information
-  companyName: z.string().min(1, "Company name is required"),
-  companyEmail: z.string().email("Invalid email address"),
-  companyPhone: z.string().optional(),
-  companyAddress: z.string().optional(),
-  companyCity: z.string().optional(),
-  companyState: z.string().optional(),
-  companyZipCode: z.string().optional(),
-  companyCountry: z.string().optional(),
-  
-  // Legal Information (for Impressum/Imprint)
-  managingDirector: z.string().optional(),
-  commercialRegister: z.string().optional(),
-  registerCourt: z.string().optional(),
-  vatId: z.string().optional(),
-  responsiblePerson: z.string().optional(),
-  
-  // Bank/Payment Details
-  bankName: z.string().min(1, "Bank name is required"),
-  accountName: z.string().min(1, "Account name is required"),
-  accountNumber: z.string().min(1, "Account number is required"),
-  swiftCode: z.string().min(1, "SWIFT code is required"),
-  iban: z.string().optional(),
-  
-  // Tax Configuration
-  taxRate: z.number().min(0).max(1, "Tax rate must be between 0 and 1"),
-  taxIncluded: z.boolean(),
-  depositPercentage: z.number().min(0).max(1, "Deposit percentage must be between 0 and 1"),
-  guaranteePercentage: z.number().min(0).max(1, "Guarantee percentage must be between 0 and 1"),
-  
-  // Email Configuration
-  supportEmail: z.string().email("Invalid support email"),
-  adminEmail: z.string().email("Invalid admin email"),
-  
-  // Additional Settings
-  currency: z.string().min(1, "Currency is required"),
-  currencySymbol: z.string().min(1, "Currency symbol is required"),
+const businessProfileSchema = z.object({
+  companyName: z.string().trim().min(1, "Business name is required").max(160),
+  companyEmail: z.string().trim().email("Enter a valid business email"),
+  companyPhone: z.string().trim().max(40).optional(),
+  companyAddress: z.string().trim().max(200).optional(),
+  companyCity: z.string().trim().max(120).optional(),
+  companyState: z.string().trim().max(120).optional(),
+  companyZipCode: z.string().trim().max(30).optional(),
+  companyCountry: z.string().trim().max(120).optional(),
+  currency: z.string().trim().length(3, "Use a three-letter currency code").transform((value) => value.toUpperCase()),
+  currencySymbol: z.string().trim().min(1).max(5),
 })
+
+const paymentDetailsSchema = z.object({
+  bankName: z.string().trim().min(1, "Bank name is required").max(160),
+  accountName: z.string().trim().min(1, "Account holder is required").max(160),
+  accountNumber: z.string().trim().min(1, "Account number is required").max(80),
+  swiftCode: z.string().trim().min(1, "SWIFT/BIC is required").max(30),
+  iban: z.string().trim().max(50).optional(),
+  depositPercentage: z.number().min(0).max(1),
+  guaranteePercentage: z.number().min(0).max(1),
+})
+
+const notificationContactsSchema = z.object({
+  supportEmail: z.string().trim().email("Enter a valid customer support email"),
+  adminEmail: z.string().trim().email("Enter a valid owner notification email"),
+})
+
+async function recordSettingsAudit(
+  adminId: string,
+  existingSettings: unknown,
+  newValue: unknown,
+  reason: string,
+) {
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      action: "SETTINGS_UPDATED",
+      targetType: "settings",
+      targetId: "company-settings",
+      oldValue: existingSettings ? (existingSettings as Prisma.InputJsonValue) : Prisma.JsonNull,
+      newValue: newValue as Prisma.InputJsonValue,
+      reason,
+    },
+  })
+}
+
+function revalidateOwnerSettings() {
+  revalidatePath("/admin")
+  revalidatePath("/admin/settings")
+  revalidatePath("/admin/payments")
+  revalidatePath("/")
+  revalidatePath("/impressum")
+  revalidatePath("/datenschutz")
+  revalidatePath("/agb")
+  revalidatePath("/widerruf")
+  revalidatePath("/about")
+  revalidatePath("/contact")
+}
+
+export async function updateBusinessProfile(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const validated = businessProfileSchema.parse(data)
+    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
+    const settings = await prisma.companySettings.upsert({
+      where: { id: "company-settings" },
+      update: validated,
+      create: { id: "company-settings", ...validated },
+    })
+    await recordSettingsAudit(admin.id, existing, validated, "business_profile_updated")
+    revalidateOwnerSettings()
+    return { success: true as const, settings }
+  } catch (error) {
+    console.error("[UPDATE_BUSINESS_PROFILE_ERROR]", error)
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Check the highlighted details." }
+    return { error: error instanceof Error ? error.message : "Business details could not be saved." }
+  }
+}
+
+export async function updatePaymentDetails(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const validated = paymentDetailsSchema.parse(data)
+    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
+    const settings = await prisma.companySettings.upsert({
+      where: { id: "company-settings" },
+      update: validated,
+      create: { id: "company-settings", ...validated },
+    })
+    const paymentDraft = await prisma.configurationVersion.findFirst({
+      where: { domain: "PAYMENTS", status: { in: ["DRAFT", "VALIDATED"] } },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    })
+    if (paymentDraft) {
+      const depositValue = Math.round(validated.depositPercentage * 10_000)
+      await prisma.$transaction([
+        prisma.paymentConfigVersion.update({
+          where: { configurationVersionId: paymentDraft.id },
+          data: {
+            depositType: depositValue > 0 ? "PERCENTAGE_BPS" : "NONE",
+            depositValue,
+            remainingBalanceRule: depositValue > 0 ? "ON_PICKUP" : "NOT_APPLICABLE",
+          },
+        }),
+        prisma.configurationVersion.update({
+          where: { id: paymentDraft.id },
+          data: {
+            revision: { increment: 1 },
+            status: "DRAFT",
+            validationStatus: "NOT_VALIDATED",
+            validationSnapshot: Prisma.JsonNull,
+            updatedById: admin.id,
+          },
+        }),
+      ])
+    }
+    await recordSettingsAudit(admin.id, existing, validated, "payment_details_updated")
+    revalidateOwnerSettings()
+    return { success: true as const, settings }
+  } catch (error) {
+    console.error("[UPDATE_PAYMENT_DETAILS_ERROR]", error)
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Check the payment details." }
+    return { error: error instanceof Error ? error.message : "Payment details could not be saved." }
+  }
+}
+
+export async function updateNotificationContacts(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const validated = notificationContactsSchema.parse(data)
+    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
+    const settings = await prisma.companySettings.upsert({
+      where: { id: "company-settings" },
+      update: validated,
+      create: { id: "company-settings", ...validated },
+    })
+    await recordSettingsAudit(admin.id, existing, validated, "notification_contacts_updated")
+    revalidateOwnerSettings()
+    return { success: true as const, settings }
+  } catch (error) {
+    console.error("[UPDATE_NOTIFICATION_CONTACTS_ERROR]", error)
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Check the email addresses." }
+    return { error: error instanceof Error ? error.message : "Notification contacts could not be saved." }
+  }
+}
 
 export async function getCompanySettings() {
   try {
@@ -65,65 +173,5 @@ export async function getCompanySettings() {
   } catch (error) {
     console.error("[GET_COMPANY_SETTINGS_ERROR]", error)
     return { error: "Failed to fetch company settings" }
-  }
-}
-
-export async function updateCompanySettings(data: unknown) {
-  try {
-    const admin = await requireAdmin()
-
-    // Validate input
-    const validated = companySettingsSchema.parse(data)
-
-    // Get existing settings for audit log
-    const existingSettings = await prisma.companySettings.findUnique({
-      where: { id: "company-settings" },
-    })
-
-    // Update or create settings
-    const settings = await prisma.companySettings.upsert({
-      where: { id: "company-settings" },
-      update: validated,
-      create: {
-        id: "company-settings",
-        ...validated,
-      },
-    })
-
-    // Create audit log
-    await prisma.adminAuditLog.create({
-      data: {
-        adminId: admin.id,
-        action: "SETTINGS_UPDATED",
-        targetType: "settings",
-        targetId: "company-settings",
-        oldValue: existingSettings ? (existingSettings as any) : Prisma.JsonNull,
-        newValue: validated as any,
-      },
-    })
-
-    // Revalidate all pages that use business information
-    revalidatePath("/admin")
-    revalidatePath("/")
-    revalidatePath("/impressum")
-    revalidatePath("/datenschutz")
-    revalidatePath("/agb")
-    revalidatePath("/widerruf")
-    revalidatePath("/about")
-    revalidatePath("/contact")
-
-    return { success: true, settings }
-  } catch (error) {
-    console.error("[UPDATE_COMPANY_SETTINGS_ERROR]", error)
-
-    if (error instanceof z.ZodError) {
-      return { error: error.errors[0]?.message || "Validation error" }
-    }
-
-    if (error instanceof Error) {
-      return { error: error.message }
-    }
-
-    return { error: "Failed to update company settings" }
   }
 }

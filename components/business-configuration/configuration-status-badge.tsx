@@ -13,10 +13,10 @@ const styles: Record<string, string> = {
 }
 
 const labels: Record<string, string> = {
-  VALID: "Validated",
-  WARNING: "Validated with warnings",
-  BLOCKED: "Blocked",
-  NOT_VALIDATED: "Not validated",
+  VALID: "Ready",
+  WARNING: "Check first",
+  BLOCKED: "Action needed",
+  NOT_VALIDATED: "Not checked",
 }
 
 export function ConfigurationStatusBadge({ status }: { status: string }) {

@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
+import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service"
+import { buildOwnerSetupProgress } from "@/lib/admin/owner-console"
 import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
@@ -44,8 +46,15 @@ const parseManualReservationPayload = (reason: string | null): ManualReservation
   return null
 }
 
-export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AdminPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>
+  searchParams: Promise<{ section?: string }>
+}) {
   const { locale } = await params
+  const { section: requestedSection } = await searchParams
   const user = await getCurrentUser()
   const signInUrl = "/sign-in"
 
@@ -63,53 +72,65 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
   const capabilities = await getBusinessConfigurationCapabilities()
 
   await runBookingLifecycleMaintenance()
-  const [cars, bookings, users, blockedDates, reviews] = await Promise.all([
-    prisma.car.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.booking.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        pricingSnapshot: true,
-        insuranceSnapshot: true,
-        customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
-        legalAcceptances: {
-          include: { legalDocumentTranslation: { include: { legalDocumentVersion: true } } },
-          orderBy: { acceptedAt: "asc" },
-        },
-      },
-    }),
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.blockedDate.findMany({
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.review.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
+  const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount] =
+    await Promise.all([
+      prisma.car.findMany({
+        where: { isDeleted: false },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.booking.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          pricingSnapshot: true,
+          insuranceSnapshot: true,
+          customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
+          legalAcceptances: {
+            include: {
+              legalDocumentTranslation: {
+                include: { legalDocumentVersion: true },
+              },
+            },
+            orderBy: { acceptedAt: "asc" },
           },
         },
-        car: {
-          select: {
-            id: true,
-            name: true,
-            nameDe: true,
+      }),
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.blockedDate.findMany({
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.review.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          car: {
+            select: {
+              id: true,
+              name: true,
+              nameDe: true,
+            },
+          },
+          booking: {
+            select: {
+              bookingNumber: true,
+            },
           },
         },
-        booking: {
-          select: {
-            bookingNumber: true,
-          },
-        },
-      },
-    }),
-  ])
+      }),
+      prisma.companySettings.findUnique({ where: { id: "company-settings" } }),
+      loadConfigurationOverview({ includeAudit: false }),
+      capabilities.canViewDocuments
+        ? prisma.bookingApplication.count({
+            where: { status: "AWAITING_DOCUMENT_REVIEW" },
+          })
+        : Promise.resolve(null),
+    ])
 
   const manualReservations = blockedDates
     .map((blockedDate) => {
@@ -131,9 +152,21 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
     })
     .filter((reservation): reservation is NonNullable<typeof reservation> => reservation !== null)
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
+  const allowedSections = new Set(["overview", "cars", "bookings", "users", "reviews", "analytics"])
+  const initialSection = requestedSection && allowedSections.has(requestedSection) ? requestedSection : "overview"
+  const setup = buildOwnerSetupProgress({
+    company: companySettings,
+    activeCarCount: cars.length,
+    overview: configurationOverview,
+  })
 
   return (
     <AdminDashboard
+      key={initialSection}
+      initialSection={initialSection}
+      generatedAt={new Date().toISOString()}
+      setup={setup}
+      documentReviewCount={documentReviewCount}
       currentUser={{
         id: adminUser.id,
         name: adminUser.name || adminUser.email,
@@ -211,9 +244,7 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
           translationId: acceptance.legalDocumentTranslationId,
           acceptedAt: acceptance.acceptedAt.toISOString(),
           source: acceptance.source,
-          hasExactProvenance: Boolean(
-            acceptance.configurationReleaseId && acceptance.legalAcceptanceConfigVersionId,
-          ),
+          hasExactProvenance: Boolean(acceptance.configurationReleaseId && acceptance.legalAcceptanceConfigVersionId),
           hashVerified:
             acceptance.contentHash === legalContentHash(acceptance.legalDocumentTranslation.canonicalContent),
         })),

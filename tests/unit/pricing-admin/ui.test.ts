@@ -18,7 +18,7 @@ describe("pricing admin UI", () => {
   it("shows missing-rate coverage clearly", () => {
     const markup = renderToStaticMarkup(createElement(PricingSummaryCard, { coverage: { totalActiveVehicles: 2, dailyRates: 1, weeklyRates: 0, monthlyRates: 0, missingRequiredRates: 1, vehiclesNotInDraft: 1, currencyConsistent: true, blockers: 1, warnings: 0 }, currency: "EUR" }))
     expect(markup).toContain("Missing required")
-    expect(markup).toContain("1 blockers")
+    expect(markup).toContain("1 must fix")
   })
 
   it("renders exact live/draft differences without a fabricated percentage", () => {

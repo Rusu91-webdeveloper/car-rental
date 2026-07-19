@@ -37,6 +37,8 @@ export function isPricingError(error: unknown): error is PricingError {
 export function publicPricingErrorMessage(error: PricingError): string {
   switch (error.code) {
     case "INVALID_DATE_RANGE":
+      if (error.message === "Rental is shorter than the configured minimum.")
+        return "This booking is shorter than the minimum rental period. Choose a later drop-off date."
       return "Please select a valid pickup and drop-off period."
     case "RATE_NOT_FOUND":
     case "RATE_DISABLED":
