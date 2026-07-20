@@ -71,6 +71,11 @@ function publicError(error: unknown) {
     return { error: error.issues[0]?.message ?? "Invalid application request.", code: "INVALID_REQUEST" }
   console.error("[BOOKING_APPLICATION_ERROR]", {
     name: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : String(error),
+    code:
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
+        : undefined,
   })
   return { error: "The application could not be saved.", code: "APPLICATION_FAILED" }
 }

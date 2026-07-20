@@ -45,6 +45,22 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('status: "FINALIZED"')
   })
 
+  it("keeps interactive transactions alive through a serverless database cold start", () => {
+    const database = read("lib/db.ts")
+    const deployment = read("vercel.json")
+    expect(database).toContain("transactionOptions")
+    expect(database).toContain("maxWait: 10_000")
+    expect(database).toContain("timeout: 30_000")
+    expect(deployment).toContain('"regions": ["fra1"]')
+  })
+
+  it("records actionable production errors without exposing them to customers", () => {
+    const actions = read("app/actions/booking-applications.ts")
+    expect(actions).toContain('console.error("[BOOKING_APPLICATION_ERROR]"')
+    expect(actions).toContain("error.message")
+    expect(actions).toContain('error: "The application could not be saved."')
+  })
+
   it("requires a safe private-document provider and keeps workers explicitly opt-in", () => {
     const uploads = read("lib/private-documents/server/lifecycle-context.ts")
     const workers = read("app/api/internal/phase8fb/[job]/route.ts")
