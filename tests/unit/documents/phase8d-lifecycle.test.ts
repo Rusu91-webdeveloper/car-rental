@@ -180,6 +180,39 @@ describe("Phase 8D provider-neutral lifecycle", () => {
     ).toEqual(first);
   });
 
+  it("resumes an unfinished matching upload even when the browser retry key changes", async () => {
+    const session = await service.createDocumentUploadSession({
+      customerUserId: "customer-1",
+      carId: "car-1",
+      pickupAt: new Date("2026-07-14T10:00:00Z"),
+      returnAt: new Date("2026-07-16T10:00:00Z"),
+      locale: "en",
+    });
+    const input = {
+      sessionId: session.id,
+      customerUserId: "customer-1",
+      documentTypeId: "identity-type",
+      side: "SINGLE" as const,
+      slotNumber: 1,
+      originalFileName: "identity.jpg",
+      declaredMimeType: "image/jpeg",
+      expectedSizeBytes: jpeg.length,
+      expectedChecksumSha256: sha256(jpeg),
+    };
+    const initial = await service.createDocumentUploadIntent({
+      ...input,
+      idempotencyKey: "initial-browser-upload-key",
+    });
+
+    const resumed = await service.createDocumentUploadIntent({
+      ...input,
+      idempotencyKey: "replacement-browser-retry-key",
+    });
+
+    expect(resumed.intent.id).toBe(initial.intent.id);
+    expect(resumed.uploadTarget.targetId).toBe(initial.uploadTarget.targetId);
+  });
+
   it("keeps transient scan failure inaccessible and retries within the bound", async () => {
     const { intent } = await sessionAndIntent("intent-timeout");
     const timedOut = await service.completeDocumentUpload({

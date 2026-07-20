@@ -38,15 +38,18 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('FROM "BookingApplication" WHERE id = ${input.applicationId} FOR UPDATE')
     expect(adapter).toContain('FROM "Car" WHERE id = ${row.carId} FOR UPDATE')
     expect(adapter).toContain("TransactionIsolationLevel.Serializable")
+    expect(adapter).toContain("maxWait: 10_000")
+    expect(adapter).toContain("timeout: 30_000")
     for (const snapshot of ["bookingPricingSnapshot.create", "bookingCustomerDriverSnapshot.create", "bookingInsuranceSnapshot.create", "bookingLegalAcceptance.createMany", "customerDocument.updateMany"])
       expect(adapter).toContain(snapshot)
     expect(adapter).toContain('status: "FINALIZED"')
   })
 
-  it("keeps production providers gated and workers explicitly opt-in", () => {
+  it("requires a safe private-document provider and keeps workers explicitly opt-in", () => {
     const uploads = read("lib/private-documents/server/lifecycle-context.ts")
     const workers = read("app/api/internal/phase8fb/[job]/route.ts")
-    expect(uploads).toContain("environment.production || !environment.featureEnabled")
+    expect(uploads).toContain("!environment.featureEnabled || environment.issues.length > 0")
+    expect(uploads).toContain("createPrivateDocumentStorage")
     expect(workers).toContain('process.env.PHASE8FB_WORKERS_ENABLED !== "true"')
     expect(workers).toContain("hasValidBearerSecret")
     expect(workers).toContain("PHASE8FB_WORKER_SECRET")

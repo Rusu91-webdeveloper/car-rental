@@ -51,13 +51,14 @@ export function ownerSettingsStepHref(stepId: string) {
   return `/admin/settings?step=${stepId}`
 }
 
-interface CompanySetupDetails {
+export interface CompanySetupDetails {
   companyName: string
   companyEmail: string
   companyPhone?: string | null
   companyAddress?: string | null
   companyCity?: string | null
   companyZipCode?: string | null
+  companyCountry?: string | null
   managingDirector?: string | null
   commercialRegister?: string | null
   registerCourt?: string | null
@@ -68,6 +69,19 @@ interface CompanySetupDetails {
   supportEmail: string
   adminEmail: string
 }
+
+const businessProfileFields = [
+  ["companyName", "registered business name"],
+  ["companyEmail", "business email"],
+  ["companyPhone", "phone number"],
+  ["companyAddress", "street address"],
+  ["companyCity", "city"],
+  ["companyZipCode", "postal code"],
+  ["companyCountry", "country"],
+  ["managingDirector", "managing director"],
+  ["commercialRegister", "commercial register number"],
+  ["registerCourt", "register court"],
+] as const satisfies ReadonlyArray<readonly [keyof CompanySetupDetails, string]>
 
 interface OwnerSettingsGuideInput {
   company: CompanySetupDetails | null
@@ -95,6 +109,17 @@ const placeholderValues = new Set([
 
 function isRealValue(value: string | null | undefined) {
   return Boolean(value?.trim() && !placeholderValues.has(value.trim().toLowerCase()))
+}
+
+export function businessProfileReadiness(company: CompanySetupDetails | null) {
+  const missingFields = businessProfileFields.flatMap(([field, label]) => {
+    const value = company?.[field]
+    const complete = field === "companyName"
+      ? value === "Qujo Autovermietung GmbH"
+      : isRealValue(value)
+    return complete ? [] : [label]
+  })
+  return { complete: missingFields.length === 0, missingFields }
 }
 
 function domainState(
@@ -146,18 +171,7 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
   const confirmations = domainState(input.overview, ["confirmations"])
   const legalAcceptance = domainState(input.overview, ["legal-acceptance"])
 
-  const hasProfile = Boolean(
-    input.company &&
-      input.company.companyName === "Qujo Autovermietung GmbH" &&
-      isRealValue(input.company.companyEmail) &&
-      isRealValue(input.company.companyPhone) &&
-      isRealValue(input.company.companyAddress) &&
-      isRealValue(input.company.companyCity) &&
-      isRealValue(input.company.companyZipCode) &&
-      isRealValue(input.company.managingDirector) &&
-      isRealValue(input.company.commercialRegister) &&
-      isRealValue(input.company.registerCourt),
-  )
+  const hasProfile = businessProfileReadiness(input.company).complete
   const hasPaymentDetails = Boolean(
     input.company &&
       isRealValue(input.company.bankName) &&

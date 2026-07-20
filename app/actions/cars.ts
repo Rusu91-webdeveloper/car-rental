@@ -13,12 +13,27 @@ import {
 } from "@/lib/cars/slug"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+import { prepareOwnerPricingEdit } from "@/lib/admin/owner-settings-edit"
+import { newCarPublishingMode } from "@/lib/admin/new-car-publishing"
+import { activateDraftRelease, validateDraftRelease } from "@/lib/business-configuration/workflow-service"
 
 const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
 export async function createCar(data: unknown) {
   try {
     const admin = await requireAdmin()
+
+    const [activeRelease, pendingRelease] = await Promise.all([
+      prisma.businessConfigurationRelease.findFirst({ where: { status: "ACTIVE" }, select: { id: true } }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: { in: ["DRAFT", "VALIDATED"] } },
+        select: { id: true },
+      }),
+    ])
+    const publishingMode = newCarPublishingMode({
+      hasActiveRelease: Boolean(activeRelease),
+      hasPendingRelease: Boolean(pendingRelease),
+    })
 
     // Validate input
     const validated = createCarSchema.parse(data)
@@ -125,13 +140,46 @@ export async function createCar(data: unknown) {
     }
 
     const { car, inheritedSetup } = createdResult
+    let bookingStatus: "ACTIVE" | "PENDING_REVIEW" | "SETUP_DRAFT" | "PRICING_ATTENTION" =
+      publishingMode === "AUTO_PUBLISH" ? "PRICING_ATTENTION" : publishingMode
+
+    try {
+      const pricing = await prepareOwnerPricingEdit(admin.id)
+      if (!pricing.draftRelease || !pricing.vehicles.some((vehicle) => vehicle.vehicleId === car.id && vehicle.draftRateId)) {
+        throw new Error("The new car was not attached to the pricing draft.")
+      }
+
+      if (publishingMode === "AUTO_PUBLISH") {
+        const validation = await validateDraftRelease(pricing.draftRelease.id, admin.id)
+        const blockers = validation.result.issues.filter(({ severity }) => severity === "BLOCKER")
+        if (blockers.length === 0) {
+          const current = await prisma.businessConfigurationRelease.findUniqueOrThrow({
+            where: { id: pricing.draftRelease.id },
+            select: { revision: true },
+          })
+          await activateDraftRelease({
+            releaseId: pricing.draftRelease.id,
+            expectedRevision: current.revision,
+            actorId: admin.id,
+            warningsAcknowledged: true,
+          })
+          bookingStatus = "ACTIVE"
+        }
+      }
+    } catch (setupError) {
+      console.error("[CREATE_CAR_PRICING_SETUP_ERROR]", {
+        carId: car.id,
+        name: setupError instanceof Error ? setupError.name : "Unknown",
+      })
+      bookingStatus = "PRICING_ATTENTION"
+    }
 
     revalidatePath("/")
     revalidatePath("/admin")
     revalidatePath("/admin/cars/pricing")
     revalidatePath("/admin/advanced/configuration")
 
-    return { success: true, car, inheritedSetup }
+    return { success: true, car, inheritedSetup, bookingStatus }
   } catch (error) {
     console.error("[CREATE_CAR_ERROR]", error)
 

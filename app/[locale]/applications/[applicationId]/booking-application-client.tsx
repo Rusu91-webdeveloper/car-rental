@@ -91,6 +91,15 @@ export function BookingApplicationClient({
     try {
       setProgress((current) => ({ ...current, [key]: 1 }))
       const checksum = await sha256(file)
+      const uploadIdempotencyKey = [
+        "document-upload",
+        application.id,
+        requirement.documentTypeId,
+        side,
+        slotNumber,
+        checksum.slice(0, 16),
+        replacesDocumentId?.slice(-12) ?? "initial",
+      ].join(":")
       const response = await fetch(`/api/booking-applications/${application.id}/upload-intents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,7 +111,7 @@ export function BookingApplicationClient({
           declaredMimeType: file.type,
           expectedSizeBytes: file.size,
           expectedChecksumSha256: checksum,
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: uploadIdempotencyKey,
           replacesDocumentId,
         }),
       })

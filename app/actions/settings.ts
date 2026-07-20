@@ -7,19 +7,21 @@ import { z } from "zod"
 import { Prisma } from "@prisma/client"
 
 const optionalText = (max: number) => z.string().trim().max(max).transform((value) => value || null)
+const requiredText = (max: number, label: string) =>
+  z.string().trim().min(1, `${label} is required`).max(max)
 
 const businessProfileSchema = z.object({
   companyName: z.literal("Qujo Autovermietung GmbH", { errorMap: () => ({ message: "The registered business name must remain Qujo Autovermietung GmbH" }) }),
   companyEmail: z.string().trim().email("Enter a valid business email"),
-  companyPhone: optionalText(40),
-  companyAddress: optionalText(200),
-  companyCity: optionalText(120),
+  companyPhone: requiredText(40, "Phone number"),
+  companyAddress: requiredText(200, "Street address"),
+  companyCity: requiredText(120, "City"),
   companyState: optionalText(120),
-  companyZipCode: optionalText(30),
-  companyCountry: optionalText(120),
-  managingDirector: optionalText(160),
-  commercialRegister: optionalText(100),
-  registerCourt: optionalText(160),
+  companyZipCode: requiredText(30, "Postal code"),
+  companyCountry: requiredText(120, "Country"),
+  managingDirector: requiredText(160, "Managing director"),
+  commercialRegister: requiredText(100, "Commercial register number"),
+  registerCourt: requiredText(160, "Register court"),
   vatId: optionalText(40),
   responsiblePerson: optionalText(300),
   currency: z.string().trim().length(3, "Use a three-letter currency code").transform((value) => value.toUpperCase()),

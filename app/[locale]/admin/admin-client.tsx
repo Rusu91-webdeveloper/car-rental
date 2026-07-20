@@ -530,9 +530,16 @@ export default function AdminDashboard({
         if (result?.car) {
           setCarsState((prev) => [mapCar(result.car), ...prev])
           setIsAddDialogOpen(false)
+          const bookingMessage = result.bookingStatus === "ACTIVE"
+            ? tr("Car created and published for online booking.", "Das Fahrzeug wurde erstellt und für Online-Buchungen veröffentlicht.")
+            : result.bookingStatus === "PENDING_REVIEW"
+              ? tr("Car created with pricing. Publish your pending settings before customers can book it.", "Das Fahrzeug wurde mit Preis erstellt. Veröffentlichen Sie die ausstehenden Einstellungen, bevor Kunden es buchen können.")
+              : result.bookingStatus === "SETUP_DRAFT"
+                ? tr("Car created with pricing. It will become bookable when business setup is completed.", "Das Fahrzeug wurde mit Preis erstellt. Es wird buchbar, sobald die Unternehmenseinrichtung abgeschlossen ist.")
+                : tr("Car created, but its pricing needs attention before customers can book it.", "Das Fahrzeug wurde erstellt, aber die Preise müssen geprüft werden, bevor Kunden es buchen können.")
           toast({
             title: tr("Success", "Erfolg"),
-            description: tr("Car created successfully!", "Fahrzeug wurde erfolgreich erstellt!"),
+            description: bookingMessage,
             variant: "default",
           })
         } else if (result?.error) {

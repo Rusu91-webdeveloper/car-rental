@@ -15,6 +15,7 @@ import { PricingIssueList } from "@/components/business-configuration/pricing-is
 import { OwnerLegalSetupForm } from "@/components/legal/owner-legal-setup-form"
 import {
   ensureOwnerDraftRelease,
+  loadOwnerBookingWorkflowDependencies,
   prepareOwnerBookingExperienceEdit,
   prepareOwnerLegalEdit,
   prepareOwnerNotificationEdit,
@@ -103,10 +104,13 @@ export async function OwnerSettingsStepContent({
     }
 
     if (step.id === "booking-flow") {
+      const { documents, legal, dependencyKey } = await loadOwnerBookingWorkflowDependencies(data.draftRelease?.id)
       return (
         <BookingFlowStepList
-          key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}`}
+          key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}-${dependencyKey}`}
           data={data}
+          documents={documents}
+          legal={legal}
           canEdit={caps.canManageBookingWorkflow}
           nextHref={nextHref}
         />

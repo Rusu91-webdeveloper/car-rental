@@ -62,13 +62,18 @@ export type AuthorizationDecision =
 function effectiveCapabilities(
   principal: Extract<CapabilityPrincipal, { authenticated: true }>,
 ) {
-  // Compatibility only: this pure contract does not replace requireAdmin() or create role persistence.
-  if (principal.role === "ADMIN")
-    return new Set<Capability>(
+  // Compatibility supplies non-restricted owner capabilities. Persisted
+  // restricted capabilities still require an explicitly assigned access role.
+  if (principal.role === "ADMIN") {
+    const effective = new Set<Capability>(
       Object.values(CAPABILITIES).filter(
         (capability) => !RESTRICTED_DOCUMENT_CAPABILITIES.has(capability),
       ),
     );
+    for (const capability of principal.capabilities)
+      effective.add(capability);
+    return effective;
+  }
   return principal.capabilities;
 }
 

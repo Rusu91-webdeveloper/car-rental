@@ -12,6 +12,7 @@ import { CONFIGURATION_DOMAIN_METADATA } from "@/lib/business-configuration/doma
 import { PrismaBusinessConfigurationRepository } from "@/lib/business-configuration/prisma-repository"
 import { synchronizeConfiguredBookingSteps } from "@/lib/booking-configuration/workflow"
 import { updateBookingWorkflowDraft } from "@/lib/phase6-admin/service"
+import { businessProfileReadiness, ownerSettingsStepHref } from "@/lib/admin/owner-settings-guide"
 
 const ownerSetupStepSchema = z.enum([
   "business-profile",
@@ -70,6 +71,22 @@ async function synchronizeCompletedSetupWorkflow(releaseId: string, actorId: str
 }
 
 async function tryActivateCompletedSetup(actorId: string) {
+  const company = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
+  const profile = businessProfileReadiness(company)
+  if (!profile.complete) {
+    return {
+      activated: false as const,
+      activationFailed: false as const,
+      issues: [
+        {
+          code: "BUSINESS_PROFILE_INCOMPLETE",
+          message: `Complete Business details before enabling online booking. Missing or invalid: ${profile.missingFields.join(", ")}.`,
+          action: "Enter the exact company contact and commercial-register details.",
+          href: ownerSettingsStepHref("business-profile"),
+        },
+      ] satisfies OwnerSetupActivationIssue[],
+    }
+  }
   const draft = await prisma.businessConfigurationRelease.findFirst({
     where: { status: { in: ["DRAFT", "VALIDATED"] } },
     orderBy: { updatedAt: "desc" },
@@ -179,6 +196,12 @@ export async function completeOwnerSetupStepAction(input: unknown) {
           issues: [] as OwnerSetupActivationIssue[],
         }
     if (activation.activationFailed) return activationError()
+    if (activation.issues.length > 0) {
+      return {
+        error: activation.issues[0].message,
+        issues: activation.issues,
+      }
+    }
     refreshOwnerSetup()
     return { success: true as const, activated: activation.activated }
   } catch (error) {

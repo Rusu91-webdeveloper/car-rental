@@ -5,14 +5,16 @@ import { Phase6DraftControls } from "@/components/business-configuration/phase6-
 import { BookingFlowStepList } from "@/components/business-configuration/booking-flow-step-list"
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list"
 import { Phase6DraftLiveComparison } from "@/components/business-configuration/phase6-draft-live-comparison"
+import { loadOwnerBookingWorkflowDependencies } from "@/lib/admin/owner-settings-edit"
 export const dynamic = "force-dynamic"
 export default async function BookingFlowPage() {
   const [caps, data] = await Promise.all([getBusinessConfigurationCapabilities(), loadPhase6ConfigurationPage()])
+  const { documents, legal, dependencyKey } = await loadOwnerBookingWorkflowDependencies(data.draftRelease?.id)
   return (
     <div className="space-y-6">
       <Phase6PageHeader
         title="Booking flow"
-        description="Configure only the supported booking steps. Documents and legal acceptance remain unavailable in Phase 6."
+        description="Review the customer booking steps. Documents, legal acceptance, and insurance stay synchronized with their dedicated settings."
         live={data.liveWorkflow?.versionNumber}
         draft={data.draftWorkflow?.versionNumber}
       />
@@ -30,8 +32,10 @@ export default async function BookingFlowPage() {
         impact="Changes supported booking-step visibility while keeping vehicle, customer, driver, review, and confirmation safeguards."
       />
       <BookingFlowStepList
-        key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}`}
+        key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}-${dependencyKey}`}
         data={data}
+        documents={documents}
+        legal={legal}
         canEdit={caps.canManageBookingWorkflow}
       />
       <PricingIssueList

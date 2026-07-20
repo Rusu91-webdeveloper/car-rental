@@ -6,9 +6,13 @@ import { updateBookingWorkflowDraftAction } from "@/app/actions/phase6-configura
 import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import {
-  synchronizeInsuranceBookingStep,
+  synchronizeConfiguredBookingSteps,
   validateBookingWorkflow,
 } from "@/lib/booking-configuration/workflow"
+import type {
+  DocumentPolicyConfiguration,
+  LegalAcceptanceConfiguration,
+} from "@/lib/business-configuration/domains"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
 const labels = {
   VEHICLE_AND_DATES: "Car and rental dates",
@@ -31,12 +35,28 @@ const configuredLater = {
     description: "Choose the terms customers accept in Legal terms and privacy.",
   },
 } as const
-export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
+export function BookingFlowStepList({
+  data,
+  documents,
+  legal,
+  canEdit,
+  nextHref,
+}: {
+  data: Phase6AdminPageData
+  documents: DocumentPolicyConfiguration
+  legal: LegalAcceptanceConfiguration
+  canEdit: boolean
+  nextHref?: string
+}) {
   const draft = data.draftWorkflow
   const router = useRouter()
   const [config, setConfig] = useState(() =>
     draft && data.draftInsurance
-      ? synchronizeInsuranceBookingStep(draft.configuration, data.draftInsurance.configuration)
+      ? synchronizeConfiguredBookingSteps(draft.configuration, {
+          insurance: data.draftInsurance.configuration,
+          documents,
+          legal,
+        })
       : draft?.configuration,
   )
   const summary = draft?.changeSummary ?? "Booking journey update"
@@ -46,11 +66,12 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
   const issues = validateBookingWorkflow({
     workflow: config,
     insurance: data.draftInsurance.configuration,
+    legal,
     fields: resolveEffectiveBookingFields(data.draftCustomerDriver.configuration),
   })
-  const insuranceWasMatched =
-    draft.configuration.steps.find(({ step }) => step === "INSURANCE")?.requirement !==
-    config.steps.find(({ step }) => step === "INSURANCE")?.requirement
+  const matchedSteps = config.steps.filter((step) =>
+    draft.configuration.steps.find((item) => item.step === step.step)?.requirement !== step.requirement,
+  )
   const insuranceDescription = !data.draftInsurance.configuration.enabled
     ? "Hidden because insurance is turned off in Step 3."
     : data.draftInsurance.configuration.selectionMode === "MANDATORY"
@@ -77,10 +98,12 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
       <section className="rounded-xl border bg-background p-5">
         <h2 className="font-semibold">Customer booking pages</h2>
         <p className="mt-1 text-sm text-muted-foreground">These are the pages customers see while booking, not the setup steps shown on the left. We match dependent pages automatically.</p>
-        {insuranceWasMatched ? (
+        {matchedSteps.length ? (
           <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900" role="status">
-            <p className="font-medium">Insurance has been fixed automatically</p>
-            <p className="mt-1">It now matches the choice you saved in Step 3. Save and continue when you are ready.</p>
+            <p className="font-medium">Dependent booking pages have been matched automatically</p>
+            <p className="mt-1">
+              {matchedSteps.map((step) => labels[step.step]).join(", ")} now match the settings you completed in the other steps. Save and continue to publish them.
+            </p>
           </div>
         ) : null}
         <div className="mt-4 space-y-2">
@@ -107,7 +130,7 @@ export function BookingFlowStepList({ data, canEdit, nextHref }: { data: Phase6A
                   </div>
                   {later ? (
                     <span className="rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                      {later.label}
+                      {step.requirement === "REQUIRED" ? "Required" : step.requirement === "OPTIONAL" ? "Optional" : "Hidden"} · {later.label}
                     </span>
                   ) : (
                     <select

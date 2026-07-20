@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
+import { PrismaBusinessConfigurationRepository } from "@/lib/business-configuration/prisma-repository"
 import {
   createLegalDraft,
   loadLegalAdministrationPage,
@@ -141,6 +142,27 @@ export async function prepareOwnerBookingExperienceEdit(actorId: string) {
     await attachPhase6DraftsToRelease({ actorId })
   }
   return loadPhase6ConfigurationPage()
+}
+
+export async function loadOwnerBookingWorkflowDependencies(
+  releaseId: string | undefined,
+  db: PrismaClient = prisma,
+) {
+  const release = releaseId
+    ? await new PrismaBusinessConfigurationRepository(db).findReleaseAggregate(releaseId)
+    : null
+  const documents = release?.domains["document-policy"]
+  const legal = release?.domains["legal-acceptance"]
+  if (!documents || !legal) {
+    throw new Error("Complete Documents and Legal terms before reviewing the customer booking steps.")
+  }
+  const dependencyKey = ["document-policy", "legal-acceptance"]
+    .map((domain) => {
+      const version = release.versions[domain as "document-policy" | "legal-acceptance"]
+      return `${version.id}:${version.revision}`
+    })
+    .join("-")
+  return { documents, legal, dependencyKey }
 }
 
 export async function prepareOwnerNotificationEdit(actorId: string) {

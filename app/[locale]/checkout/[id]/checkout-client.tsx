@@ -222,6 +222,7 @@ export function CheckoutClient({
   const [dropoffCalendarOpen, setDropoffCalendarOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
   const [customer, setCustomer] = useState<BookingCustomerDriverInput>(initialCustomer)
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
   const [insuranceSelected, setInsuranceSelected] = useState(
     bookingConfiguration.insurance?.requirementMode === "MANDATORY" ||
       bookingConfiguration.insurance?.preselectedByDefault ||
@@ -765,7 +766,45 @@ export function CheckoutClient({
 
           {bookingConfiguration.mode === "ACTIVE_RELEASE" && bookingConfiguration.fields.length > 0 ? (
             <div className="bg-background rounded-xl p-4 border border-border space-y-5">
-              <h3 className="font-semibold text-lg">Customer and driver information</h3>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-lg">Customer and driver information</h3>
+                  {isDemoMode ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {locale === "de"
+                        ? "Testdaten bleiben deutlich als fiktiv markiert. Für den E-Mail-Test wird Ihre angemeldete E-Mail-Adresse beibehalten."
+                        : "Test data stays clearly marked as fictional. Your signed-in email is preserved for delivery testing."}
+                    </p>
+                  ) : null}
+                </div>
+                {isDemoMode ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCustomer((current) => ({
+                        ...current,
+                        firstName: current.firstName || "Test",
+                        lastName: current.lastName || "Customer",
+                        phone: "+49 30 11111111",
+                        country: "DE",
+                        address: "Testkunde Straße 2 (TESTDATEN)",
+                        city: "Musterstadt",
+                        postalCode: "10115",
+                        nationality: "DE",
+                        dateOfBirth: "1990-01-01",
+                        licenceNumber: "TEST-LICENCE-0001",
+                        licenceIssueDate: "2015-01-01",
+                        licenceExpiryDate: "2030-01-01",
+                        licenceIssuingCountry: "DE",
+                      }))
+                    }
+                  >
+                    {locale === "de" ? "Fiktive Testdaten einfügen" : "Fill fictional test data"}
+                  </Button>
+                ) : null}
+              </div>
               {(["CUSTOMER", "DRIVER"] as const).map((section) => {
                 const fields = bookingConfiguration.fields.filter((field) => field.visible && field.section === section)
                 if (!fields.length) return null

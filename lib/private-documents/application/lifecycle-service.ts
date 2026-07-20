@@ -150,6 +150,48 @@ export class PrivateDocumentLifecycleService {
         }),
       };
     }
+    const sessionIntents = await this.repository.listSessionIntents(session.id);
+    const resumable = sessionIntents
+      .filter(
+        (value) =>
+          value.documentTypeId === input.documentTypeId &&
+          value.side === input.side &&
+          value.slotNumber === input.slotNumber &&
+          value.expectedSizeBytes === input.expectedSizeBytes &&
+          value.expectedChecksumSha256 === input.expectedChecksumSha256 &&
+          ["INTENT_CREATED", "UPLOADING", "UPLOADED", "VERIFYING", "QUARANTINED"].includes(value.status),
+      )
+      .sort((left, right) => right.attemptNumber - left.attemptNumber)[0];
+    if (resumable) {
+      const extension = resumable.originalFileName
+        .toLowerCase()
+        .match(/\.(pdf|jpe?g|png)$/)?.[0] as
+        | ".pdf"
+        | ".jpg"
+        | ".jpeg"
+        | ".png"
+        | undefined;
+      if (!extension)
+        documentError(
+          "DOCUMENT_EXTENSION_UNSUPPORTED",
+          "Stored intent extension is unsupported.",
+        );
+      return {
+        intent: resumable,
+        uploadTarget: await this.storage.createUploadTarget({
+          uploadIntentId: resumable.id,
+          normalizedExtension: extension,
+          declaredMimeType: resumable.declaredMimeType as
+            | "application/pdf"
+            | "image/jpeg"
+            | "image/png",
+          maximumBytes: DOCUMENT_FILE_POLICY.maximumBytes,
+          expectedChecksumSha256: resumable.expectedChecksumSha256,
+          expiresAt: resumable.expiresAt,
+          existing: { targetId: resumable.targetId, object: resumable.object },
+        }),
+      };
+    }
     const rule = session.requirements.find(
       (value) =>
         value.documentTypeId === input.documentTypeId &&
@@ -181,6 +223,14 @@ export class PrivateDocumentLifecycleService {
       Math.max(
         0,
         ...documents
+          .filter(
+            (value) =>
+              value.documentTypeId === input.documentTypeId &&
+              value.side === input.side &&
+              value.slotNumber === input.slotNumber,
+          )
+          .map((value) => value.attemptNumber),
+        ...sessionIntents
           .filter(
             (value) =>
               value.documentTypeId === input.documentTypeId &&

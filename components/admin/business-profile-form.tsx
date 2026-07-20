@@ -69,24 +69,25 @@ export function BusinessProfileForm({ value, nextHref }: { value: BusinessProfil
       <div>
         <h2 className="font-semibold">Business profile</h2>
         <p className="mt-1 text-sm text-muted-foreground">Shown on customer pages, emails, and legal contact areas.</p>
+        <p className="mt-1 text-xs text-muted-foreground">All fields marked required must contain the company’s real registered information before online booking can be enabled.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Registered business name" htmlFor="company-name"><Input id="company-name" value={form.companyName} readOnly aria-readonly="true" className="bg-muted" required /></Field>
         <Field label="Contact email" htmlFor="company-email"><Input id="company-email" type="email" value={form.companyEmail} onChange={(event) => set("companyEmail", event.target.value)} required /></Field>
-        <Field label="Phone" htmlFor="company-phone"><Input id="company-phone" value={form.companyPhone} onChange={(event) => set("companyPhone", event.target.value)} /></Field>
-        <Field label="Street address" htmlFor="company-address"><Input id="company-address" value={form.companyAddress} onChange={(event) => set("companyAddress", event.target.value)} /></Field>
-        <Field label="City" htmlFor="company-city"><Input id="company-city" value={form.companyCity} onChange={(event) => set("companyCity", event.target.value)} /></Field>
+        <Field label="Phone" htmlFor="company-phone"><Input id="company-phone" value={form.companyPhone} onChange={(event) => set("companyPhone", event.target.value)} required /></Field>
+        <Field label="Street address" htmlFor="company-address"><Input id="company-address" value={form.companyAddress} onChange={(event) => set("companyAddress", event.target.value)} required /></Field>
+        <Field label="City" htmlFor="company-city"><Input id="company-city" value={form.companyCity} onChange={(event) => set("companyCity", event.target.value)} required /></Field>
         <Field label="State or region" htmlFor="company-state"><Input id="company-state" value={form.companyState} onChange={(event) => set("companyState", event.target.value)} /></Field>
-        <Field label="Postal code" htmlFor="company-postcode"><Input id="company-postcode" value={form.companyZipCode} onChange={(event) => set("companyZipCode", event.target.value)} /></Field>
-        <Field label="Country" htmlFor="company-country"><Input id="company-country" value={form.companyCountry} onChange={(event) => set("companyCountry", event.target.value)} /></Field>
+        <Field label="Postal code" htmlFor="company-postcode"><Input id="company-postcode" value={form.companyZipCode} onChange={(event) => set("companyZipCode", event.target.value)} required /></Field>
+        <Field label="Country" htmlFor="company-country"><Input id="company-country" value={form.companyCountry} onChange={(event) => set("companyCountry", event.target.value)} required /></Field>
       </div>
       <details open className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">Legal details for the Impressum</summary>
         <p className="mt-2 text-xs text-muted-foreground">Enter the exact details from the commercial register. Empty fields are never replaced with sample data.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Managing director" htmlFor="managing-director"><Input id="managing-director" value={form.managingDirector} onChange={(event) => set("managingDirector", event.target.value)} /></Field>
-          <Field label="Commercial register number" htmlFor="commercial-register"><Input id="commercial-register" placeholder="e.g. HRB …" value={form.commercialRegister} onChange={(event) => set("commercialRegister", event.target.value)} /></Field>
-          <Field label="Register court" htmlFor="register-court"><Input id="register-court" value={form.registerCourt} onChange={(event) => set("registerCourt", event.target.value)} /></Field>
+          <Field label="Managing director" htmlFor="managing-director"><Input id="managing-director" value={form.managingDirector} onChange={(event) => set("managingDirector", event.target.value)} required /></Field>
+          <Field label="Commercial register number" htmlFor="commercial-register"><Input id="commercial-register" placeholder="e.g. HRB …" value={form.commercialRegister} onChange={(event) => set("commercialRegister", event.target.value)} required /></Field>
+          <Field label="Register court" htmlFor="register-court"><Input id="register-court" value={form.registerCourt} onChange={(event) => set("registerCourt", event.target.value)} required /></Field>
           <Field label="VAT identification number" htmlFor="vat-id"><Input id="vat-id" value={form.vatId} onChange={(event) => set("vatId", event.target.value)} /></Field>
           <div className="sm:col-span-2"><Field label="Editorially responsible person (only if applicable)" htmlFor="responsible-person"><Input id="responsible-person" value={form.responsiblePerson} onChange={(event) => set("responsiblePerson", event.target.value)} /></Field></div>
         </div>

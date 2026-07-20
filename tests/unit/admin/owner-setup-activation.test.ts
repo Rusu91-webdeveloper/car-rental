@@ -23,6 +23,9 @@ describe("owner setup activation", () => {
     const action = source("app/actions/owner-setup.ts")
 
     expect(action).toContain("if (activation.activationFailed) return activationError()")
+    expect(action).toContain("if (activation.issues.length > 0)")
+    expect(action).toContain("businessProfileReadiness(company)")
+    expect(action).toContain("BUSINESS_PROFILE_INCOMPLETE")
     expect(action).toContain("online booking could not be enabled")
     expect(action).toContain("recoverCompletedOwnerSetupAction")
   })
@@ -31,9 +34,11 @@ describe("owner setup activation", () => {
     const page = source("app/[locale]/admin/settings/page.tsx")
     const recovery = source("components/admin/owner-setup-activation-recovery.tsx")
 
-    expect(page).toContain("guide.completed === guide.total")
+    expect(page).toContain("allStepsRecorded")
+    expect(page).toContain("completedStepIds.has(id)")
     expect(page).toContain("<OwnerSetupActivationRecovery")
     expect(recovery).toContain("recoverCompletedOwnerSetupAction()")
     expect(recovery).toContain("Enabling online booking")
+    expect(recovery).toContain('href.includes("?") ? "&" : "?"')
   })
 })

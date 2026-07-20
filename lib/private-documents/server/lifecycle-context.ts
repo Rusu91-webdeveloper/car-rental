@@ -18,8 +18,11 @@ export async function loadOwnedApplicationDocumentLifecycle(applicationId: strin
   if (!application.documentUploadSession)
     documentError("DOCUMENT_SESSION_NOT_FOUND", "Upload session is unavailable.")
   const environment = readPrivateDocumentEnvironment()
-  if (environment.production || !environment.featureEnabled)
-    documentError("DOCUMENT_PROVIDER_STORE_UNAVAILABLE", "Private document uploads are disabled.")
+  if (!environment.featureEnabled || environment.issues.length > 0)
+    documentError(
+      "DOCUMENT_PROVIDER_STORE_UNAVAILABLE",
+      "Private document uploads are not safely configured.",
+    )
   const repository = new PrismaDocumentLifecycleRepository(prisma)
   const storage = createPrivateDocumentStorage({
     environment,

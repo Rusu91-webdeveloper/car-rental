@@ -49,6 +49,8 @@ export default async function BusinessSettingsPage({
     completedStepIds: completedSteps.map(({ targetId }) => targetId),
     locale,
   });
+  const completedStepIds = new Set(completedSteps.map(({ targetId }) => targetId));
+  const allStepsRecorded = guide.steps.every(({ id }) => completedStepIds.has(id));
   const hasSetup = Boolean(overview.activeRelease || overview.draftRelease);
   const requestedStep = guide.steps.find((step) => step.id === requested.step);
   const currentStep = requestedStep ?? guide.nextStep;
@@ -59,7 +61,7 @@ export default async function BusinessSettingsPage({
   const nextHref = nextStep?.href ?? "/admin/settings";
   const editing = requested.edit === "1" || currentStep?.state === "complete";
   const shouldRecoverActivation = Boolean(
-    !overview.activeRelease && overview.draftRelease && guide.completed === guide.total,
+    !overview.activeRelease && overview.draftRelease && allStepsRecorded,
   );
 
   return (

@@ -1,4 +1,8 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
+import {
+  DEFAULT_DOCUMENT_ROLE_PERMISSIONS,
+  defaultDocumentRolePermission,
+} from "@/lib/document-configuration/default-role-permissions"
 import { BOOKING_STEPS, CONFIRMATION_SECTIONS, CUSTOMER_FIELDS } from "./domains"
 
 const requiredCustomerFields = new Set(["FIRST_NAME", "LAST_NAME", "EMAIL"])
@@ -200,6 +204,36 @@ export async function initializeBusinessConfiguration(
             },
           },
         }))
+
+      const documentPolicyPermissionCount =
+        await tx.documentPolicyRolePermission.count({
+          where: { documentPolicyConfigVersionId: documentPolicy.id },
+        })
+      if (documentPolicyPermissionCount === 0) {
+        const documentRoles = await tx.accessRole.findMany({
+          where: {
+            key: { in: Object.keys(DEFAULT_DOCUMENT_ROLE_PERMISSIONS) },
+            status: "ACTIVE",
+          },
+          select: { id: true, key: true },
+        })
+        const rolePermissions = documentRoles.flatMap((role) => {
+          const permission = defaultDocumentRolePermission(role.key)
+          return permission
+            ? [
+                {
+                  documentPolicyConfigVersionId: documentPolicy.id,
+                  accessRoleId: role.id,
+                  ...permission,
+                },
+              ]
+            : []
+        })
+        if (rolePermissions.length)
+          await tx.documentPolicyRolePermission.createMany({
+            data: rolePermissions,
+          })
+      }
 
       const payment =
         (await latestDraftVersion(tx, "PAYMENTS")) ??

@@ -6,6 +6,10 @@ import Link, { useRouter } from "@/navigation"
 import { recoverCompletedOwnerSetupAction } from "@/app/actions/owner-setup"
 import { Button } from "@/components/ui/button"
 
+function editHref(href: string) {
+  return `${href}${href.includes("?") ? "&" : "?"}edit=1`
+}
+
 export function OwnerSetupActivationRecovery() {
   const router = useRouter()
   const attempted = useRef(false)
@@ -59,7 +63,7 @@ export function OwnerSetupActivationRecovery() {
         </div>
         {issues[0] ? (
           <Button asChild variant="outline">
-            <Link href={`${issues[0].href}?edit=1`}>Review settings</Link>
+            <Link href={editHref(issues[0].href)}>Review settings</Link>
           </Button>
         ) : (
           <Button type="button" variant="outline" onClick={retry} disabled={pending}>

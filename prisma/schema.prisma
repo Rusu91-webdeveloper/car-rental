@@ -1935,7 +1935,6 @@ model CustomerDocument {
   auditEvents          AuditEvent[]
 
   @@unique([storageProviderId, storageKey])
-  @@unique([bookingId, documentTypeId, side, sequence])
   @@index([bookingId, documentTypeId])
   @@index([customerUserId, documentTypeId])
   @@index([retentionUntil, legalHold, deletionStatus])

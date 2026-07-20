@@ -1,5 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import type { DocumentConfigurationPageData, DocumentPolicyDraftInput } from "./types"
+import {
+  DEFAULT_DOCUMENT_ROLE_PERMISSIONS,
+  defaultDocumentRolePermission,
+} from "./default-role-permissions"
 
 const KEYS = ["IDENTITY_CARD", "PASSPORT", "DRIVING_LICENCE"] as const
 
@@ -152,15 +156,36 @@ export class PrismaDocumentConfigurationRepository {
           },
         })
       }
-      if (release.documentPolicyConfig.rolePermissions.length)
+      const inheritedPermissions =
+        release.documentPolicyConfig.rolePermissions.length > 0
+          ? release.documentPolicyConfig.rolePermissions.map((permission) => ({
+              accessRoleId: permission.accessRoleId,
+              mayView: permission.mayView,
+              mayDownload: permission.mayDownload,
+              mayDelete: permission.mayDelete,
+              mayManageLegalHold: permission.mayManageLegalHold,
+            }))
+          : (
+              await tx.accessRole.findMany({
+                where: {
+                  key: {
+                    in: Object.keys(DEFAULT_DOCUMENT_ROLE_PERMISSIONS),
+                  },
+                  status: "ACTIVE",
+                },
+                select: { id: true, key: true },
+              })
+            ).flatMap((role) => {
+              const permission = defaultDocumentRolePermission(role.key)
+              return permission
+                ? [{ accessRoleId: role.id, ...permission }]
+                : []
+            })
+      if (inheritedPermissions.length)
         await tx.documentPolicyRolePermission.createMany({
-          data: release.documentPolicyConfig.rolePermissions.map((permission) => ({
+          data: inheritedPermissions.map((permission) => ({
             documentPolicyConfigVersionId: version.id,
-            accessRoleId: permission.accessRoleId,
-            mayView: permission.mayView,
-            mayDownload: permission.mayDownload,
-            mayDelete: permission.mayDelete,
-            mayManageLegalHold: permission.mayManageLegalHold,
+            ...permission,
           })),
         })
       const updated = await tx.businessConfigurationRelease.update({

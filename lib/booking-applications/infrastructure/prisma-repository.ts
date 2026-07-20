@@ -1097,7 +1097,11 @@ export class PrismaBookingApplicationRepository
           })
           return mapView((await load(tx, row.id))!)
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 10_000,
+          timeout: 30_000,
+        },
       )
     } catch (error) {
       if (error instanceof BookingApplicationError) throw error

@@ -6,6 +6,7 @@ import { ConfigurationAccessDenied } from "@/components/admin/configuration-acce
 import { requireAdmin } from "@/lib/auth";
 import {
   ownerSettingsPageMode,
+  loadOwnerBookingWorkflowDependencies,
   prepareOwnerBookingExperienceEdit,
   type OwnerSettingsPageSearchParams,
 } from "@/lib/admin/owner-settings-edit";
@@ -17,6 +18,7 @@ export default async function BookingFlowSettingsPage({ searchParams }: { search
   const data = editing
     ? await prepareOwnerBookingExperienceEdit((await requireAdmin()).id)
     : await loadPhase6ConfigurationPage();
+  const { documents, legal, dependencyKey } = await loadOwnerBookingWorkflowDependencies(data.draftRelease?.id);
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
       <AdminPageHeader
@@ -25,8 +27,10 @@ export default async function BookingFlowSettingsPage({ searchParams }: { search
         description="Choose what customers see before they send a booking request."
       />
       <BookingFlowStepList
-        key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}`}
+        key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}-${dependencyKey}`}
         data={data}
+        documents={documents}
+        legal={legal}
         canEdit={caps.canManageBookingWorkflow}
         nextHref={nextHref}
       />

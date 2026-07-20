@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide"
+import { buildOwnerSettingsGuide, businessProfileReadiness } from "@/lib/admin/owner-settings-guide"
 import type { ConfigurationOverview } from "@/lib/business-configuration/workflow-service"
 
 type GuideOverview = Pick<
@@ -14,6 +14,7 @@ const company = {
   companyAddress: "Beispielweg 8",
   companyCity: "Berlin",
   companyZipCode: "10117",
+  companyCountry: "Deutschland",
   managingDirector: "Erika Beispiel",
   commercialRegister: "HRB 987654 B",
   registerCourt: "Amtsgericht Charlottenburg",
@@ -42,6 +43,20 @@ function overview(overrides: Partial<GuideOverview> = {}): GuideOverview {
 }
 
 describe("owner settings guide", () => {
+  it("reports the exact registered business details that still need attention", () => {
+    const readiness = businessProfileReadiness({
+      ...company,
+      companyName: "Carssss",
+      commercialRegister: "",
+    })
+
+    expect(readiness).toEqual({
+      complete: false,
+      missingFields: ["registered business name", "commercial register number"],
+    })
+    expect(businessProfileReadiness(company)).toEqual({ complete: true, missingFields: [] })
+  })
+
   it("treats demo placeholders as unfinished setup", () => {
     const guide = buildOwnerSettingsGuide({
       company: {
