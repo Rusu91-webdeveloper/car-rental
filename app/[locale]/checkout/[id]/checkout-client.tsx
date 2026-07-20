@@ -621,7 +621,7 @@ export function CheckoutClient({
   }
 
   return (
-      <div className="min-h-screen bg-muted pb-24">
+      <div className="qujo-page pb-24">
         {/* Header */}
         <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
           <div className="flex items-center gap-4">
@@ -634,7 +634,7 @@ export function CheckoutClient({
           </div>
         </header>
 
-        <div className="p-4 space-y-4">
+        <div className="mx-auto max-w-3xl space-y-4 p-4 sm:py-8">
           {/* Car Summary */}
           <div className="bg-background rounded-xl p-4 border border-border">
             <div className="flex gap-4">

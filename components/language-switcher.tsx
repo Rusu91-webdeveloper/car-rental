@@ -1,14 +1,19 @@
 "use client";
 
-import { useLocale } from "next-intl";
+import { useEffect } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/navigation";
-import { locales } from "@/i18n";
 
 export function LanguageSwitcher() {
   const locale = useLocale();
+  const t = useTranslations("common");
   const router = useRouter();
   const pathname = usePathname();
   const isEnglish = locale === "en";
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const switchLocale = (newLocale: string) => {
     if (newLocale === locale) {
@@ -21,7 +26,8 @@ export function LanguageSwitcher() {
     <button
       onClick={() => switchLocale(isEnglish ? "de" : "en")}
       className="relative inline-flex h-7 w-12 items-center rounded-full bg-muted/80 border border-border/50 transition-all duration-200 ease-in-out hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-      aria-label="Switch language"
+      aria-label={isEnglish ? t("switchToGerman") : t("switchToEnglish")}
+      title={isEnglish ? t("switchToGerman") : t("switchToEnglish")}
       role="switch"
       aria-checked={!isEnglish}>
       {/* Sliding indicator */}

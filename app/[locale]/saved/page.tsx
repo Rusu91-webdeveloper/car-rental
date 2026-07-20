@@ -32,7 +32,7 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
   const reviewStatsByCar = await getCarReviewStatsMap(savedCarsList.map((car) => car.id))
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.96)_100%)] pb-24">
+    <div className="qujo-page pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">

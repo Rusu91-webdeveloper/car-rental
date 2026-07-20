@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { config } from "@/lib/config"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { HomeClient } from "./home-client"
 

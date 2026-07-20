@@ -78,4 +78,27 @@ describe("Resend-only production email", () => {
     expect(JSON.stringify(result)).not.toContain("provider-secret-detail")
     expect(logError).toHaveBeenCalledWith("email.operation_failed")
   })
+
+  it("delivers contact messages to the owner with safe HTML and reply routing", async () => {
+    resendSend.mockResolvedValue({ data: { id: "synthetic-contact" }, error: null })
+    const { sendContactMessageEmail } = await import("@/lib/email")
+    const result = await sendContactMessageEmail({
+      to: ["owner@example.invalid"],
+      name: "Visitor <script>",
+      email: "visitor@example.invalid",
+      subject: "Rental & availability",
+      message: "Please check <b>tomorrow</b>.",
+      locale: "en",
+    })
+
+    expect(result).toEqual({ id: "synthetic-contact" })
+    const message = resendSend.mock.calls[0][0]
+    expect(message.to).toEqual(["owner@example.invalid"])
+    expect(message.replyTo).toBe("visitor@example.invalid")
+    expect(message.subject).toBe("[Kontakt] Rental & availability")
+    expect(message.html).toContain("Visitor &lt;script&gt;")
+    expect(message.html).toContain("Rental &amp; availability")
+    expect(message.html).toContain("Please check &lt;b&gt;tomorrow&lt;/b&gt;.")
+    expect(message.html).not.toContain("<script>")
+  })
 })

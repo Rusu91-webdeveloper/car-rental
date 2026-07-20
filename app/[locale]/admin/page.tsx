@@ -165,6 +165,7 @@ export default async function AdminPage({
     company: companySettings,
     overview: configurationOverview,
     completedStepIds: completedSetupSteps.map(({ targetId }) => targetId),
+    locale,
   })
   const setup = {
     completed: settingsGuide.completed,

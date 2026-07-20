@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl"
 import { getMessages } from "next-intl/server"
 import { DemoBanner } from "@/components/demo-banner"
 import { Footer } from "@/components/footer"
+import { Toaster } from "@/components/ui/toaster"
 import { getBusinessInfo } from "@/lib/business-info"
 import { locales } from "@/i18n"
 
@@ -32,6 +33,7 @@ export default async function LocaleLayout({
         <DemoBanner />
         <main className="flex-1">{children}</main>
         <Footer businessInfo={businessInfo} />
+        <Toaster />
       </div>
     </NextIntlClientProvider>
   )

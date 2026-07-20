@@ -8,8 +8,15 @@ type GuideOverview = Pick<
 >
 
 const company = {
-  companyName: "City Drive Rentals",
+  companyName: "Qujo Autovermietung GmbH",
   companyEmail: "hello@city-drive.example",
+  companyPhone: "+49 30 5550100",
+  companyAddress: "Beispielweg 8",
+  companyCity: "Berlin",
+  companyZipCode: "10117",
+  managingDirector: "Erika Beispiel",
+  commercialRegister: "HRB 987654 B",
+  registerCourt: "Amtsgericht Charlottenburg",
   bankName: "City Bank",
   accountName: "City Drive Rentals",
   accountNumber: "100200300",
@@ -160,6 +167,23 @@ describe("owner settings guide", () => {
       "business-basics",
       "booking-experience",
       "payments-communication",
+    ])
+  })
+
+  it("provides German copy for the owner setup when the admin locale is German", () => {
+    const guide = buildOwnerSettingsGuide({ company, overview: overview(), locale: "de" })
+
+    expect(guide.steps.map(({ title }) => title)).toEqual([
+      "Unternehmensdaten",
+      "Mietregeln und Steuern",
+      "Versicherung",
+      "Buchungsschritte für Kunden",
+      "Fahrerregeln",
+      "Kundeninformationen",
+      "Erforderliche Dokumente",
+      "Zahlungen und Kautionen",
+      "Kundennachrichten",
+      "Mietbedingungen und Datenschutz",
     ])
   })
 })

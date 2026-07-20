@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import Link, { usePathname } from "@/navigation";
 import { useLinkStatus } from "next/link";
+import { useLocale } from "next-intl";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 interface NavigationItem {
   label: string;
@@ -22,33 +24,37 @@ interface NavigationItem {
   icon: LucideIcon;
 }
 
-const ownerItems: NavigationItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Bookings", href: "/admin?section=bookings", icon: CalendarDays },
-  { label: "Cars", href: "/admin?section=cars", icon: Car },
-  { label: "Customers", href: "/admin?section=users", icon: Users },
-  { label: "Settings", href: "/admin/settings", icon: Settings2 },
-];
+function ownerItems(de: boolean): NavigationItem[] {
+  return [
+  { label: de ? "Übersicht" : "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: de ? "Buchungen" : "Bookings", href: "/admin?section=bookings", icon: CalendarDays },
+  { label: de ? "Fahrzeuge" : "Cars", href: "/admin?section=cars", icon: Car },
+  { label: de ? "Kunden" : "Customers", href: "/admin?section=users", icon: Users },
+  { label: de ? "Einstellungen" : "Settings", href: "/admin/settings", icon: Settings2 },
+  ];
+}
 
-const configurationItems: NavigationItem[] = [
+function configurationItems(de: boolean): NavigationItem[] {
+  return [
   {
-    label: "Booking Settings",
+    label: de ? "Buchungseinstellungen" : "Booking Settings",
     href: "/admin/bookings/settings",
     icon: CalendarDays,
   },
-  { label: "Car Pricing", href: "/admin/cars/pricing", icon: Car },
+  { label: de ? "Fahrzeugpreise" : "Car Pricing", href: "/admin/cars/pricing", icon: Car },
   {
-    label: "Customer Information",
+    label: de ? "Kundeninformationen" : "Customer Information",
     href: "/admin/customers/settings",
     icon: Users,
   },
-  { label: "Payments", href: "/admin/payments", icon: WalletCards },
+  { label: de ? "Zahlungen" : "Payments", href: "/admin/payments", icon: WalletCards },
   {
-    label: "Publish Changes",
+    label: de ? "Änderungen veröffentlichen" : "Publish Changes",
     href: "/admin/advanced/configuration",
     icon: CircleGauge,
   },
-];
+  ];
+}
 
 function NavigationLinkContent({ item }: { item: NavigationItem }) {
   const { pending } = useLinkStatus();
@@ -131,16 +137,17 @@ export function AdminNavigation({
   isAdmin: boolean;
   userName: string;
 }) {
+  const de = useLocale() === "de";
   const pathname = usePathname();
   const roleItems = isAdmin
-    ? ownerItems
+    ? ownerItems(de)
     : canViewConfiguration
-      ? configurationItems
+      ? configurationItems(de)
       : [];
   const items = !isAdmin && canViewDocuments
     ? [
         ...roleItems,
-        { label: "Documents", href: "/admin/documents", icon: FileCheck2 },
+        { label: de ? "Dokumente" : "Documents", href: "/admin/documents", icon: FileCheck2 },
       ]
     : roleItems;
   const showAdvancedConfiguration = !isAdmin && canViewConfiguration;
@@ -159,15 +166,15 @@ export function AdminNavigation({
               <Car className="h-5 w-5" />
             </span>
             <span>
-              <span className="block font-semibold">RentCar</span>
+              <span className="block font-semibold">Qujo</span>
               <span className="block text-xs text-muted-foreground">
-                Owner control center
+                {de ? "Verwaltungszentrale" : "Owner control center"}
               </span>
             </span>
           </Link>
         </div>
         <nav
-          aria-label="Admin navigation"
+          aria-label={de ? "Admin-Navigation" : "Admin navigation"}
           className="flex-1 space-y-1 overflow-y-auto p-3"
         >
           <NavigationLinks items={items} />
@@ -178,16 +185,19 @@ export function AdminNavigation({
               href="/admin/advanced/configuration"
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              <CircleGauge className="h-4 w-4" /> More
+              <CircleGauge className="h-4 w-4" /> {de ? "Mehr" : "More"}
             </Link>
           ) : null}
           <div className="mt-2 px-3 py-2">
-            <p className="truncate text-sm font-medium">{userName}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="truncate text-sm font-medium">{userName}</p>
+              <LanguageSwitcher />
+            </div>
             <Link
               href="/"
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              View customer site
+              {de ? "Kundenseite anzeigen" : "View customer site"}
             </Link>
           </div>
         </div>
@@ -200,14 +210,17 @@ export function AdminNavigation({
             onClick={(event) => openDashboardSection(event, pathname, "overview")}
             className="flex items-center gap-2 font-semibold"
           >
-            <Car className="h-5 w-5 text-primary" /> RentCar Admin
+            <Car className="h-5 w-5 text-primary" /> Qujo Admin
           </Link>
-          <Link href="/" className="text-xs text-muted-foreground">
-            Customer site
-          </Link>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Link href="/" className="text-xs text-muted-foreground">
+              {de ? "Kundenseite" : "Customer site"}
+            </Link>
+          </div>
         </div>
         <nav
-          aria-label="Admin navigation"
+          aria-label={de ? "Admin-Navigation" : "Admin navigation"}
           className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]"
         >
           <NavigationLinks items={items} />
@@ -216,7 +229,7 @@ export function AdminNavigation({
               href="/admin/advanced/configuration"
               className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground"
             >
-              <CircleGauge className="h-4 w-4" /> More
+              <CircleGauge className="h-4 w-4" /> {de ? "Mehr" : "More"}
             </Link>
           ) : null}
         </nav>

@@ -16,18 +16,18 @@ describe("owner-facing admin information architecture", () => {
   it("gives owners only the five everyday business destinations", () => {
     const navigation = source("components/admin/admin-navigation.tsx")
     const ownerItems = navigation.slice(
-      navigation.indexOf("const ownerItems"),
-      navigation.indexOf("const configurationItems"),
+      navigation.indexOf("function ownerItems"),
+      navigation.indexOf("function configurationItems"),
     )
     expect(ownerItems.match(/label:/g)).toHaveLength(5)
-    expect(ownerItems).toContain('label: "Dashboard"')
-    expect(ownerItems).toContain('label: "Bookings"')
-    expect(ownerItems).toContain('label: "Cars"')
-    expect(ownerItems).toContain('label: "Customers"')
-    expect(ownerItems).toContain('label: "Settings"')
-    expect(ownerItems).not.toContain('label: "Payments"')
-    expect(ownerItems).not.toContain('label: "Team"')
-    expect(ownerItems).not.toContain('label: "Documents"')
+    expect(ownerItems).toContain(': "Dashboard"')
+    expect(ownerItems).toContain(': "Bookings"')
+    expect(ownerItems).toContain(': "Cars"')
+    expect(ownerItems).toContain(': "Customers"')
+    expect(ownerItems).toContain(': "Settings"')
+    expect(ownerItems).not.toContain(': "Payments"')
+    expect(ownerItems).not.toContain(': "Team"')
+    expect(ownerItems).not.toContain(': "Documents"')
     expect(navigation).toContain("const showAdvancedConfiguration = !isAdmin && canViewConfiguration")
   })
 
@@ -38,7 +38,7 @@ describe("owner-facing admin information architecture", () => {
     expect(settingsPage).toContain("<OwnerSettingsWizard")
     expect(settingsPage).toContain("<OwnerSettingsStepContent")
     expect(settingsPage).toContain("requestedStep ?? guide.nextStep")
-    expect(wizard).toContain("Step {currentIndex + 1} of {guide.total}")
+    expect(wizard).toContain('{de ? "Schritt" : "Step"} {currentIndex + 1} {de ? "von" : "of"} {guide.total}')
     expect(wizard).toContain("Select any step to review or change it.")
     expect(wizard).toContain("<ArrowLeft")
     expect(stepContent).toContain("nextHref={nextHref}")
@@ -81,7 +81,7 @@ describe("owner-facing admin information architecture", () => {
 
   it("keeps technical operations outside the owner navigation", () => {
     const navigation = source("components/admin/admin-navigation.tsx")
-    expect(navigation).toContain('label: "Publish Changes"')
+    expect(navigation).toContain(': "Publish Changes"')
     expect(navigation).not.toContain('label: "Configuration Releases"')
     expect(navigation).not.toContain("cron")
     expect(navigation).not.toContain("OIDC")

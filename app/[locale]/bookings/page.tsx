@@ -137,13 +137,13 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   }
 
   return (
-    <div className="min-h-screen bg-muted pb-20">
+    <div className="qujo-page pb-24">
       {/* Header */}
-      <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
-        <h1 className="text-xl font-bold">{t("bookings.title")}</h1>
+      <header className="sticky top-0 z-10 border-b border-black/[0.06] bg-[#f8f7f2]/90 px-4 py-5 backdrop-blur-xl">
+        <h1 className="mx-auto max-w-5xl text-2xl font-bold">{t("bookings.title")}</h1>
       </header>
 
-      <div className="p-4">
+      <div className="mx-auto max-w-5xl p-4 sm:py-8">
         {userBookings.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">

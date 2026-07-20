@@ -57,9 +57,21 @@ interface OwnerSettingsWizardProps {
   guide: OwnerSettingsGuide
   currentStepId: string
   children: ReactNode
+  locale?: string
 }
 
-export function OwnerSettingsWizard({ guide, currentStepId, children }: OwnerSettingsWizardProps) {
+function localizedStateLabel(state: OwnerSettingsStepState, de: boolean) {
+  if (!de) return stateMeta[state].label
+  return ({ complete: "Abgeschlossen", attention: "Aufmerksamkeit erforderlich", review: "Bitte prüfen", "in-progress": "Begonnen", "not-started": "Nicht begonnen" } as const)[state]
+}
+
+function localizedPhaseLabel(phaseId: string, fallback: string, de: boolean) {
+  if (!de) return fallback
+  return ({ "business-basics": "Unternehmensgrundlagen", "booking-experience": "Buchungserlebnis", "payments-communication": "Zahlungen und Kommunikation" } as Record<string, string>)[phaseId] ?? fallback
+}
+
+export function OwnerSettingsWizard({ guide, currentStepId, children, locale }: OwnerSettingsWizardProps) {
+  const de = locale === "de"
   const currentIndex = guide.steps.findIndex((step) => step.id === currentStepId)
   const currentStep = guide.steps[currentIndex]
   if (!currentStep) return null
@@ -74,31 +86,31 @@ export function OwnerSettingsWizard({ guide, currentStepId, children }: OwnerSet
         <CardContent className="space-y-3 px-5 sm:px-6">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary">Business setup</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">{de ? "Unternehmenseinrichtung" : "Business setup"}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Step {currentIndex + 1} of {guide.total}
+                {de ? "Schritt" : "Step"} {currentIndex + 1} {de ? "von" : "of"} {guide.total}
               </p>
             </div>
             <p className="text-2xl font-semibold tracking-tight">{guide.percent}%</p>
           </div>
-          <Progress value={guide.percent} aria-label={`${guide.percent}% complete`} />
+          <Progress value={guide.percent} aria-label={de ? `${guide.percent}% abgeschlossen` : `${guide.percent}% complete`} />
         </CardContent>
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
         <Card className="gap-0 overflow-hidden py-0 shadow-none lg:sticky lg:top-6">
           <CardHeader className="border-b px-5 py-5">
-            <CardTitle className="text-base">Your settings</CardTitle>
-            <CardDescription>Select any step to review or change it.</CardDescription>
+            <CardTitle className="text-base">{de ? "Ihre Einstellungen" : "Your settings"}</CardTitle>
+            <CardDescription>{de ? "Wählen Sie einen Schritt aus, um ihn zu prüfen oder zu ändern." : "Select any step to review or change it."}</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <nav aria-label="Business setup steps">
+            <nav aria-label={de ? "Schritte der Unternehmenseinrichtung" : "Business setup steps"}>
               {OWNER_SETTINGS_PHASES.map((phase) => {
                 const phaseSteps = guide.steps.filter((step) => step.phase === phase.id)
                 return (
                   <div key={phase.id} className="border-b last:border-b-0">
                     <p className="bg-muted/35 px-5 py-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {phase.label}
+                      {localizedPhaseLabel(phase.id, phase.label, de)}
                     </p>
                     <ol>
                       {phaseSteps.map((step) => {
@@ -129,7 +141,7 @@ export function OwnerSettingsWizard({ guide, currentStepId, children }: OwnerSet
                               <span className="min-w-0 flex-1">
                                 <span className={cn("block truncate text-sm font-medium", active && "text-primary")}>{step.title}</span>
                                 <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                                  <StepIcon className="h-3 w-3" /> {stateMeta[step.state].label}
+                                  <StepIcon className="h-3 w-3" /> {localizedStateLabel(step.state, de)}
                                 </span>
                               </span>
                               <LinkLoadingIndicator />
@@ -149,9 +161,9 @@ export function OwnerSettingsWizard({ guide, currentStepId, children }: OwnerSet
           <Card className="gap-0 overflow-hidden border-primary/25 py-0 shadow-sm">
             <CardHeader className="bg-muted/25 px-5 py-5 sm:px-7 sm:py-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-medium text-primary">Step {currentIndex + 1}</p>
+                <p className="text-sm font-medium text-primary">{de ? "Schritt" : "Step"} {currentIndex + 1}</p>
                 <Badge variant="outline" className={meta.className}>
-                  <StatusIcon className="h-3 w-3" /> {meta.label}
+                  <StatusIcon className="h-3 w-3" /> {localizedStateLabel(currentStep.state, de)}
                 </Badge>
               </div>
               <CardTitle id="settings-step-title" className="mt-2 text-2xl tracking-tight">
@@ -166,7 +178,7 @@ export function OwnerSettingsWizard({ guide, currentStepId, children }: OwnerSet
           {previousStep ? (
             <Button asChild variant="ghost" className="-ml-2 w-fit">
               <Link href={previousStep.href}>
-                <ArrowLeft className="h-4 w-4" /> Back to {previousStep.title} <LinkLoadingIndicator />
+                <ArrowLeft className="h-4 w-4" /> {de ? "Zurück zu" : "Back to"} {previousStep.title} <LinkLoadingIndicator />
               </Link>
             </Button>
           ) : null}

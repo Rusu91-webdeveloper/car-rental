@@ -70,7 +70,7 @@ function VerifyEmailContent() {
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold mb-4">Verify it's you</h1>
+        <h1 className="text-3xl font-bold mb-4">Verify it&apos;s you</h1>
         <p className="text-muted-foreground mb-2">
           {t.rich("verify.subtitle", {
             highlight: (chunks) => <span className="text-foreground font-medium">{chunks}</span>,
@@ -107,7 +107,7 @@ function VerifyEmailContent() {
           Verify Account
         </button>
 
-        <p className="text-muted-foreground text-sm mb-2">Didn't receive the email? Check your spam folder.</p>
+        <p className="text-muted-foreground text-sm mb-2">Didn&apos;t receive the email? Check your spam folder.</p>
         <button className="text-primary font-medium text-sm">Change email address</button>
       </div>
     </div>

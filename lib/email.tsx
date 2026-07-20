@@ -10,7 +10,7 @@ const safeEmailConsole = {
   warn(message: string, ...discarded: unknown[]) { void message; void discarded; logger.warn("email.operation_skipped") },
   error(message: string, ...discarded: unknown[]) { void message; void discarded; logger.error("email.operation_failed") },
 }
-const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "RentCar <noreply@rentcar.com>"
+const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "Qujo Autovermietung <noreply@qujo.de>"
 let resend: Resend | undefined
 
 function getResend() {
@@ -22,6 +22,7 @@ type SendEmailInput = {
   to: string | string[]
   subject: string
   html: string
+  replyTo?: string
 }
 
 /**
@@ -110,7 +111,7 @@ function resolveSupportEmail(
   )
 }
 
-async function sendEmail({ to, subject, html }: SendEmailInput) {
+async function sendEmail({ to, subject, html, replyTo }: SendEmailInput) {
   const configStatus = getEmailConfigStatus()
 
   // Validate email configuration
@@ -146,6 +147,7 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
       to,
       subject,
       html,
+      ...(replyTo ? { replyTo } : {}),
     })
 
     if (error) {
@@ -166,6 +168,45 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
     })
     return { error: "Email delivery failed" }
   }
+}
+
+export async function sendContactMessageEmail(input: {
+  to: string[]
+  name: string
+  email: string
+  subject: string
+  message: string
+  locale: "de" | "en"
+}) {
+  const labels = input.locale === "de"
+    ? { heading: "Neue Nachricht über das Kontaktformular", name: "Name", email: "E-Mail", subject: "Betreff", message: "Nachricht" }
+    : { heading: "New contact form message", name: "Name", email: "Email", subject: "Subject", message: "Message" }
+
+  return sendEmail({
+    to: input.to,
+    replyTo: input.email,
+    subject: `[Kontakt] ${input.subject}`,
+    html: `
+      <!doctype html>
+      <html lang="${input.locale}">
+        <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
+          <div style="max-width:640px;margin:0 auto;padding:32px 20px">
+            <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
+              <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">Qujo Autovermietung GmbH</p>
+              <h1 style="margin:0 0 24px;font-size:24px">${labels.heading}</h1>
+              <p><strong>${labels.name}:</strong> ${escapeHtml(input.name)}</p>
+              <p><strong>${labels.email}:</strong> <a href="mailto:${escapeHtml(input.email)}">${escapeHtml(input.email)}</a></p>
+              <p><strong>${labels.subject}:</strong> ${escapeHtml(input.subject)}</p>
+              <div style="margin-top:24px;padding-top:20px;border-top:1px solid #e2e7e3">
+                <p style="margin:0 0 8px"><strong>${labels.message}</strong></p>
+                <p style="margin:0;white-space:pre-wrap">${escapeHtml(input.message)}</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  })
 }
 
 export async function sendProductionAlertTest(input: {
@@ -244,7 +285,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         supportEmail: true,
       },
     })
-    const companyName = companySettings?.companyName || "RentCar"
+    const companyName = companySettings?.companyName || "Qujo Autovermietung"
     const supportEmail = resolveSupportEmail(companySettings)
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"

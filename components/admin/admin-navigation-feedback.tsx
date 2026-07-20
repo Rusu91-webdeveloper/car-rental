@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
+import { useLocale } from "next-intl"
 
 const NAVIGATION_TIMEOUT_MS = 30_000
 
@@ -14,6 +15,7 @@ export function AdminNavigationFeedback() {
 }
 
 function NavigationFeedbackController() {
+  const de = useLocale() === "de"
   const [pending, setPending] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -75,7 +77,7 @@ function NavigationFeedbackController() {
       <div className="h-1 overflow-hidden bg-primary/15">
         <div className="h-full w-1/2 animate-pulse rounded-r-full bg-primary shadow-[0_0_12px_hsl(var(--primary))]" />
       </div>
-      <span className="sr-only">Opening page…</span>
+      <span className="sr-only">{de ? "Seite wird geöffnet…" : "Opening page…"}</span>
     </div>
   )
 }

@@ -17,10 +17,14 @@ interface BusinessSettingsSearchParams {
 }
 
 export default async function BusinessSettingsPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<BusinessSettingsSearchParams>;
 }) {
+  const { locale } = await params;
+  const de = locale === "de";
   const admin = await requireAdmin();
   const requested = await searchParams;
   // The overview already performs several bounded read batches. Finish it
@@ -43,6 +47,7 @@ export default async function BusinessSettingsPage({
     company,
     overview,
     completedStepIds: completedSteps.map(({ targetId }) => targetId),
+    locale,
   });
   const hasSetup = Boolean(overview.activeRelease || overview.draftRelease);
   const requestedStep = guide.steps.find((step) => step.id === requested.step);
@@ -62,18 +67,18 @@ export default async function BusinessSettingsPage({
       <div className="rounded-2xl border bg-card p-5 shadow-sm sm:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <AdminPageHeader
-            eyebrow="Business settings"
-            title="Let’s set up your rental business"
-            description="Complete one simple step at a time. We will always show you what comes next, and you can change anything later."
+            eyebrow={de ? "Unternehmenseinstellungen" : "Business settings"}
+            title={de ? "Richten Sie Ihr Mietwagengeschäft ein" : "Let’s set up your rental business"}
+            description={de ? "Schließen Sie einen einfachen Schritt nach dem anderen ab. Wir zeigen Ihnen immer, was als Nächstes kommt, und Sie können später alles ändern." : "Complete one simple step at a time. We will always show you what comes next, and you can change anything later."}
           />
           {hasSetup ? (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5" /> {guide.completed} complete
+                <CheckCircle2 className="h-3.5 w-3.5" /> {guide.completed} {de ? "abgeschlossen" : "complete"}
               </span>
               {guide.attentionCount > 0 ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-                  <CircleAlert className="h-3.5 w-3.5" /> {guide.attentionCount} need attention
+                  <CircleAlert className="h-3.5 w-3.5" /> {guide.attentionCount} {de ? "benötigen Aufmerksamkeit" : "need attention"}
                 </span>
               ) : null}
             </div>
@@ -84,7 +89,7 @@ export default async function BusinessSettingsPage({
       {!hasSetup ? (
         <StartBusinessSetup />
       ) : currentStep ? (
-        <OwnerSettingsWizard guide={guide} currentStepId={currentStep.id}>
+        <OwnerSettingsWizard guide={guide} currentStepId={currentStep.id} locale={locale}>
           <OwnerSettingsStepContent
             step={currentStep}
             adminId={admin.id}
@@ -93,7 +98,7 @@ export default async function BusinessSettingsPage({
           />
         </OwnerSettingsWizard>
       ) : (
-        <BusinessSetupGuide guide={guide} />
+        <BusinessSetupGuide guide={guide} locale={locale} />
       )}
     </main>
   );

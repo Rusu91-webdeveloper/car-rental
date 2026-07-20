@@ -5,7 +5,7 @@ const hasAuthEnv = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.NEXTAUTH_SECRET
 )
 
-const nextAuth = hasAuthEnv
+const configuredAuth = hasAuthEnv
   ? NextAuth({
       providers: [
         GoogleProvider({
@@ -17,9 +17,7 @@ const nextAuth = hasAuthEnv
         strategy: "jwt",
       },
       secret: process.env.NEXTAUTH_SECRET,
-    })
-  : {
-      auth: ((handler: any) => handler) as any,
-    }
+    }).auth
+  : ((handler: unknown) => handler) as ReturnType<typeof NextAuth>["auth"]
 
-export const auth = nextAuth.auth
+export const auth = configuredAuth

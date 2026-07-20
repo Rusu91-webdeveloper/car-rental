@@ -46,7 +46,7 @@ export function CarCard({
   const [isPending, startTransition] = useTransition()
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
   const categoryKey = car.category.toLowerCase()
-  const categoryLabel = t(`categories.${categoryKey}` as any)
+  const categoryLabel = t(`categories.${categoryKey}`)
 
   // Preserve date query params when linking to car detail page
   const getCarDetailUrl = () => {
@@ -86,7 +86,7 @@ export function CarCard({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "AVAILABLE":
-        return "bg-emerald-600 text-white"
+        return "bg-[#dff0a5] text-[#20370f]"
       case "LOW_STOCK":
         return "bg-amber-500 text-white"
       case "MAINTENANCE":
@@ -110,22 +110,20 @@ export function CarCard({
   }
 
   return (
-    <Link href={getCarDetailUrl()} className="block h-full">
-      <article className="group h-full overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_48px_-36px_rgba(15,23,42,0.65)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_30px_70px_-42px_rgba(15,23,42,0.75)]">
+    <Link href={getCarDetailUrl()} className="block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4">
+      <article className="group h-full overflow-hidden rounded-[1.35rem] border border-black/[0.07] bg-white shadow-[0_18px_45px_-36px_rgba(19,37,29,0.55)] transition-all duration-300 hover:-translate-y-1 hover:border-black/[0.12] hover:shadow-[0_26px_60px_-38px_rgba(19,37,29,0.62)]">
         {/* Image */}
-        <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+        <div className="relative aspect-[16/10] overflow-hidden bg-[#eef0ea]">
           <img
             src={car.image || "/placeholder.jpg"}
             alt={displayName}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
           />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.24),transparent_34%),radial-gradient(circle_at_82%_100%,rgba(15,23,42,0.16),transparent_45%)]" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/58 via-black/30 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/28 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent" />
           <div className="absolute top-3 left-3">
             <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.09em] shadow-lg ring-1 ring-black/10 ${getStatusColor(car.status)}`}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.11em] shadow-sm ring-1 ring-black/10 ${getStatusColor(car.status)}`}
             >
               {getStatusText(car.status)}
             </span>
@@ -133,7 +131,7 @@ export function CarCard({
           <button
             onClick={handleSaveClick}
             disabled={isPending}
-            className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/75 bg-white/95 text-slate-700 shadow-lg transition-transform hover:scale-110 disabled:opacity-60"
+            className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/60 bg-white/90 text-[#263c32] shadow-lg backdrop-blur transition-transform hover:scale-105 disabled:opacity-60"
             aria-label={isSaved ? "Unsave car" : "Save car"}
           >
             <svg
@@ -152,13 +150,13 @@ export function CarCard({
 
         {/* Content */}
         <div className="p-4 sm:p-5">
-          <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">{categoryLabel}</span>
-              <h3 className="mt-1 line-clamp-1 text-xl font-bold leading-tight text-slate-900 sm:text-2xl">{displayName}</h3>
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-800">{categoryLabel}</span>
+              <h3 className="mt-1 line-clamp-1 text-xl font-bold leading-tight text-[#13251d] sm:text-[1.4rem]">{displayName}</h3>
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-lg font-bold text-slate-900">
+              <div className="text-lg font-bold text-[#13251d]">
                 {formatCents(car.price)}
                 <span className="text-sm font-normal text-slate-500">/ {t("car.pricePerDay")}</span>
               </div>
@@ -166,18 +164,18 @@ export function CarCard({
           </div>
 
           <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
-            <div className="flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700">
+            <div className="flex items-center gap-1 rounded-full bg-[#f2f3ed] px-2 py-1 text-[#5e681f]">
               <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.922-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.196-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81H7.03a1 1 0 00.95-.69l1.07-3.292z" />
               </svg>
-              <span className="font-semibold text-slate-900">{car.rating.toFixed(1)}</span>
+              <span className="font-semibold text-[#13251d]">{car.rating.toFixed(1)}</span>
             </div>
             <span>{t("car.reviews", { count: car.reviews })}</span>
           </div>
 
           {/* Specs */}
           <div className="mb-5 grid grid-cols-3 gap-2 text-xs text-slate-600">
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+            <div className="flex items-center gap-1.5 rounded-lg bg-[#f5f5f1] px-2 py-2">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -188,7 +186,7 @@ export function CarCard({
               </svg>
               <span className="line-clamp-1">{car.specs.gearbox}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+            <div className="flex items-center gap-1.5 rounded-lg bg-[#f5f5f1] px-2 py-2">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -199,7 +197,7 @@ export function CarCard({
               </svg>
               <span className="line-clamp-1">{t("car.seats", { count: car.specs.seats })}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2">
+            <div className="flex items-center gap-1.5 rounded-lg bg-[#f5f5f1] px-2 py-2">
               {car.specs.fuel === "EV" || car.specs.fuel === "Electric" ? (
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -228,7 +226,7 @@ export function CarCard({
           </div>
 
           {/* Book Button */}
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition-colors hover:bg-slate-800">
+          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13251d] px-4 py-3 font-semibold text-white transition-colors hover:bg-[#1e372b]">
             <span>{t("common.bookNow")}</span>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

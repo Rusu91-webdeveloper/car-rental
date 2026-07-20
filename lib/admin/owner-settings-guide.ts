@@ -54,6 +54,13 @@ export function ownerSettingsStepHref(stepId: string) {
 interface CompanySetupDetails {
   companyName: string
   companyEmail: string
+  companyPhone?: string | null
+  companyAddress?: string | null
+  companyCity?: string | null
+  companyZipCode?: string | null
+  managingDirector?: string | null
+  commercialRegister?: string | null
+  registerCourt?: string | null
   bankName: string
   accountName: string
   accountNumber: string
@@ -66,6 +73,7 @@ interface OwnerSettingsGuideInput {
   company: CompanySetupDetails | null
   overview: Pick<ConfigurationOverview, "domainStatuses" | "legalHealth">
   completedStepIds?: string[]
+  locale?: string
 }
 
 const placeholderValues = new Set([
@@ -77,6 +85,12 @@ const placeholderValues = new Set([
   "yourswift",
   "support@rentcar.com",
   "admin@rentcar.com",
+  "+49 (0) 30 12345678",
+  "musterstraße 123",
+  "10115 berlin",
+  "max mustermann",
+  "hrb 123456 b",
+  "amtsgericht berlin-charlottenburg",
 ])
 
 function isRealValue(value: string | null | undefined) {
@@ -117,6 +131,7 @@ function combineStates(...states: OwnerSettingsStepState[]): OwnerSettingsStepSt
 }
 
 export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSettingsGuide {
+  const tr = (english: string, german: string) => (input.locale === "de" ? german : english)
   const completedStepIds = new Set(input.completedStepIds ?? [])
   const savedState = (id: string, current: OwnerSettingsStepState): OwnerSettingsStepState => {
     if (!completedStepIds.has(id) || current === "attention" || current === "review") return current
@@ -132,7 +147,16 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
   const legalAcceptance = domainState(input.overview, ["legal-acceptance"])
 
   const hasProfile = Boolean(
-    input.company && isRealValue(input.company.companyName) && isRealValue(input.company.companyEmail),
+    input.company &&
+      input.company.companyName === "Qujo Autovermietung GmbH" &&
+      isRealValue(input.company.companyEmail) &&
+      isRealValue(input.company.companyPhone) &&
+      isRealValue(input.company.companyAddress) &&
+      isRealValue(input.company.companyCity) &&
+      isRealValue(input.company.companyZipCode) &&
+      isRealValue(input.company.managingDirector) &&
+      isRealValue(input.company.commercialRegister) &&
+      isRealValue(input.company.registerCourt),
   )
   const hasPaymentDetails = Boolean(
     input.company &&
@@ -152,8 +176,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
   const steps: OwnerSettingsStep[] = [
     {
       id: "business-profile",
-      title: "Business details",
-      description: "Your business name, customer contact details, address, and currency.",
+      title: tr("Business details", "Unternehmensdaten"),
+      description: tr("Your business name, customer contact details, address, and currency.", "Unternehmensname, Kundenkontaktdaten, Anschrift und Währung."),
       href: ownerSettingsStepHref("business-profile"),
       phase: "business-basics",
       state: hasProfile ? "complete" : "not-started",
@@ -161,8 +185,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "rental-rules",
-      title: "Rental rules and tax",
-      description: "Set the minimum booking length and tax rules used for every car.",
+      title: tr("Rental rules and tax", "Mietregeln und Steuern"),
+      description: tr("Set the minimum booking length and tax rules used for every car.", "Legen Sie Mindestmietdauer und Steuerregeln für alle Fahrzeuge fest."),
       href: ownerSettingsStepHref("rental-rules"),
       phase: "business-basics",
       state: savedState("rental-rules", pricing.state),
@@ -170,8 +194,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "insurance",
-      title: "Insurance",
-      description: "Decide whether insurance is offered and what customers pay per day.",
+      title: tr("Insurance", "Versicherung"),
+      description: tr("Decide whether insurance is offered and what customers pay per day.", "Legen Sie fest, ob eine Versicherung angeboten wird und welchen Tagespreis Kunden zahlen."),
       href: ownerSettingsStepHref("insurance"),
       phase: "business-basics",
       state: savedState("insurance", insurance.state),
@@ -179,8 +203,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "booking-flow",
-      title: "Customer booking steps",
-      description: "Choose which steps customers complete during the booking journey.",
+      title: tr("Customer booking steps", "Buchungsschritte für Kunden"),
+      description: tr("Choose which steps customers complete during the booking journey.", "Wählen Sie, welche Schritte Kunden während der Buchung durchlaufen."),
       href: ownerSettingsStepHref("booking-flow"),
       phase: "booking-experience",
       state: savedState("booking-flow", bookingFlow.state),
@@ -188,8 +212,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "driver-rules",
-      title: "Driver rules",
-      description: "Set the minimum age and driving-licence requirements.",
+      title: tr("Driver rules", "Fahrerregeln"),
+      description: tr("Set the minimum age and driving-licence requirements.", "Legen Sie Mindestalter und Führerscheinanforderungen fest."),
       href: ownerSettingsStepHref("driver-rules"),
       phase: "booking-experience",
       state: savedState("driver-rules", customerDriver.state),
@@ -197,8 +221,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "customer-information",
-      title: "Customer information",
-      description: "Choose which customer and driver details are required.",
+      title: tr("Customer information", "Kundeninformationen"),
+      description: tr("Choose which customer and driver details are required.", "Wählen Sie, welche Kunden- und Fahrerangaben erforderlich sind."),
       href: ownerSettingsStepHref("customer-information"),
       phase: "booking-experience",
       state: savedState("customer-information", customerDriver.state),
@@ -206,8 +230,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "documents",
-      title: "Required documents",
-      description: "Choose which documents customers provide and when they provide them.",
+      title: tr("Required documents", "Erforderliche Dokumente"),
+      description: tr("Choose which documents customers provide and when they provide them.", "Wählen Sie, welche Dokumente Kunden zu welchem Zeitpunkt bereitstellen müssen."),
       href: ownerSettingsStepHref("documents"),
       phase: "booking-experience",
       state: savedState("documents", documents.state),
@@ -215,8 +239,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "payments",
-      title: "Payments and deposits",
-      description: "Set payment methods, bank details, booking deposits, and customer instructions.",
+      title: tr("Payments and deposits", "Zahlungen und Kautionen"),
+      description: tr("Set payment methods, bank details, booking deposits, and customer instructions.", "Legen Sie Zahlungsarten, Bankdaten, Buchungsanzahlungen und Kundenhinweise fest."),
       href: ownerSettingsStepHref("payments"),
       phase: "payments-communication",
       state: savedState("payments", combineStates(hasPaymentDetails ? "complete" : "not-started", payments.state)),
@@ -224,8 +248,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "customer-messages",
-      title: "Customer messages",
-      description: "Set notification addresses and the messages customers receive.",
+      title: tr("Customer messages", "Kundennachrichten"),
+      description: tr("Set notification addresses and the messages customers receive.", "Legen Sie Benachrichtigungsadressen und Kundennachrichten fest."),
       href: ownerSettingsStepHref("customer-messages"),
       phase: "payments-communication",
       state: savedState("customer-messages", combineStates(hasNotificationContacts ? "complete" : "not-started", confirmations.state)),
@@ -233,8 +257,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
     },
     {
       id: "legal",
-      title: "Legal terms and privacy",
-      description: "Publish the terms and privacy notice customers must accept.",
+      title: tr("Legal terms and privacy", "Mietbedingungen und Datenschutz"),
+      description: tr("Publish the terms and privacy notice customers must accept.", "Veröffentlichen Sie Mietbedingungen und Datenschutzhinweise, denen Kunden zustimmen müssen."),
       href: ownerSettingsStepHref("legal"),
       phase: "payments-communication",
       state: savedState("legal", combineStates(legalAcceptance.state, legalState)),

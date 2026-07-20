@@ -1,122 +1,43 @@
-import Link from "@/navigation"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { ClientOnly } from "@/components/client-only"
-import { getTranslations } from "next-intl/server"
+import { PublicLegalPage, type PublicLegalSection } from "@/components/legal/public-legal-page"
 import { getBusinessInfo } from "@/lib/business-info"
 
-export default async function DatenschutzPage() {
-  const t = await getTranslations("datenschutz")
-  const businessInfo = await getBusinessInfo()
+const deSections: PublicLegalSection[] = [
+  { title: "2. Aufruf der Website und Hosting", paragraphs: ["Bei jedem Aufruf verarbeiten unsere Hosting-Systeme technisch erforderliche Verbindungsdaten, insbesondere IP-Adresse, Zeitpunkt, angeforderte URL, Referrer, Browser-/Geräteinformationen und HTTP-Status. Die Verarbeitung erfolgt zur sicheren und störungsfreien Bereitstellung der Website auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO. Serverprotokolle werden nur so lange gespeichert, wie dies für Betrieb, Sicherheit und Missbrauchsaufklärung erforderlich ist."] },
+  { title: "3. Kundenkonto und Anmeldung", paragraphs: ["Wenn die Anmeldung aktiviert ist, verarbeiten wir Kontaktdaten, Profilinformationen, interne Benutzerkennungen sowie Anmelde- und Sitzungsdaten. Bei der Anmeldung mit Google erhalten wir die von Ihnen freigegebenen Basisprofildaten. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, soweit die Anmeldung der Anbahnung oder Durchführung eines Mietvertrags dient, im Übrigen Art. 6 Abs. 1 lit. f DSGVO zur sicheren Kontoverwaltung."] },
+  { title: "4. Buchungsanfragen und Fahrzeugmiete", paragraphs: ["Für Buchungsanfragen und Mietverträge verarbeiten wir die erforderlichen Stamm-, Kontakt-, Fahrer-, Führerschein-, Buchungs-, Fahrzeug-, Preis-, Zahlungsstatus- und Kommunikationsdaten. Soweit im Buchungsablauf verlangt, verarbeiten wir außerdem hochgeladene Identitäts- oder Führerscheindokumente. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO. Gesetzlich erforderliche Nachweise und Aufbewahrung erfolgen nach Art. 6 Abs. 1 lit. c DSGVO; Betrugsprävention, Anspruchsdurchsetzung und Flotten-/Betriebssicherheit beruhen auf Art. 6 Abs. 1 lit. f DSGVO."], bullets: ["Nicht erforderliche Dokumente werden nicht angefordert.", "Dokumente werden zugriffsgeschützt gespeichert und nur autorisierten Mitarbeitenden zur Prüfung bereitgestellt.", "Die jeweils im Buchungsablauf angezeigten Hinweise zu Pflichtfeldern, Dokumenten und Aufbewahrung gelten ergänzend."] },
+  { title: "5. Kontaktformular und Kundenservice", paragraphs: ["Wenn Sie uns schreiben, verarbeiten wir Name, E-Mail-Adresse, Betreff, Nachricht sowie technische Sicherheitsdaten, um Ihre Anfrage zu beantworten und Missbrauch zu verhindern. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO bei vorvertraglichen oder vertraglichen Anliegen, ansonsten Art. 6 Abs. 1 lit. f DSGVO. Nachrichten werden an die intern konfigurierte zuständige Stelle übermittelt und über unseren E-Mail-Dienstleister zugestellt."] },
+  { title: "6. Zahlungen", paragraphs: ["Die derzeit vorgesehenen Zahlungsarten und Zahlungsanweisungen werden im Buchungsprozess angezeigt. Wir verarbeiten Zahlungsstatus, Beträge, Referenzen und erforderliche Abrechnungsdaten. Vollständige Zugangsdaten zu Bankkonten oder Zahlungskarten werden nicht über das Kontaktformular erhoben. Rechtsgrundlagen sind Art. 6 Abs. 1 lit. b und lit. c DSGVO."] },
+  { title: "7. Empfänger und Auftragsverarbeiter", paragraphs: ["Wir setzen – abhängig von der aktivierten Produktionskonfiguration – technische Dienstleister für Hosting, Datenbankbetrieb, private Dateispeicherung, Authentifizierung und E-Mail-Versand ein. Dazu können Vercel (Hosting und private Dateispeicherung), Google (optionale Anmeldung) und Resend (transaktionaler E-Mail-Versand) gehören. Dienstleister erhalten nur die für ihre Aufgabe erforderlichen Daten und werden, soweit erforderlich, nach Art. 28 DSGVO verpflichtet. Behörden, Gerichte, Versicherer oder professionelle Berater erhalten Daten nur bei gesetzlicher Grundlage oder soweit dies zur Durchsetzung oder Abwehr von Ansprüchen erforderlich ist."] },
+  { title: "8. Übermittlungen in Drittländer", paragraphs: ["Bei einzelnen Dienstleistern kann eine Verarbeitung außerhalb des Europäischen Wirtschaftsraums, insbesondere in den USA, stattfinden. In diesem Fall stützen wir die Übermittlung auf einen Angemessenheitsbeschluss oder geeignete Garantien wie die Standardvertragsklauseln der Europäischen Kommission und prüfen zusätzliche Schutzmaßnahmen. Resend gibt an, Daten in den USA zu speichern und Standardvertragsklauseln in seinem Auftragsverarbeitungsvertrag zu verwenden."] },
+  { title: "9. Cookies und lokale Speicherung", paragraphs: ["Wir verwenden nur technisch erforderliche Cookies bzw. vergleichbare Speichermechanismen, insbesondere für sichere Anmeldung, Sitzungsverwaltung, Sprache und Schutzfunktionen. Sie sind für die von Ihnen angeforderten Dienste erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG). Derzeit setzen wir keine Marketing- oder profilbildenden Tracking-Cookies ein. Werden künftig nicht erforderliche Technologien ergänzt, holen wir vorher eine Einwilligung ein."] },
+  { title: "10. Speicherdauer", paragraphs: ["Wir speichern personenbezogene Daten nur so lange, wie es für den jeweiligen Zweck erforderlich ist. Kontaktanfragen werden grundsätzlich spätestens zwölf Monate nach abschließender Bearbeitung gelöscht, sofern kein Vertrags- oder Rechtsstreitbezug besteht. Kontodaten werden bis zur Löschung des Kontos gespeichert. Buchungs-, Vertrags- und Abrechnungsdaten bleiben während gesetzlicher handels- und steuerrechtlicher Aufbewahrungsfristen gespeichert. Daten, die zur Rechtsverfolgung erforderlich sind, können bis zum Ablauf der maßgeblichen Verjährungsfristen aufbewahrt werden. Für hochgeladene Dokumente gelten die im Buchungsablauf mitgeteilten, zweckgebundenen Löschfristen."] },
+  { title: "11. Ihre Rechte", paragraphs: ["Sie haben nach Maßgabe der DSGVO Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Datenübertragbarkeit. Sie können einer Verarbeitung auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO aus Gründen Ihrer besonderen Situation widersprechen. Eine erteilte Einwilligung kann jederzeit mit Wirkung für die Zukunft widerrufen werden. Zudem können Sie sich bei einer Datenschutzaufsichtsbehörde beschweren, insbesondere an Ihrem Wohnort, Arbeitsplatz oder am Ort des mutmaßlichen Verstoßes."] },
+  { title: "12. Pflicht zur Bereitstellung und automatisierte Entscheidungen", paragraphs: ["Als erforderlich markierte Vertragsdaten müssen bereitgestellt werden, damit wir eine Buchungsanfrage prüfen und einen Mietvertrag durchführen können. Ohne diese Daten ist die Leistung gegebenenfalls nicht möglich. Wir treffen keine ausschließlich automatisierten Entscheidungen mit rechtlicher oder ähnlich erheblicher Wirkung im Sinne von Art. 22 DSGVO."] },
+  { title: "13. Sicherheit und Änderungen", paragraphs: ["Wir setzen angemessene technische und organisatorische Maßnahmen ein, darunter Zugriffsbegrenzung, verschlüsselte Übertragung, private Dokumentenspeicherung und Protokollierung sicherheitsrelevanter Vorgänge. Wir aktualisieren diese Erklärung, wenn sich Verarbeitungsvorgänge, Dienstleister oder Rechtsgrundlagen wesentlich ändern."] },
+]
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </Link>
-            <h1 className="text-xl font-bold">{t("title")}</h1>
-          </div>
-          <ClientOnly>
-            <LanguageSwitcher />
-          </ClientOnly>
-        </div>
-      </header>
+const enSections: PublicLegalSection[] = [
+  { title: "2. Website access and hosting", paragraphs: ["Whenever this website is accessed, our hosting systems process technically necessary connection data, in particular IP address, time, requested URL, referrer, browser/device information and HTTP status. Processing is necessary to provide a secure and reliable website and is based on Article 6(1)(f) GDPR. Server logs are retained only for as long as required for operations, security and abuse investigation."] },
+  { title: "3. Customer account and sign-in", paragraphs: ["If sign-in is enabled, we process contact and profile data, internal user identifiers, and authentication/session data. When you sign in with Google, we receive the basic profile data you authorise. Processing is based on Article 6(1)(b) GDPR where needed to prepare or perform a rental contract, and otherwise on Article 6(1)(f) GDPR for secure account administration."] },
+  { title: "4. Booking requests and vehicle rental", paragraphs: ["For booking requests and rental contracts, we process the required identity, contact, driver, licence, booking, vehicle, pricing, payment-status and communication data. Where the booking flow requires it, we also process uploaded identity or driving-licence documents. Processing is based on Article 6(1)(b) GDPR. Legally required evidence and retention are based on Article 6(1)(c); fraud prevention, claims and fleet/operational security on Article 6(1)(f)."], bullets: ["We do not request documents that are not required.", "Documents are access-controlled and available only to authorised staff for review.", "The notices shown in the booking flow about required fields, documents and retention also apply."] },
+  { title: "5. Contact form and customer service", paragraphs: ["When you contact us, we process your name, email address, subject, message and technical security data to answer the request and prevent abuse. The legal basis is Article 6(1)(b) GDPR for pre-contractual or contractual enquiries and otherwise Article 6(1)(f). Messages are delivered to the internally configured responsible team through our email provider."] },
+  { title: "6. Payments", paragraphs: ["Available payment methods and instructions are displayed during booking. We process payment status, amounts, references and required accounting information. Full bank-account access credentials or card credentials are not collected through the contact form. Processing is based on Article 6(1)(b) and (c) GDPR."] },
+  { title: "7. Recipients and processors", paragraphs: ["Depending on the enabled production configuration, we use service providers for hosting, database operation, private file storage, authentication and email delivery. These may include Vercel (hosting and private file storage), Google (optional sign-in) and Resend (transactional email). Providers receive only the data necessary for their task and are bound as processors under Article 28 GDPR where required. Authorities, courts, insurers or professional advisers receive data only where legally permitted or necessary to establish, exercise or defend claims."] },
+  { title: "8. International transfers", paragraphs: ["Some providers may process data outside the European Economic Area, particularly in the United States. In that case, we rely on an adequacy decision or appropriate safeguards such as the European Commission's Standard Contractual Clauses and assess supplementary safeguards. Resend states that it stores data in the US and uses Standard Contractual Clauses in its data processing agreement."] },
+  { title: "9. Cookies and local storage", paragraphs: ["We use only technically necessary cookies or comparable storage, particularly for secure sign-in, session management, language and protection features. They are required for services requested by you (section 25(2)(2) TDDDG). We currently use no marketing or profiling cookies. If optional technologies are added later, we will obtain consent beforehand."] },
+  { title: "10. Retention", paragraphs: ["We keep personal data only as long as necessary for its purpose. Contact enquiries are normally deleted no later than twelve months after final resolution unless they relate to a contract or dispute. Account data is retained until the account is deleted. Booking, contract and accounting data is retained for applicable statutory commercial and tax periods. Data required for legal claims may be retained until the relevant limitation periods expire. Uploaded documents follow the purpose-specific deletion periods disclosed in the booking flow."] },
+  { title: "11. Your rights", paragraphs: ["Subject to the GDPR, you may request access, rectification, erasure, restriction and portability. You may object, on grounds relating to your situation, to processing based on Article 6(1)(f). Consent can be withdrawn at any time for the future. You may also lodge a complaint with a data protection supervisory authority, particularly where you live, work or where an alleged infringement occurred."] },
+  { title: "12. Required data and automated decisions", paragraphs: ["Data marked as required must be provided so that we can assess a booking request and perform a rental contract. Without it, the service may not be possible. We do not make decisions based solely on automated processing that produce legal or similarly significant effects within Article 22 GDPR."] },
+  { title: "13. Security and updates", paragraphs: ["We use appropriate technical and organisational safeguards, including access limitation, encrypted transmission, private document storage and logging of security-relevant operations. We update this notice when processing, providers or legal bases materially change."] },
+]
 
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="space-y-8">
-          <section>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("intro")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("lastUpdated")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("dataController.title")}</h2>
-            <div className="space-y-2 text-muted-foreground">
-              <p className="font-medium text-foreground">{businessInfo.companyName}</p>
-              {businessInfo.companyAddress && <p>{businessInfo.companyAddress}</p>}
-              {businessInfo.companyCity && (
-                <p>
-                  {businessInfo.companyCity}
-                  {businessInfo.companyCountry ? `, ${businessInfo.companyCountry}` : ""}
-                </p>
-              )}
-              <p>
-                <span className="font-medium text-foreground">{t("dataController.email")}:</span>{" "}
-                <a
-                  href={`mailto:${businessInfo.companyEmail}`}
-                  className="hover:text-primary transition-colors"
-                >
-                  {businessInfo.companyEmail}
-                </a>
-              </p>
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("dataCollection.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("dataCollection.intro")}</p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>{t("dataCollection.items.personal")}</li>
-              <li>{t("dataCollection.items.booking")}</li>
-              <li>{t("dataCollection.items.payment")}</li>
-              <li>{t("dataCollection.items.usage")}</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("dataPurpose.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("dataPurpose.intro")}</p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>{t("dataPurpose.items.processing")}</li>
-              <li>{t("dataPurpose.items.communication")}</li>
-              <li>{t("dataPurpose.items.legal")}</li>
-              <li>{t("dataPurpose.items.improvement")}</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("dataSharing.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed">{t("dataSharing.content")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("dataRights.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("dataRights.intro")}</p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>{t("dataRights.items.access")}</li>
-              <li>{t("dataRights.items.rectification")}</li>
-              <li>{t("dataRights.items.deletion")}</li>
-              <li>{t("dataRights.items.restriction")}</li>
-              <li>{t("dataRights.items.portability")}</li>
-              <li>{t("dataRights.items.objection")}</li>
-            </ul>
-            <p className="text-muted-foreground leading-relaxed mt-4">{t("dataRights.contact")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("cookies.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed">{t("cookies.content")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("security.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed">{t("security.content")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("changes.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed">{t("changes.content")}</p>
-          </section>
-        </div>
-      </div>
-    </div>
-  )
+export default async function DatenschutzPage({ params }: { params: Promise<{ locale: string }> }) {
+  const [{ locale }, info] = await Promise.all([params, getBusinessInfo()])
+  const de = locale !== "en"
+  const address = [info.companyAddress, [info.companyZipCode, info.companyCity].filter(Boolean).join(" "), info.companyCountry].filter(Boolean)
+  const controller: PublicLegalSection = {
+    title: de ? "1. Verantwortlicher" : "1. Controller",
+    content: <div className="space-y-1"><p className="font-semibold text-foreground">{info.companyName}</p>{address.map((line) => <p key={line}>{line}</p>)}{info.companyEmail ? <p>E-Mail: <a className="text-foreground underline underline-offset-2" href={`mailto:${info.companyEmail}`}>{info.companyEmail}</a></p> : null}{info.companyPhone ? <p>{de ? "Telefon" : "Phone"}: {info.companyPhone}</p> : null}</div>,
+  }
+  return <PublicLegalPage title={de ? "Datenschutzerklärung" : "Privacy Notice"} intro={de ? "Diese Erklärung informiert Sie transparent über die Verarbeitung personenbezogener Daten auf unserer Website und im Rahmen von Buchungsanfragen und Fahrzeugmieten." : "This notice explains how we process personal data on our website and in connection with booking requests and vehicle rentals."} updated={de ? "Stand: 20. Juli 2026" : "Last updated: 20 July 2026"} sections={[controller, ...(de ? deSections : enSections)]} />
 }
-

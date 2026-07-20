@@ -27,10 +27,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ locale
   ])
 
   return (
-    <div className="min-h-screen bg-muted pb-20">
+    <div className="qujo-page pb-24">
       {/* Header */}
-      <header className="bg-background px-4 py-6 border-b border-border">
-        <div className="flex items-center gap-4">
+      <header className="border-b border-black/[0.06] bg-white/80 px-4 py-8">
+        <div className="mx-auto flex max-w-4xl items-center gap-4">
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-3xl font-bold">
             {(currentUser.name || currentUser.email).charAt(0).toUpperCase()}
           </div>
@@ -44,7 +44,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ locale
         </div>
       </header>
 
-      <div className="p-4 space-y-4">
+      <div className="mx-auto max-w-4xl space-y-4 p-4 sm:py-8">
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-background rounded-xl p-4 border border-border">

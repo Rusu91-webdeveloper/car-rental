@@ -12,9 +12,9 @@ export function BottomNav({ active }: BottomNavProps) {
   const isActive = (page: string) => active === page
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border">
-      <div className="flex items-center justify-around px-2 py-3">
-        <Link href="/" className="flex flex-col items-center gap-1 px-4 py-2">
+    <nav className="fixed inset-x-3 bottom-3 z-40 rounded-[1.2rem] border border-black/10 bg-white/95 shadow-[0_18px_50px_-24px_rgba(19,37,29,0.65)] backdrop-blur-xl md:hidden">
+      <div className="flex items-center justify-around px-2 py-1.5">
+        <Link href="/" className="flex flex-col items-center gap-1 rounded-xl px-4 py-2">
           <svg
             className={`w-6 h-6 ${isActive("home") ? "text-primary" : "text-muted-foreground"}`}
             fill={isActive("home") ? "currentColor" : "none"}

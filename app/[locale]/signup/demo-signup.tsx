@@ -36,7 +36,7 @@ export function DemoSignup() {
       </button>
 
       <div className="max-w-md mx-auto">
-        <h1 className="text-4xl font-bold mb-2">Let's get started</h1>
+        <h1 className="text-4xl font-bold mb-2">Let&apos;s get started</h1>
         <p className="text-muted-foreground mb-8">{t("signup.subtitle")}</p>
 
         <form onSubmit={handleSignUp} className="space-y-6">

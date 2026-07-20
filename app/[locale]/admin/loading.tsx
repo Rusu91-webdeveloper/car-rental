@@ -1,7 +1,10 @@
 import { LoaderCircle, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { getLocale } from "next-intl/server"
 
-export default function Loading() {
+export default async function Loading() {
+  const de = (await getLocale()) === "de"
+
   return (
     <main
       className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-5xl items-center justify-center p-4 sm:p-6 lg:p-8"
@@ -15,16 +18,16 @@ export default function Loading() {
               <Sparkles className="h-7 w-7" aria-hidden="true" />
               <span className="absolute -inset-1 rounded-[1.15rem] border-2 border-primary/20 border-t-primary motion-safe:animate-spin" />
             </span>
-            <h1 className="mt-5 text-xl font-semibold tracking-tight">Opening your page</h1>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight">{de ? "Ihre Seite wird geöffnet" : "Opening your page"}</h1>
             <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              We’re saving your progress and getting the next step ready.
+              {de ? "Wir speichern Ihren Fortschritt und bereiten den nächsten Schritt vor." : "We’re saving your progress and getting the next step ready."}
             </p>
             <div className="mt-6 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-primary/10">
               <div className="h-full w-1/2 rounded-full bg-primary motion-safe:animate-pulse" />
             </div>
             <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground" role="status">
               <LoaderCircle className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />
-              Please wait a moment
+              {de ? "Bitte warten Sie einen Moment" : "Please wait a moment"}
             </p>
           </CardContent>
         </Card>

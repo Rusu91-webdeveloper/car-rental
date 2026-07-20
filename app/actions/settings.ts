@@ -6,15 +6,22 @@ import { requireAdmin } from "@/lib/auth"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
 
+const optionalText = (max: number) => z.string().trim().max(max).transform((value) => value || null)
+
 const businessProfileSchema = z.object({
-  companyName: z.string().trim().min(1, "Business name is required").max(160),
+  companyName: z.literal("Qujo Autovermietung GmbH", { errorMap: () => ({ message: "The registered business name must remain Qujo Autovermietung GmbH" }) }),
   companyEmail: z.string().trim().email("Enter a valid business email"),
-  companyPhone: z.string().trim().max(40).optional(),
-  companyAddress: z.string().trim().max(200).optional(),
-  companyCity: z.string().trim().max(120).optional(),
-  companyState: z.string().trim().max(120).optional(),
-  companyZipCode: z.string().trim().max(30).optional(),
-  companyCountry: z.string().trim().max(120).optional(),
+  companyPhone: optionalText(40),
+  companyAddress: optionalText(200),
+  companyCity: optionalText(120),
+  companyState: optionalText(120),
+  companyZipCode: optionalText(30),
+  companyCountry: optionalText(120),
+  managingDirector: optionalText(160),
+  commercialRegister: optionalText(100),
+  registerCourt: optionalText(160),
+  vatId: optionalText(40),
+  responsiblePerson: optionalText(300),
   currency: z.string().trim().length(3, "Use a three-letter currency code").transform((value) => value.toUpperCase()),
   currencySymbol: z.string().trim().min(1).max(5),
 })
@@ -156,6 +163,7 @@ export async function updateNotificationContacts(data: unknown) {
 
 export async function getCompanySettings() {
   try {
+    await requireAdmin()
     let settings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
     })
