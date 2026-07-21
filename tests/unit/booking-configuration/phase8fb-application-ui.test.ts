@@ -98,4 +98,21 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adminDashboard).toContain("Reviewer access is missing")
     expect(adminDashboard).toContain("DOCUMENT_REVIEWER")
   })
+
+  it("groups private documents into an application review workspace", () => {
+    const queue = read("app/[locale]/admin/documents/review-queue-client.tsx")
+    const workspace = read("app/[locale]/admin/documents/applications/[applicationId]/page.tsx")
+    const presenter = read("lib/private-documents/application/review-queue-presenter.ts")
+    const documentReview = read("app/[locale]/admin/documents/[documentId]/review-client.tsx")
+
+    expect(queue).toContain("groupIntoCases")
+    expect(queue).toContain("Review application")
+    expect(queue).toContain("Document review progress")
+    expect(presenter).toContain("bookingApplication")
+    expect(presenter).toContain("approvedDocuments")
+    expect(workspace).toContain("Customer and driver")
+    expect(workspace).toContain("Document checklist")
+    expect(workspace).toContain("Legal acceptances")
+    expect(documentReview).toContain("router.push(returnTo)")
+  })
 })

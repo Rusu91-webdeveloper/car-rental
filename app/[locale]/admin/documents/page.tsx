@@ -1,19 +1,20 @@
 import { PrivateDocumentError } from "@/lib/private-documents/domain/errors"
 import { loadRestrictedDocumentActor } from "@/lib/private-documents/server/request-context"
+import { presentReviewQueue, type PresentedReviewQueueItem } from "@/lib/private-documents/application/review-queue-presenter"
 import { DocumentReviewQueue } from "./review-queue-client"
 
 export const dynamic = "force-dynamic"
 
-export default async function DocumentReviewQueuePage() {
-  let state:
-    | Awaited<ReturnType<Awaited<ReturnType<typeof loadRestrictedDocumentActor>>["reviews"]["listReviewQueue"]>>
-    | { error: string }
+export default async function DocumentReviewQueuePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  let state: { items: PresentedReviewQueueItem[]; nextCursor?: string } | { error: string }
   try {
     const context = await loadRestrictedDocumentActor()
-    state = await context.reviews.listReviewQueue({
+    const queue = await context.reviews.listReviewQueue({
       actor: context.actor,
-      limit: 25,
+      limit: 100,
     })
+    state = { ...queue, items: await presentReviewQueue(queue.items) }
   } catch (error) {
     state = {
       error: error instanceof PrivateDocumentError ? error.message : "The restricted review queue is unavailable.",
@@ -22,17 +23,23 @@ export default async function DocumentReviewQueuePage() {
   if ("error" in state)
     return (
       <main className="mx-auto max-w-2xl p-6">
-        <h1 className="text-2xl font-semibold">Document review unavailable</h1>
+        <h1 className="text-2xl font-semibold">
+          {locale === "de" ? "Dokumentenprüfung nicht verfügbar" : "Document review unavailable"}
+        </h1>
         <p className="mt-3 text-muted-foreground">{state.error}</p>
       </main>
     )
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <header>
-        <p className="text-sm font-medium text-primary">Documents</p>
-        <h1 className="text-2xl font-semibold">Which documents need a decision?</h1>
+        <p className="text-sm font-medium text-primary">{locale === "de" ? "Buchungsprüfung" : "Booking review"}</p>
+        <h1 className="text-2xl font-semibold">
+          {locale === "de" ? "Welche Buchungsanträge benötigen eine Entscheidung?" : "Which booking applications need a decision?"}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Review customer uploads and either approve them or ask for a replacement.
+          {locale === "de"
+            ? "Prüfen Sie Antrag, Fahrerinformationen und alle hochgeladenen Dokumente an einem Ort."
+            : "Review the application, driver information and every uploaded document in one place."}
         </p>
       </header>
       <DocumentReviewQueue initialItems={state.items} initialCursor={state.nextCursor} />

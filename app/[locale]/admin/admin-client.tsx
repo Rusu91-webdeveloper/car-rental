@@ -1349,7 +1349,9 @@ export default function AdminDashboard({
                         </div>
                         {application.status === "AWAITING_DOCUMENT_REVIEW" && canReviewDocuments ? (
                           <Button size="sm" asChild>
-                            <Link href="/admin/documents">{tr("Review documents", "Dokumente prüfen")}</Link>
+                            <Link href={`/admin/documents/applications/${application.id}`}>
+                              {tr("Review application", "Antrag prüfen")}
+                            </Link>
                           </Button>
                         ) : null}
                       </div>

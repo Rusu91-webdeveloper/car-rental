@@ -1,5 +1,6 @@
 import { PrivateDocumentError } from "@/lib/private-documents/domain/errors";
 import { loadRestrictedDocumentActor } from "@/lib/private-documents/server/request-context";
+import { presentReviewQueue } from "@/lib/private-documents/application/review-queue-presenter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
             ),
       limit: Number(url.searchParams.get("limit") ?? 25),
     });
-    return Response.json(result, {
+    return Response.json({ ...result, items: await presentReviewQueue(result.items) }, {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
