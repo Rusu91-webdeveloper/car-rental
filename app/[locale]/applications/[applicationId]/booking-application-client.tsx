@@ -12,12 +12,31 @@ import type { ApplicationReadiness, BookingApplicationView } from "@/lib/booking
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { formatCents } from "@/lib/money"
 
 const TERMINAL = new Set(["FINALIZED", "EXPIRED", "CANCELLED", "REJECTED"])
 
 function sides(value: "SINGLE_FILE" | "FRONT_AND_BACK") {
   return value === "FRONT_AND_BACK" ? (["FRONT", "BACK"] as const) : (["SINGLE"] as const)
+}
+
+function formatApplicationDateTime(value: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Berlin",
+  }).format(new Date(value))
 }
 
 async function sha256(file: File) {
@@ -160,12 +179,16 @@ export function BookingApplicationClient({
     startTransition(async () => {
       const result = (await operation()) as {
         error?: string
+        applicationId?: string
         application?: BookingApplicationView
         readiness?: ApplicationReadiness
         bookingId?: string
+        submittedForReview?: boolean
       }
       if (result.error) setMessage(result.error)
       else if (result.bookingId) router.push(`/bookings?booking_id=${result.bookingId}`)
+      else if (result.submittedForReview && result.applicationId)
+        router.push(`/bookings?application_id=${result.applicationId}`)
       else {
         if (result.application) setApplication(result.application)
         if (result.readiness) setReadiness(result.readiness)
@@ -199,15 +222,16 @@ export function BookingApplicationClient({
         <p className="text-sm font-medium text-primary">Saved application</p>
         <h1 className="text-2xl font-semibold">Identity and licence documents</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Progress is saved on the server. Application expires {application.expiresAt.toLocaleString(locale)}.
+          {locale === "de" ? "Der Fortschritt wird auf dem Server gespeichert. Der Antrag läuft ab am " : "Progress is saved on the server. Application expires "}
+          {formatApplicationDateTime(application.expiresAt, locale)}.
         </p>
       </header>
 
       <section className="rounded-xl border bg-background p-4">
         <h2 className="font-semibold">Rental evidence</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-          <div><dt className="text-muted-foreground">Pick-up</dt><dd>{application.pickupAt.toLocaleString(locale)}</dd></div>
-          <div><dt className="text-muted-foreground">Return</dt><dd>{application.returnAt.toLocaleString(locale)}</dd></div>
+          <div><dt className="text-muted-foreground">{locale === "de" ? "Abholung" : "Pick-up"}</dt><dd>{formatApplicationDateTime(application.pickupAt, locale)}</dd></div>
+          <div><dt className="text-muted-foreground">{locale === "de" ? "Rückgabe" : "Return"}</dt><dd>{formatApplicationDateTime(application.returnAt, locale)}</dd></div>
           <div><dt className="text-muted-foreground">Shared location</dt><dd>{application.pickupLocation}</dd></div>
           {application.quote ? <div><dt className="text-muted-foreground">Confirmed quote</dt><dd>{formatCents(application.quote.grandTotal, application.quote.currency)}</dd></div> : null}
         </dl>
@@ -272,6 +296,33 @@ export function BookingApplicationClient({
         </section>
       ) : null}
 
+      {application.status === "AWAITING_DOCUMENT_REVIEW" ? (
+        <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
+          <h2 className="font-semibold">
+            {locale === "de" ? "Dokumente zur Prüfung eingereicht" : "Documents submitted for review"}
+          </h2>
+          <p className="mt-1 text-sm">
+            {locale === "de"
+              ? "Ihre Buchungsanfrage ist gespeichert. Der Vermieter prüft jetzt die Dokumente. Nach der Freigabe können Sie die Buchung unter „Meine Fahrten“ abschließen."
+              : "Your booking request is saved. The rental company will now review the documents. After approval, you can finalize the booking from My Trips."}
+          </p>
+          <Button className="mt-3" variant="outline" onClick={() => router.push("/bookings")}>
+            {locale === "de" ? "Unter „Meine Fahrten“ verfolgen" : "Track in My Trips"}
+          </Button>
+        </section>
+      ) : null}
+
+      {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+          <h2 className="font-semibold">{locale === "de" ? "Dokumente freigegeben" : "Documents approved"}</h2>
+          <p className="mt-1 text-sm">
+            {locale === "de"
+              ? "Schließen Sie jetzt die Buchung ab. Erst danach wird die Reservierung verbindlich erstellt."
+              : "Finalize the booking now. The reservation is created only after this final step."}
+          </p>
+        </section>
+      ) : null}
+
       {application.status === "CUSTOMER_ACTION_REQUIRED" ? (
         <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
           <h2 className="font-semibold">Review renewed terms</h2>
@@ -291,7 +342,32 @@ export function BookingApplicationClient({
         {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
           <Button disabled={isPending} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>Finalize booking</Button>
         ) : null}
-        <Button variant="outline" disabled={isPending} onClick={() => mutate(() => cancelSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>Cancel application</Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" disabled={isPending}>
+              {locale === "de" ? "Antrag stornieren" : "Cancel application"}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{locale === "de" ? "Buchungsantrag wirklich stornieren?" : "Cancel this booking application?"}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {locale === "de"
+                  ? "Diese Aktion ist endgültig. Es wird keine Buchung erstellt und der Antrag kann nicht fortgesetzt werden."
+                  : "This is permanent. No booking will be created and this application cannot be continued."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{locale === "de" ? "Zurück" : "Keep application"}</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => mutate(() => cancelSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}
+              >
+                {locale === "de" ? "Endgültig stornieren" : "Cancel permanently"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </main>
   )

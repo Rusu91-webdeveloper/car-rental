@@ -169,7 +169,11 @@ export async function submitBookingApplicationForReview(input: unknown) {
       ...value,
       customerUserId: user.id,
     })
-    return { applicationId: application.id, revision: application.revision }
+    return {
+      applicationId: application.id,
+      revision: application.revision,
+      submittedForReview: true,
+    }
   } catch (error) {
     return publicError(error)
   }

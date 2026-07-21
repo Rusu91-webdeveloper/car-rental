@@ -127,6 +127,29 @@ interface AdminBooking {
   }
 }
 
+interface AdminBookingApplication {
+  id: string
+  userId: string
+  carId: string
+  status:
+    | "DRAFT"
+    | "AWAITING_DOCUMENT_UPLOAD"
+    | "AWAITING_DOCUMENT_REVIEW"
+    | "CUSTOMER_ACTION_REQUIRED"
+    | "READY_TO_FINALIZE"
+    | "FINALIZING"
+    | "FINALIZED"
+    | "EXPIRED"
+    | "CANCELLED"
+    | "REJECTED"
+  pickupDate: string
+  dropoffDate: string
+  location: string
+  totalPrice: number | null
+  currency: string
+  updatedAt: string
+}
+
 interface AdminManualReservation {
   id: string
   carId: string
@@ -157,6 +180,7 @@ export default function AdminDashboard({
   currentUser,
   cars,
   bookings,
+  bookingApplications,
   users,
   reviews,
   manualReservations,
@@ -164,10 +188,12 @@ export default function AdminDashboard({
   generatedAt,
   setup,
   documentReviewCount,
+  canReviewDocuments,
 }: {
   currentUser: { id: string; name: string; email: string }
   cars: AdminCar[]
   bookings: AdminBooking[]
+  bookingApplications: AdminBookingApplication[]
   users: AdminUser[]
   reviews: AdminReview[]
   manualReservations: AdminManualReservation[]
@@ -175,6 +201,7 @@ export default function AdminDashboard({
   generatedAt: string
   setup: OwnerSetupProgress
   documentReviewCount: number | null
+  canReviewDocuments: boolean
 }) {
   const [isPending, startTransition] = useTransition()
   const [carsState, setCarsState] = useState<AdminCar[]>(cars)
@@ -302,7 +329,34 @@ export default function AdminDashboard({
     })
     .reduce((sum, booking) => sum + booking.totalPrice, 0)
   const customerCount = usersState.filter((user) => user.role === "USER").length
-  const attentionCount = pendingBookings + unavailableCars + (documentReviewCount ?? 0)
+  const pendingApplicationReviews = bookingApplications.filter(
+    (application) => application.status === "AWAITING_DOCUMENT_REVIEW",
+  ).length
+  const displayedDocumentReviewCount = canReviewDocuments ? (documentReviewCount ?? pendingApplicationReviews) : pendingApplicationReviews
+  const attentionCount = pendingBookings + unavailableCars + displayedDocumentReviewCount
+
+  const applicationStatusCopy = (status: AdminBookingApplication["status"]) => {
+    const labels: Record<AdminBookingApplication["status"], { en: string; de: string }> = {
+      DRAFT: { en: "In progress", de: "In Bearbeitung" },
+      AWAITING_DOCUMENT_UPLOAD: { en: "Documents required", de: "Dokumente erforderlich" },
+      AWAITING_DOCUMENT_REVIEW: { en: "Awaiting document review", de: "Dokumentenprüfung ausstehend" },
+      CUSTOMER_ACTION_REQUIRED: { en: "Customer action required", de: "Kundenaktion erforderlich" },
+      READY_TO_FINALIZE: { en: "Customer can finalize", de: "Kunde kann abschließen" },
+      FINALIZING: { en: "Finalizing", de: "Wird abgeschlossen" },
+      FINALIZED: { en: "Finalized", de: "Abgeschlossen" },
+      EXPIRED: { en: "Expired", de: "Abgelaufen" },
+      CANCELLED: { en: "Cancelled", de: "Storniert" },
+      REJECTED: { en: "Rejected", de: "Abgelehnt" },
+    }
+    return tr(labels[status].en, labels[status].de)
+  }
+
+  const formatApplicationDateTime = (value: string) =>
+    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Europe/Berlin",
+    }).format(new Date(value))
 
   const filteredCars = carsState.filter((car) => {
     const matchesSearch =
@@ -902,9 +956,20 @@ export default function AdminDashboard({
                   <span><span className="block text-sm font-medium">{tr("Unavailable cars", "Nicht verfügbare Fahrzeuge")}</span><span className="text-xs text-muted-foreground">{tr("Check status or maintenance", "Status oder Wartung prüfen")}</span></span>
                   <Badge variant={unavailableCars > 0 ? "destructive" : "secondary"}>{unavailableCars}</Badge>
                 </button>
-                <Link href="/admin/documents" className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
-                  <span><span className="block text-sm font-medium">{tr("Documents to review", "Zu prüfende Dokumente")}</span><span className="text-xs text-muted-foreground">{tr("Check customer uploads", "Kundendokumente prüfen")}</span></span>
-                  <Badge variant={(documentReviewCount ?? 0) > 0 ? "destructive" : "secondary"}>{documentReviewCount ?? "—"}</Badge>
+                <Link href={canReviewDocuments ? "/admin/documents" : "/admin/documents/security"} className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/50">
+                  <span>
+                    <span className="block text-sm font-medium">
+                      {canReviewDocuments
+                        ? tr("Documents to review", "Zu prüfende Dokumente")
+                        : tr("Document access required", "Dokumentenzugriff erforderlich")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {canReviewDocuments
+                        ? tr("Check customer uploads", "Kundendokumente prüfen")
+                        : tr("A document security administrator must grant reviewer access.", "Ein Dokumentensicherheitsadministrator muss den Prüferzugriff freigeben.")}
+                    </span>
+                  </span>
+                  <Badge variant={displayedDocumentReviewCount > 0 ? "destructive" : "secondary"}>{displayedDocumentReviewCount}</Badge>
                 </Link>
               </CardContent>
             ) : null}
@@ -960,9 +1025,13 @@ export default function AdminDashboard({
                 </Button>
 
                 <Button variant="outline" className="h-auto py-4 flex-col gap-2 bg-transparent" asChild>
-                  <Link href="/admin/documents">
+                  <Link href={canReviewDocuments ? "/admin/documents" : "/admin/documents/security"}>
                     <FileCheck2 className="w-6 h-6" />
-                    <span>{tr("Review documents", "Dokumente prüfen")}</span>
+                    <span>
+                      {canReviewDocuments
+                        ? tr("Review documents", "Dokumente prüfen")
+                        : tr("Request document access", "Dokumentenzugriff anfordern")}
+                    </span>
                   </Link>
                 </Button>
               </div>
@@ -1187,6 +1256,109 @@ export default function AdminDashboard({
               {tr("Review customer requests or reserve a car for a direct customer.", "Prüfen Sie Kundenanfragen oder reservieren Sie ein Fahrzeug für einen Direktkunden.")}
             </p>
           </header>
+          <Card className={pendingApplicationReviews > 0 ? "border-amber-200" : undefined}>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{tr("Booking applications before confirmation", "Buchungsanträge vor der Bestätigung")}</CardTitle>
+                  <CardDescription>
+                    {tr(
+                      "These requests are saved, but they are not bookings until document review and customer finalization are complete.",
+                      "Diese Anfragen sind gespeichert, werden aber erst nach Dokumentenprüfung und Abschluss durch den Kunden zu Buchungen.",
+                    )}
+                  </CardDescription>
+                </div>
+                <Badge variant={pendingApplicationReviews > 0 ? "destructive" : "secondary"}>
+                  {bookingApplications.length}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!canReviewDocuments && pendingApplicationReviews > 0 ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>{tr("Reviewer access is missing", "Prüferzugriff fehlt")}</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>
+                      {tr(
+                        "You can see that applications need review, but private files stay protected until a document security administrator grants the DOCUMENT_REVIEWER role.",
+                        "Sie sehen, dass Anträge geprüft werden müssen. Private Dateien bleiben jedoch geschützt, bis ein Dokumentensicherheitsadministrator die Rolle DOCUMENT_REVIEWER erteilt.",
+                      )}
+                    </p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/admin/documents/security">
+                        {tr("Open document access", "Dokumentenzugriff öffnen")}
+                      </Link>
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              {bookingApplications.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {tr("No open or recently closed applications.", "Keine offenen oder kürzlich geschlossenen Anträge.")}
+                </p>
+              ) : (
+                bookingApplications.map((application) => {
+                  const car = carsState.find((item) => item.id === application.carId)
+                  const customer = usersState.find((item) => item.id === application.userId)
+                  const isClosed = ["CANCELLED", "EXPIRED", "REJECTED"].includes(application.status)
+
+                  return (
+                    <div key={application.id} className={`rounded-lg border p-4 ${isClosed ? "bg-muted/30" : ""}`}>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold">
+                              {car ? getCarName(car) : tr("Unknown car", "Unbekanntes Fahrzeug")}
+                            </p>
+                            <Badge variant={application.status === "AWAITING_DOCUMENT_REVIEW" ? "destructive" : isClosed ? "outline" : "secondary"}>
+                              {applicationStatusCopy(application.status)}
+                            </Badge>
+                          </div>
+                          <p className="break-words text-sm text-muted-foreground">
+                            {customer?.name || customer?.email || tr("Unknown customer", "Unbekannter Kunde")}
+                            {customer?.email && customer.name ? ` • ${customer.email}` : ""}
+                          </p>
+                          <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                            <p>{tr("Pick-up:", "Abholung:")} {formatApplicationDateTime(application.pickupDate)}</p>
+                            <p>{tr("Return:", "Rückgabe:")} {formatApplicationDateTime(application.dropoffDate)}</p>
+                            <p>{tr("Location:", "Ort:")} {application.location}</p>
+                            <p>
+                              {tr("Quote:", "Angebot:")} {application.totalPrice === null
+                                ? tr("Not available", "Nicht verfügbar")
+                                : formatCents(application.totalPrice, application.currency)}
+                            </p>
+                          </div>
+                          {application.status === "READY_TO_FINALIZE" ? (
+                            <p className="text-sm text-emerald-700">
+                              {tr(
+                                "Documents are approved. The customer must now finalize this application in My Trips.",
+                                "Die Dokumente sind freigegeben. Der Kunde muss den Antrag jetzt unter „Meine Fahrten“ abschließen.",
+                              )}
+                            </p>
+                          ) : null}
+                          {application.status === "CANCELLED" ? (
+                            <p className="text-sm text-muted-foreground">
+                              {tr(
+                                "The customer cancelled this application. No booking was created.",
+                                "Der Kunde hat diesen Antrag storniert. Es wurde keine Buchung erstellt.",
+                              )}
+                            </p>
+                          ) : null}
+                        </div>
+                        {application.status === "AWAITING_DOCUMENT_REVIEW" && canReviewDocuments ? (
+                          <Button size="sm" asChild>
+                            <Link href="/admin/documents">{tr("Review documents", "Dokumente prüfen")}</Link>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>{tr("Reserve a car for a direct customer", "Fahrzeug für einen Direktkunden reservieren")}</CardTitle>

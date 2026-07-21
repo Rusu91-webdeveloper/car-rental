@@ -70,7 +70,7 @@ export default async function AdminPage({
   const adminUser = user!
   const capabilities = await getBusinessConfigurationCapabilities()
 
-  const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
+  const [cars, bookings, bookingApplications, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
     await Promise.all([
       prisma.car.findMany({
         where: { isDeleted: false },
@@ -91,6 +91,29 @@ export default async function AdminPage({
             orderBy: { acceptedAt: "asc" },
           },
         },
+      }),
+      prisma.bookingApplication.findMany({
+        where: {
+          bookingId: null,
+          status: { notIn: ["FINALIZING", "FINALIZED"] },
+        },
+        select: {
+          id: true,
+          customerUserId: true,
+          carId: true,
+          status: true,
+          pickupAt: true,
+          returnAt: true,
+          pickupLocation: true,
+          updatedAt: true,
+          pricingQuotes: {
+            where: { isCurrent: true },
+            select: { grandTotal: true, currency: true },
+            take: 1,
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
       }),
       prisma.user.findMany({
         orderBy: { createdAt: "desc" },
@@ -189,6 +212,7 @@ export default async function AdminPage({
       generatedAt={generatedAt}
       setup={setup}
       documentReviewCount={documentReviewCount}
+      canReviewDocuments={capabilities.canViewDocuments}
       currentUser={{
         id: adminUser.id,
         name: adminUser.name || adminUser.email,
@@ -270,6 +294,18 @@ export default async function AdminPage({
           hashVerified:
             acceptance.contentHash === legalContentHash(acceptance.legalDocumentTranslation.canonicalContent),
         })),
+      }))}
+      bookingApplications={bookingApplications.map((application) => ({
+        id: application.id,
+        userId: application.customerUserId,
+        carId: application.carId,
+        status: application.status,
+        pickupDate: application.pickupAt.toISOString(),
+        dropoffDate: application.returnAt.toISOString(),
+        location: application.pickupLocation,
+        totalPrice: application.pricingQuotes[0]?.grandTotal ?? null,
+        currency: application.pricingQuotes[0]?.currency ?? "EUR",
+        updatedAt: application.updatedAt.toISOString(),
       }))}
       users={users.map((item: User) => ({
         id: item.id,

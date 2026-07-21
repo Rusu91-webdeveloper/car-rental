@@ -26,30 +26,45 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   const currentUser = user!
 
   await runBookingLifecycleMaintenance()
-  const userBookings = await prisma.booking.findMany({
-    where: { userId: currentUser.id },
-    include: {
-      car: true,
-      pricingSnapshot: true,
-      insuranceSnapshot: true,
-      legalAcceptances: {
-        include: {
-          legalDocumentTranslation: { include: { legalDocumentVersion: true } },
-          legalAcceptanceConfig: { select: { showInConfirmation: true } },
+  const [userBookings, userApplications] = await Promise.all([
+    prisma.booking.findMany({
+      where: { userId: currentUser.id },
+      include: {
+        car: true,
+        pricingSnapshot: true,
+        insuranceSnapshot: true,
+        legalAcceptances: {
+          include: {
+            legalDocumentTranslation: { include: { legalDocumentVersion: true } },
+            legalAcceptanceConfig: { select: { showInConfirmation: true } },
+          },
+          orderBy: { acceptedAt: "asc" },
         },
-        orderBy: { acceptedAt: "asc" },
-      },
-      review: {
-        select: {
-          id: true,
-          rating: true,
-          comment: true,
-          createdAt: true,
+        review: {
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  })
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.bookingApplication.findMany({
+      where: {
+        customerUserId: currentUser.id,
+        bookingId: null,
+        status: { notIn: ["FINALIZING", "FINALIZED"] },
+      },
+      include: {
+        car: true,
+        pricingQuotes: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+  ])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -122,7 +137,22 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Europe/Berlin",
     })
+  }
+
+  const applicationStatus = (status: string) => {
+    const copy: Record<string, { en: string; de: string; descriptionEn: string; descriptionDe: string }> = {
+      DRAFT: { en: "In progress", de: "In Bearbeitung", descriptionEn: "Continue the booking application.", descriptionDe: "Setzen Sie den Buchungsantrag fort." },
+      AWAITING_DOCUMENT_UPLOAD: { en: "Documents required", de: "Dokumente erforderlich", descriptionEn: "Upload the required identity and licence documents.", descriptionDe: "Laden Sie die erforderlichen Ausweis- und Führerscheindokumente hoch." },
+      AWAITING_DOCUMENT_REVIEW: { en: "Awaiting document review", de: "Dokumentenprüfung ausstehend", descriptionEn: "Your request is saved. The rental company is reviewing your documents.", descriptionDe: "Ihre Anfrage ist gespeichert. Der Vermieter prüft Ihre Dokumente." },
+      CUSTOMER_ACTION_REQUIRED: { en: "Action required", de: "Aktion erforderlich", descriptionEn: "Open the application and complete the requested update.", descriptionDe: "Öffnen Sie den Antrag und führen Sie die angeforderte Aktualisierung durch." },
+      READY_TO_FINALIZE: { en: "Ready to finalize", de: "Bereit zum Abschluss", descriptionEn: "Your documents are approved. Finalize the booking now.", descriptionDe: "Ihre Dokumente sind freigegeben. Schließen Sie die Buchung jetzt ab." },
+      CANCELLED: { en: "Cancelled", de: "Storniert", descriptionEn: "This application was cancelled and no booking was created.", descriptionDe: "Dieser Antrag wurde storniert und es wurde keine Buchung erstellt." },
+      EXPIRED: { en: "Expired", de: "Abgelaufen", descriptionEn: "This application expired before a booking was created.", descriptionDe: "Dieser Antrag ist abgelaufen, bevor eine Buchung erstellt wurde." },
+      REJECTED: { en: "Rejected", de: "Abgelehnt", descriptionEn: "This application was not approved.", descriptionDe: "Dieser Antrag wurde nicht freigegeben." },
+    }
+    return copy[status] ?? { en: status, de: status, descriptionEn: "Open the application for details.", descriptionDe: "Öffnen Sie den Antrag für weitere Informationen." }
   }
 
   const reviewCopy = {
@@ -144,7 +174,49 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
       </header>
 
       <div className="mx-auto max-w-5xl p-4 sm:py-8">
-        {userBookings.length === 0 ? (
+        {userApplications.length > 0 ? (
+          <section className="mb-6 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-primary">{locale === "de" ? "Buchungsanträge" : "Booking applications"}</p>
+              <h2 className="text-xl font-bold">{locale === "de" ? "Anfragen vor dem Buchungsabschluss" : "Requests before booking confirmation"}</h2>
+            </div>
+            {userApplications.map((application) => {
+              const status = applicationStatus(application.status)
+              const active = !["CANCELLED", "EXPIRED", "REJECTED"].includes(application.status)
+              const quote = application.pricingQuotes[0]
+              const carName = locale === "de" ? application.car.nameDe || application.car.name : application.car.name
+              return (
+                <div key={application.id} className="rounded-xl border bg-background p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <img className="h-20 w-full rounded-lg object-cover sm:w-28" src={application.car.image || "/placeholder.svg"} alt={carName} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-semibold">{carName}</h3>
+                        <Badge variant={application.status === "READY_TO_FINALIZE" ? "default" : active ? "secondary" : "outline"}>
+                          {locale === "de" ? status.de : status.en}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">{locale === "de" ? status.descriptionDe : status.descriptionEn}</p>
+                      <p className="mt-2 text-sm">
+                        {formatDateTime(application.pickupAt, locale)} – {formatDateTime(application.returnAt, locale)}
+                        {quote ? ` · ${formatCents(quote.grandTotal, quote.currency)}` : ""}
+                      </p>
+                    </div>
+                    {active ? (
+                      <Link href={`/applications/${application.id}`} className="inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-medium hover:bg-muted">
+                        {application.status === "READY_TO_FINALIZE"
+                          ? locale === "de" ? "Buchung abschließen" : "Finalize booking"
+                          : locale === "de" ? "Antrag öffnen" : "Open application"}
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </section>
+        ) : null}
+
+        {userBookings.length === 0 && userApplications.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
               <svg className="w-10 h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
