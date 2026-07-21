@@ -2,7 +2,7 @@ import "server-only"
 
 import { prisma } from "@/lib/db"
 import { getEmailConfigStatus } from "@/lib/email"
-import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment"
+import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { SCHEDULED_PRODUCTION_JOBS } from "@/lib/production/cron-schedule"
 import { readProductionOperationsEnvironment } from "@/lib/production/operations-environment"
 
@@ -157,7 +157,7 @@ export function evaluateRecoveryEvidenceStatus(input: {
 }
 
 export async function getProductionHealthReport(now = new Date()) {
-  const environment = readPrivateDocumentEnvironment()
+  const environment = await readRuntimePrivateDocumentEnvironment()
   const operations = readProductionOperationsEnvironment()
   const dayAgo = new Date(now.getTime() - DAY_MS)
   const staleReviewAt = new Date(now.getTime() - DAY_MS)

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { evaluateProductionDocumentHealth } from "@/lib/private-documents/application/health";
 import { PrivateDocumentError } from "@/lib/private-documents/domain/errors";
 import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment";
+import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment";
 import type { VercelBlobClient } from "@/lib/private-documents/infrastructure/vercel-blob-client";
 import { DeterministicFakeMalwareScanner } from "@/lib/private-documents/scanning/fake-scanner";
 import { createPrivateDocumentStorage } from "@/lib/private-documents/storage/factory";
@@ -120,6 +121,44 @@ describe("Phase 8E-B environment and pathname boundary", () => {
     expect(() => assertVercelBlobPathname(pathname)).toThrow(
       PrivateDocumentError,
     );
+  });
+});
+
+describe("Phase 8E-B runtime OIDC environment", () => {
+  const runtimeEnvironment = {
+    NODE_ENV: "production",
+    VERCEL: "1",
+    BLOB_STORE_ID: "store_expected",
+    PRIVATE_DOCUMENTS_ENABLED: "true",
+    PRIVATE_DOCUMENT_STORAGE_PROVIDER: "vercel-blob-private",
+    PRIVATE_DOCUMENT_BLOB_STORE_ID: "store_expected",
+    PRIVATE_DOCUMENT_BLOB_REGION: "fra1",
+    PRIVATE_DOCUMENT_BLOB_PRIVATE_ACCESS_ATTESTED: "true",
+    PRIVATE_DOCUMENT_BLOB_REGION_ATTESTED: "true",
+    PRIVATE_DOCUMENT_ENVIRONMENT: "production",
+  } as const;
+
+  it("accepts a rotating OIDC credential resolved from Vercel request context", async () => {
+    const resolveOidcToken = vi.fn().mockResolvedValue("runtime-oidc-token");
+    const environment = await readRuntimePrivateDocumentEnvironment(
+      runtimeEnvironment,
+      resolveOidcToken,
+    );
+
+    expect(resolveOidcToken).toHaveBeenCalledOnce();
+    expect(environment.oidcAvailable).toBe(true);
+    expect(environment.issues).not.toContain("DOCUMENT_BLOB_OIDC_UNAVAILABLE");
+    expect(environment).not.toHaveProperty("oidcToken");
+  });
+
+  it("continues to fail closed when no runtime credential can be resolved", async () => {
+    const environment = await readRuntimePrivateDocumentEnvironment(
+      runtimeEnvironment,
+      vi.fn().mockRejectedValue(new Error("OIDC unavailable")),
+    );
+
+    expect(environment.oidcAvailable).toBe(false);
+    expect(environment.issues).toContain("DOCUMENT_BLOB_OIDC_UNAVAILABLE");
   });
 });
 

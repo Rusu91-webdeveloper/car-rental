@@ -7,16 +7,16 @@ import { DocumentCleanupService } from "@/lib/private-documents/application/clea
 import { DocumentDeletionService } from "@/lib/private-documents/application/deletion-service"
 import { PrivateDocumentOperationsMonitoringService } from "@/lib/private-documents/application/operations-monitoring"
 import { UnsupportedRecentAuthenticationVerifier } from "@/lib/private-documents/authorization/recent-auth"
-import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment"
 import { PrismaDocumentLifecycleRepository } from "@/lib/private-documents/infrastructure/prisma-repository"
+import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { createPrivateDocumentStorage } from "@/lib/private-documents/storage/factory"
 import type { ProductionWorkerJob } from "./operations-environment"
 import type { WorkerSummary } from "./worker-execution"
 
 type BatchLike = { examined?: number; succeeded?: number; failed?: number }
 
-function documentServices() {
-  const environment = readPrivateDocumentEnvironment()
+async function documentServices() {
+  const environment = await readRuntimePrivateDocumentEnvironment()
   const repository = new PrismaDocumentLifecycleRepository(prisma)
   const storage = createPrivateDocumentStorage({
     environment,
@@ -48,7 +48,7 @@ export async function executeProductionWorkerJob(job: ProductionWorkerJob) {
     return { expired }
   }
 
-  const services = documentServices()
+  const services = await documentServices()
   if (job === "abandoned-upload-cleanup") {
     return {
       objects: await services.cleanup.cleanupAbandonedUploadObjects(50),

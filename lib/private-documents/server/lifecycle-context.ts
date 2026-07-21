@@ -2,8 +2,8 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PrivateDocumentLifecycleService } from "../application/lifecycle-service";
 import { documentError } from "../domain/errors";
-import { readPrivateDocumentEnvironment } from "../infrastructure/environment";
 import { PrismaDocumentLifecycleRepository } from "../infrastructure/prisma-repository";
+import { readRuntimePrivateDocumentEnvironment } from "../infrastructure/runtime-environment";
 import { DeterministicFakeMalwareScanner } from "../scanning/fake-scanner";
 import { createPrivateDocumentStorage } from "../storage/factory";
 
@@ -22,7 +22,7 @@ export async function loadOwnedApplicationDocumentLifecycle(
       "DOCUMENT_SESSION_NOT_FOUND",
       "Upload session is unavailable.",
     );
-  const environment = readPrivateDocumentEnvironment();
+  const environment = await readRuntimePrivateDocumentEnvironment();
   if (!environment.featureEnabled || environment.issues.length > 0) {
     console.warn("[private-documents] lifecycle configuration unavailable", {
       applicationId,

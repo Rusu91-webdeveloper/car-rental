@@ -1,7 +1,7 @@
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { prisma } from "@/lib/db"
 import { PrismaDocumentConfigurationRepository } from "@/lib/document-configuration/prisma-repository"
-import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment"
+import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { DocumentPolicyEditor } from "@/app/[locale]/admin/business-configuration/documents/policy-editor"
 import { requireAdmin } from "@/lib/auth"
@@ -22,7 +22,7 @@ export default async function DocumentSettingsPage({ searchParams }: { searchPar
     )
   const { editing, nextHref } = await ownerSettingsPageMode(searchParams, "/admin/payments")
   if (editing) await ensureOwnerDraftRelease((await requireAdmin()).id)
-  const environment = readPrivateDocumentEnvironment()
+  const environment = await readRuntimePrivateDocumentEnvironment()
   const data = await new PrismaDocumentConfigurationRepository(prisma).load(
     caps.canEdit,
     environment.issues.length ? environment.issues : ["DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED"],

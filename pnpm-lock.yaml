@@ -108,6 +108,9 @@ importers:
       '@vercel/blob':
         specifier: 2.6.1
         version: 2.6.1
+      '@vercel/oidc':
+        specifier: ^3.8.0
+        version: 3.8.0
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.23(postcss@8.5.19)
