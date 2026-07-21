@@ -99,7 +99,7 @@ export default async function ApplicationReviewWorkspace({
               reviewReasonCode: true,
               safeReviewerNote: true,
               createdAt: true,
-              documentType: { select: { name: true } },
+              documentType: { select: { key: true, name: true } },
             },
             orderBy: [{ documentTypeId: "asc" }, { slotNumber: "asc" }, { side: "asc" }],
           },
@@ -255,7 +255,7 @@ export default async function ApplicationReviewWorkspace({
               {documents.map((document) => (
                 <div key={document.id} className="rounded-xl border p-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="truncate text-sm font-semibold">{documentTypeName(document.documentTypeId, document.documentType.name, locale)}</p><p className="text-xs text-muted-foreground">{documentSide(document.side, locale)} · {tr("file", "Datei")} {document.slotNumber}</p></div>
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold">{documentTypeName(document.documentType.key, document.documentType.name, locale)}</p><p className="text-xs text-muted-foreground">{documentSide(document.side, locale)} · {tr("file", "Datei")} {document.slotNumber}</p></div>
                     <DocumentStatus status={document.manualReviewStatus} locale={locale} />
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3">
@@ -324,9 +324,9 @@ function applicationStatus(status: string, locale: string) {
   return labels[status]?.[locale === "de" ? 1 : 0] ?? status
 }
 
-function documentTypeName(typeId: string, fallback: string, locale: string) {
+function documentTypeName(typeKey: string, fallback: string, locale: string) {
   if (locale !== "de") return fallback
-  return ({ IDENTITY_CARD: "Personalausweis", PASSPORT: "Reisepass", DRIVING_LICENCE: "Führerschein" } as Record<string, string>)[typeId] ?? fallback
+  return ({ IDENTITY_CARD: "Personalausweis", PASSPORT: "Reisepass", DRIVING_LICENCE: "Führerschein" } as Record<string, string>)[typeKey] ?? fallback
 }
 
 function validationStatus(status: string, locale: string) {

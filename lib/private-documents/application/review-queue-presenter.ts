@@ -5,6 +5,7 @@ export interface PresentedReviewQueueItem {
   documentId: string
   bookingId?: string
   documentTypeId: string
+  documentTypeKey: string
   documentTypeName: string
   side: "SINGLE" | "FRONT" | "BACK"
   slotNumber: number
@@ -39,7 +40,7 @@ export async function presentReviewQueue(items: ReviewQueueItem[]): Promise<Pres
     where: { id: { in: items.map((item) => item.documentId) } },
     select: {
       id: true,
-      documentType: { select: { name: true } },
+      documentType: { select: { key: true, name: true } },
       uploadSession: {
         select: {
           bookingApplication: {
@@ -76,6 +77,7 @@ export async function presentReviewQueue(items: ReviewQueueItem[]): Promise<Pres
 
     return {
       ...item,
+      documentTypeKey: record?.documentType.key ?? item.documentTypeId,
       documentTypeName: record?.documentType.name ?? item.documentTypeId,
       application: application
         ? {

@@ -35,6 +35,7 @@ interface QueueItem {
   documentId: string
   bookingId?: string
   documentTypeId: string
+  documentTypeKey: string
   documentTypeName: string
   side: "SINGLE" | "FRONT" | "BACK"
   slotNumber: number
@@ -217,7 +218,7 @@ export function DocumentReviewQueue({
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {reviewCase.items.map((item) => (
                     <button key={item.documentId} type="button" onClick={() => router.push(`/admin/documents/${item.documentId}`)} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50">
-                      <span className="min-w-0"><span className="block truncate text-sm font-medium">{documentTypeLabel(item.documentTypeId, item.documentTypeName, locale)}</span><span className="block text-xs text-muted-foreground">{friendlySide(item.side, locale)} · {tr("file", "Datei")} {item.slotNumber}</span></span>
+                      <span className="min-w-0"><span className="block truncate text-sm font-medium">{documentTypeLabel(item.documentTypeKey, item.documentTypeName, locale)}</span><span className="block text-xs text-muted-foreground">{friendlySide(item.side, locale)} · {tr("file", "Datei")} {item.slotNumber}</span></span>
                       <Badge variant="outline">{Math.floor(item.pendingAgeMs / 3_600_000)}h</Badge>
                     </button>
                   ))}
@@ -243,14 +244,14 @@ function friendlySide(side: QueueItem["side"], locale: string) {
   return locale === "de" ? "Einzeldokument" : "Single file"
 }
 
-function documentTypeLabel(typeId: string, fallback: string, locale: string) {
+function documentTypeLabel(typeKey: string, fallback: string, locale: string) {
   if (locale !== "de") return fallback
   const labels: Record<string, string> = {
     IDENTITY_CARD: "Personalausweis",
     PASSPORT: "Reisepass",
     DRIVING_LICENCE: "Führerschein",
   }
-  return labels[typeId] ?? fallback
+  return labels[typeKey] ?? fallback
 }
 
 function applicationStatusLabel(status: string, locale: string) {

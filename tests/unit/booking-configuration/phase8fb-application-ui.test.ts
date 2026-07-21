@@ -110,6 +110,7 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(queue).toContain("Document review progress")
     expect(presenter).toContain("bookingApplication")
     expect(presenter).toContain("approvedDocuments")
+    expect(presenter).toContain("documentTypeKey")
     expect(workspace).toContain("Customer and driver")
     expect(workspace).toContain("Document checklist")
     expect(workspace).toContain("Legal acceptances")
