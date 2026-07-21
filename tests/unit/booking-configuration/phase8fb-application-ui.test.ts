@@ -115,4 +115,12 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(workspace).toContain("Legal acceptances")
     expect(documentReview).toContain("router.push(returnTo)")
   })
+
+  it("repairs uninitialized policy permissions without assigning restricted roles", () => {
+    const migration = read("prisma/migrations/20260721031500_backfill_reviewer_permissions_for_existing_documents/migration.sql")
+    expect(migration).toContain("policies_requiring_access")
+    expect(migration).toContain("DOCUMENT_REVIEWER")
+    expect(migration).toContain("DocumentPolicyRolePermission")
+    expect(migration).not.toContain('INSERT INTO "UserAccessRole"')
+  })
 })

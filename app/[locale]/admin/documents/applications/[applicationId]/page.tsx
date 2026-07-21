@@ -350,6 +350,7 @@ function scanStatus(status: string, locale: string) {
     CLEAN: ["Clean", "Unbedenklich"],
     INFECTED: ["Unsafe", "Unsicher"],
     FAILED: ["Scan failed", "Scan fehlgeschlagen"],
+    NOT_AVAILABLE: ["Scan not available", "Scan nicht verfügbar"],
   }
   return labels[status]?.[locale === "de" ? 1 : 0] ?? status
 }
