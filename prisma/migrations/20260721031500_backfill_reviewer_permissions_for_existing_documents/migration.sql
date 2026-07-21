@@ -2,6 +2,12 @@
 -- no policy-role rows at all. Backfill only those uninitialized snapshots that
 -- already own retained customer documents. Access still requires an explicitly
 -- assigned restricted DOCUMENT_* role and the matching capability.
+-- The payload guard is suspended only for this table and only inside Prisma's
+-- migration transaction. PostgreSQL rolls the trigger state back as well if
+-- any statement fails, and the guard is explicitly re-enabled before commit.
+ALTER TABLE "DocumentPolicyRolePermission"
+  DISABLE TRIGGER "DocumentPolicyRolePermission_immutable";
+
 WITH policies_requiring_access AS (
   SELECT DISTINCT document."documentPolicyConfigVersionId" AS policy_id
   FROM "CustomerDocument" document
@@ -38,3 +44,6 @@ JOIN "AccessRole" role
   )
  AND role.status = 'ACTIVE'
 ON CONFLICT ("documentPolicyConfigVersionId", "accessRoleId") DO NOTHING;
+
+ALTER TABLE "DocumentPolicyRolePermission"
+  ENABLE TRIGGER "DocumentPolicyRolePermission_immutable";

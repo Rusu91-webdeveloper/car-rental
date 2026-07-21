@@ -121,6 +121,8 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(migration).toContain("policies_requiring_access")
     expect(migration).toContain("DOCUMENT_REVIEWER")
     expect(migration).toContain("DocumentPolicyRolePermission")
+    expect(migration).toContain('DISABLE TRIGGER "DocumentPolicyRolePermission_immutable"')
+    expect(migration).toContain('ENABLE TRIGGER "DocumentPolicyRolePermission_immutable"')
     expect(migration).not.toContain('INSERT INTO "UserAccessRole"')
   })
 })
