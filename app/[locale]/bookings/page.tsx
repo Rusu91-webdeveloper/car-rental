@@ -81,10 +81,24 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     }
   }
 
+  const getStatusLabel = (status: string) => {
+    if (locale !== "de") return status.replaceAll("_", " ")
+    return ({
+      PENDING: "ZAHLUNG AUSSTEHEND",
+      CONFIRMED: "BESTÄTIGT",
+      IN_PROGRESS: "IN BEARBEITUNG",
+      COMPLETED: "ABGESCHLOSSEN",
+      CANCELLED: "STORNIERT",
+      REJECTED: "ABGELEHNT",
+    } as Record<string, string>)[status] ?? status
+  }
+
   const getPaymentStatusColor = (paymentStatus: string) => {
     switch (paymentStatus) {
       case "PAID":
         return "bg-green-50 text-green-700 border-green-200"
+      case "DEPOSIT_PAID":
+        return "bg-blue-50 text-blue-700 border-blue-200"
       case "PENDING":
         return "bg-yellow-50 text-yellow-700 border-yellow-200"
       case "FAILED":
@@ -102,6 +116,8 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     switch (paymentStatus) {
       case "PAID":
         return t("bookings.paid")
+      case "DEPOSIT_PAID":
+        return locale === "de" ? "Anzahlung bezahlt" : "Deposit paid"
       case "PENDING":
         return t("bookings.pending")
       case "FAILED":
@@ -118,9 +134,9 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   const getPaymentMethodLabel = (paymentMethod: string) => {
     switch (paymentMethod) {
       case "TRANSFER":
-        return "Bank Transfer"
+        return locale === "de" ? "Banküberweisung" : "Bank Transfer"
       case "PAY_AT_PICKUP":
-        return "Pay at Pickup"
+        return locale === "de" ? "Zahlung bei Abholung" : "Pay at Pickup"
       default:
         return paymentMethod
     }
@@ -243,14 +259,14 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
               const displayName = locale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
               const displaySubtitle =
                 locale === "de" ? booking.car.subtitleDe || booking.car.subtitle : booking.car.subtitle
-              const cancellationDeadline = calculateCancellationDeadline(booking.createdAt)
+              const cancellationDeadline = booking.paymentDueAt ?? calculateCancellationDeadline(booking.createdAt)
               const showCancellationDeadline =
                 booking.status === "PENDING" &&
                 booking.paymentStatus === "PENDING" &&
                 booking.paymentMethod === "TRANSFER"
               const canLeaveReview =
                 booking.status === "COMPLETED" &&
-                (booking.paymentStatus === "PAID" || booking.paymentMethod === "PAY_AT_PICKUP")
+                booking.paymentStatus === "PAID"
               const displayedTotal = booking.pricingSnapshot?.grandTotal ?? booking.totalPrice
               const displayedCurrency = booking.pricingSnapshot?.currency ?? "EUR"
 
@@ -268,7 +284,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                           <h3 className="font-bold">{displayName}</h3>
                           <p className="text-sm text-muted-foreground">{displaySubtitle}</p>
                         </div>
-                        <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                        <Badge className={getStatusColor(booking.status)}>{getStatusLabel(booking.status)}</Badge>
                       </div>
                     </div>
                   </div>

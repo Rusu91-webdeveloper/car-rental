@@ -59,6 +59,7 @@ model User {
   applicationLegalAcceptances    BookingApplicationLegalAcceptance[] @relation("BookingApplicationLegalAcceptanceCustomer")
   accessRoleAssignments          UserAccessRole[]
   auditEvents                    AuditEvent[]                        @relation("AuditEventActor")
+  paymentsRecorded               Payment[]                           @relation("PaymentRecordedBy")
 
   @@index([providerId])
   @@index([email])
@@ -212,11 +213,12 @@ model Booking {
   stripePaymentIntentId String? @unique
 
   // Timestamps
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  confirmedAt DateTime?
-  cancelledAt DateTime?
-  completedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
+  completedAt  DateTime?
+  paymentDueAt DateTime?
 
   // Relations
   payments               Payment[]
@@ -229,6 +231,7 @@ model Booking {
   customerDocuments      CustomerDocument[]
   documentUploadSession  DocumentUploadSession?
   sourceApplication      BookingApplication?
+  notifications          BookingNotification[]
 
   @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
   @@index([userId])
@@ -250,6 +253,7 @@ enum BookingStatus {
 
 enum PaymentStatus {
   PENDING
+  DEPOSIT_PAID
   PAID
   FAILED
   REFUNDED
@@ -259,6 +263,32 @@ enum PaymentStatus {
 enum BookingPaymentMethod {
   TRANSFER
   PAY_AT_PICKUP
+}
+
+enum PaymentPurpose {
+  DEPOSIT
+  BALANCE
+  FULL
+}
+
+enum BookingNotificationEvent {
+  CUSTOMER_TRANSFER_INSTRUCTIONS
+  CUSTOMER_CASH_CONFIRMATION
+  CUSTOMER_TRANSFER_CONFIRMED
+  CUSTOMER_TRANSFER_EXPIRED
+  ADMIN_BOOKING_CREATED
+}
+
+enum BookingNotificationRecipient {
+  CUSTOMER
+  ADMIN
+}
+
+enum BookingNotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
 }
 
 enum BookingApplicationStatus {
@@ -309,9 +339,14 @@ model Payment {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  amount   Int // in cents
-  currency String        @default("usd")
-  status   PaymentStatus
+  amount       Int // in cents
+  currency     String                @default("usd")
+  status       PaymentStatus
+  purpose      PaymentPurpose?
+  method       BookingPaymentMethod?
+  receivedAt   DateTime?
+  recordedById String?
+  recordedBy   User?                 @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
 
   stripePaymentIntentId String?
   stripeChargeId        String?
@@ -323,6 +358,28 @@ model Payment {
 
   @@index([bookingId])
   @@index([stripePaymentIntentId])
+  @@index([recordedById, receivedAt])
+}
+
+model BookingNotification {
+  id                String                       @id @default(cuid())
+  bookingId         String
+  booking           Booking                      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  event             BookingNotificationEvent
+  recipient         BookingNotificationRecipient
+  eventKey          String                       @unique @db.VarChar(160)
+  status            BookingNotificationStatus    @default(PENDING)
+  attemptCount      Int                          @default(0)
+  nextAttemptAt     DateTime                     @default(now())
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  providerMessageId String?                      @db.VarChar(255)
+  lastErrorCode     String?                      @db.VarChar(64)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([bookingId, createdAt])
 }
 
 // Blocked dates for maintenance or other reasons
@@ -383,9 +440,13 @@ model AdminAuditLog {
 }
 
 enum AdminAction {
+  BOOKING_CREATED
   BOOKING_CONFIRMED
+  BOOKING_STATUS_CHANGED
   BOOKING_CANCELLED
   BOOKING_REJECTED
+  PAYMENT_RECEIVED
+  NOTIFICATION_RETRIED
   CAR_CREATED
   CAR_UPDATED
   CAR_DELETED
@@ -1166,11 +1227,11 @@ model PaymentMethodRule {
 }
 
 model PaymentInstructionTranslation {
-  id                     String @id @default(cuid())
+  id                     String                @id @default(cuid())
   paymentConfigVersionId String
   method                 ConfiguredPaymentMode
-  locale                 String @db.VarChar(10)
-  instructions           String @db.Text
+  locale                 String                @db.VarChar(10)
+  instructions           String                @db.Text
 
   paymentConfig         PaymentConfigVersion                 @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
   applicationSelections BookingApplicationPaymentSelection[]

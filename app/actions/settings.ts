@@ -10,6 +10,16 @@ const optionalText = (max: number) => z.string().trim().max(max).transform((valu
 const requiredText = (max: number, label: string) =>
   z.string().trim().min(1, `${label} is required`).max(max)
 
+function validIban(value: string) {
+  const iban = value.replace(/\s+/g, "").toUpperCase()
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)) return false
+  const rearranged = `${iban.slice(4)}${iban.slice(0, 4)}`
+  const numeric = rearranged.replace(/[A-Z]/g, (letter) => String(letter.charCodeAt(0) - 55))
+  let remainder = 0
+  for (const digit of numeric) remainder = (remainder * 10 + Number(digit)) % 97
+  return remainder === 1
+}
+
 const businessProfileSchema = z.object({
   companyName: z.literal("Qujo Autovermietung GmbH", { errorMap: () => ({ message: "The registered business name must remain Qujo Autovermietung GmbH" }) }),
   companyEmail: z.string().trim().email("Enter a valid business email"),
@@ -33,7 +43,7 @@ const paymentDetailsSchema = z.object({
   accountName: z.string().trim().min(1, "Account holder is required").max(160),
   accountNumber: z.string().trim().min(1, "Account number is required").max(80),
   swiftCode: z.string().trim().min(1, "SWIFT/BIC is required").max(30),
-  iban: z.string().trim().max(50).optional(),
+  iban: z.string().trim().min(1, "IBAN is required").max(50).refine(validIban, "Enter a valid IBAN").transform((value) => value.replace(/\s+/g, "").toUpperCase()),
   depositPercentage: z.number().min(0).max(1),
   guaranteePercentage: z.number().min(0).max(1),
 })

@@ -17,7 +17,13 @@ import {
   updateCar as updateCarAction,
   deleteCar as deleteCarAction,
 } from "@/app/actions/cars"
-import { resendBookingConfirmationAsAdmin, updateBookingStatus } from "@/app/actions/bookings"
+import {
+  confirmTransferDeposit,
+  recordPickupPayment,
+  resendBookingConfirmationAsAdmin,
+  retryBookingNotification,
+  updateBookingStatus,
+} from "@/app/actions/bookings"
 import { cancelBookingApplicationAsAdmin } from "@/app/actions/booking-applications"
 import { deleteReviewAsAdmin } from "@/app/actions/reviews"
 import {
@@ -37,7 +43,6 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
-  XCircle,
   Clock,
   Search,
   Filter,
@@ -97,8 +102,21 @@ interface AdminBooking {
   totalPrice: number
   currency: string
   guaranteeAmount: number
+  bookingNumber: string
+  transferCode: string
+  depositAmount: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
+  paymentStatus: "PENDING" | "DEPOSIT_PAID" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED"
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
+  paymentDueAt: string | null
+  amountReceived: number
+  emailDelivery: {
+    id: string
+    event: "CUSTOMER_TRANSFER_INSTRUCTIONS" | "CUSTOMER_CASH_CONFIRMATION" | "CUSTOMER_TRANSFER_CONFIRMED" | "CUSTOMER_TRANSFER_EXPIRED" | "ADMIN_BOOKING_CREATED"
+    status: "PENDING" | "PROCESSING" | "SENT" | "FAILED"
+    sentAt: string | null
+    lastErrorCode: string | null
+  } | null
   createdAt: string
   insurance: { name: string; subtotal: number } | null
   legalAcceptances: Array<{
@@ -150,6 +168,7 @@ interface AdminBookingApplication {
   location: string
   totalPrice: number | null
   currency: string
+  paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   updatedAt: string
 }
 
@@ -307,10 +326,8 @@ export default function AdminDashboard({
     }
   }
 
-  const revenueBookings = bookingsState.filter((booking) =>
-    ["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(booking.status),
-  )
-  const totalRevenueCents = revenueBookings.reduce((sum, booking) => sum + booking.totalPrice, 0)
+  const revenueBookings = bookingsState.filter((booking) => booking.amountReceived > 0)
+  const totalRevenueCents = revenueBookings.reduce((sum, booking) => sum + booking.amountReceived, 0)
   const activeBookings = bookingsState.filter((b) => b.status === "CONFIRMED").length
   const pendingBookings = bookingsState.filter((b) => b.status === "PENDING").length
   const completedBookings = bookingsState.filter((b) => b.status === "COMPLETED").length
@@ -331,7 +348,7 @@ export default function AdminDashboard({
       const bookingDate = new Date(b.createdAt)
       return bookingDate.getMonth() === now.getMonth() && bookingDate.getFullYear() === now.getFullYear()
     })
-    .reduce((sum, booking) => sum + booking.totalPrice, 0)
+    .reduce((sum, booking) => sum + booking.amountReceived, 0)
   const customerCount = usersState.filter((user) => user.role === "USER").length
   const pendingApplicationReviews = bookingApplicationsState.filter(
     (application) => application.status === "AWAITING_DOCUMENT_REVIEW",
@@ -759,6 +776,71 @@ export default function AdminDashboard({
       "Diese Buchung stornieren? Die Daten werden freigegeben und der Kunde wird benachrichtigt. Der rechtliche Prüfverlauf bleibt erhalten.",
     ))) return
     handleUpdateBookingStatus(booking.id, "CANCELLED", "Cancelled and removed from active bookings by administrator.")
+  }
+
+  const handleConfirmTransferDeposit = (booking: AdminBooking) => {
+    if (!confirm(tr(
+      `Confirm receipt of ${formatCents(booking.depositAmount || booking.totalPrice, booking.currency)} and confirm this booking?`,
+      `Eingang von ${formatCents(booking.depositAmount || booking.totalPrice, booking.currency)} bestätigen und diese Buchung freigeben?`,
+    ))) return
+    startTransition(async () => {
+      const result = await confirmTransferDeposit({ bookingId: booking.id })
+      if (result?.error) {
+        toast({ title: tr("Payment could not be confirmed", "Zahlung konnte nicht bestätigt werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      if (!("success" in result) || !result.success) return
+      setBookingsState((previous) => previous.map((item) => item.id === booking.id
+        ? {
+            ...item,
+            status: "CONFIRMED",
+            paymentStatus: result.paymentStatus,
+            paymentDueAt: null,
+            amountReceived: item.amountReceived + result.amountReceived,
+          }
+        : item))
+      toast({
+        title: tr("Deposit received", "Anzahlung eingegangen"),
+        description: result.confirmationEmailSent
+          ? tr("The booking is confirmed and the pickup email was sent.", "Die Buchung ist bestätigt und die Abhol-E-Mail wurde gesendet.")
+          : tr("The booking is confirmed. Email delivery is queued for retry.", "Die Buchung ist bestätigt. Die E-Mail-Zustellung wird erneut versucht."),
+      })
+      router.refresh()
+    })
+  }
+
+  const handleRecordPickupPayment = (booking: AdminBooking) => {
+    const outstanding = Math.max(booking.totalPrice - booking.amountReceived, 0)
+    if (!confirm(tr(
+      `Confirm that ${formatCents(outstanding, booking.currency)} was collected at pickup?`,
+      `Bestätigen, dass ${formatCents(outstanding, booking.currency)} bei der Abholung bezahlt wurde?`,
+    ))) return
+    startTransition(async () => {
+      const result = await recordPickupPayment({ bookingId: booking.id })
+      if (result?.error) {
+        toast({ title: tr("Payment could not be recorded", "Zahlung konnte nicht erfasst werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      if (!("success" in result) || !result.success) return
+      setBookingsState((previous) => previous.map((item) => item.id === booking.id
+        ? { ...item, paymentStatus: "PAID", amountReceived: item.amountReceived + result.amountReceived }
+        : item))
+      toast({ title: tr("Pickup payment recorded", "Abholzahlung erfasst"), description: tr("Revenue and the booking payment status were updated.", "Umsatz und Zahlungsstatus der Buchung wurden aktualisiert.") })
+      router.refresh()
+    })
+  }
+
+  const handleRetryNotification = (booking: AdminBooking) => {
+    if (!booking.emailDelivery) return
+    startTransition(async () => {
+      const result = await retryBookingNotification({ deliveryId: booking.emailDelivery!.id })
+      if (result?.error) {
+        toast({ title: tr("Email retry failed", "Erneuter E-Mail-Versand fehlgeschlagen"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      toast({ title: tr("Email delivered", "E-Mail zugestellt"), description: tr("The customer notification was sent through Gmail SMTP.", "Die Kundenbenachrichtigung wurde über Gmail SMTP gesendet.") })
+      router.refresh()
+    })
   }
 
   const handleCancelApplication = (application: AdminBookingApplication) => {
@@ -1326,8 +1408,8 @@ export default function AdminDashboard({
                   <CardTitle>{tr("Booking applications before confirmation", "Buchungsanträge vor der Bestätigung")}</CardTitle>
                   <CardDescription>
                     {tr(
-                      "These requests become confirmed bookings automatically when all required documents are approved.",
-                      "Diese Anfragen werden automatisch zu bestätigten Buchungen, sobald alle erforderlichen Dokumente freigegeben sind.",
+                      "After document approval, transfer requests await payment while pay-at-pickup requests are confirmed immediately.",
+                      "Nach der Dokumentenfreigabe warten Überweisungsanfragen auf Zahlung; Buchungen mit Zahlung bei Abholung werden sofort bestätigt.",
                     )}
                   </CardDescription>
                 </div>
@@ -1395,10 +1477,9 @@ export default function AdminDashboard({
                           </div>
                           {application.status === "READY_TO_FINALIZE" ? (
                             <p className="text-sm text-emerald-700">
-                              {tr(
-                                "Documents are approved. The booking is being confirmed automatically.",
-                                "Die Dokumente sind freigegeben. Die Buchung wird automatisch bestätigt.",
-                              )}
+                              {application.paymentMethod === "TRANSFER"
+                                ? tr("Documents are approved. A 24-hour payment reservation is being created.", "Die Dokumente sind freigegeben. Eine 24-stündige Zahlungsreservierung wird erstellt.")
+                                : tr("Documents are approved. The pay-at-pickup booking is being confirmed.", "Die Dokumente sind freigegeben. Die Buchung mit Zahlung bei Abholung wird bestätigt.")}
                             </p>
                           ) : null}
                           {application.status === "CANCELLED" ? (
@@ -1556,58 +1637,38 @@ export default function AdminDashboard({
                             >
                               {tr(booking.status.replaceAll("_", " "), ({ PENDING: "AUSSTEHEND", CONFIRMED: "BESTÄTIGT", IN_PROGRESS: "IN BEARBEITUNG", COMPLETED: "ABGESCHLOSSEN", CANCELLED: "STORNIERT", REJECTED: "ABGELEHNT" } as const)[booking.status])}
                             </Badge>
-                            <Select
-                              value={booking.status}
-                              onValueChange={(value) =>
-                                handleUpdateBookingStatus(booking.id, value as AdminBooking["status"])
-                              }
-                            >
-                              <SelectTrigger className="w-full sm:w-36">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PENDING">
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4" />
-                                    {tr("Pending", "Ausstehend")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="CONFIRMED">
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    {tr("Confirmed", "Bestätigt")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="IN_PROGRESS">
-                                  <div className="flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4" />
-                                    {tr("In Progress", "In Bearbeitung")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="COMPLETED">
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    {tr("Completed", "Abgeschlossen")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="CANCELLED">
-                                  <div className="flex items-center gap-2">
-                                    <XCircle className="w-4 h-4" />
-                                    {tr("Cancelled", "Storniert")}
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="REJECTED">
-                                  <div className="flex items-center gap-2">
-                                    <XCircle className="w-4 h-4" />
-                                    {tr("Rejected", "Abgelehnt")}
-                                  </div>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {booking.status === "PENDING" && booking.paymentMethod === "TRANSFER" && booking.paymentStatus === "PENDING" ? (
+                              <Button size="sm" disabled={isPending} onClick={() => handleConfirmTransferDeposit(booking)}>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                {tr("Mark deposit received", "Anzahlung bestätigen")}
+                              </Button>
+                            ) : null}
+                            {booking.paymentMethod === "PAY_AT_PICKUP" && booking.paymentStatus !== "PAID" && ["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(booking.status) ? (
+                              <Button size="sm" disabled={isPending} onClick={() => handleRecordPickupPayment(booking)}>
+                                <DollarSign className="mr-2 h-4 w-4" />
+                                {tr("Mark cash received", "Barzahlung bestätigen")}
+                              </Button>
+                            ) : null}
+                            {booking.status === "CONFIRMED" ? (
+                              <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleUpdateBookingStatus(booking.id, "IN_PROGRESS")}>
+                                {tr("Start rental", "Miete starten")}
+                              </Button>
+                            ) : null}
+                            {booking.status === "IN_PROGRESS" ? (
+                              <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleUpdateBookingStatus(booking.id, "COMPLETED")}>
+                                {tr("Complete rental", "Miete abschließen")}
+                              </Button>
+                            ) : null}
                             {booking.status === "CONFIRMED" ? (
                               <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleResendConfirmation(booking.id)}>
                                 <Mail className="mr-2 h-4 w-4" />
                                 {tr("Resend confirmation", "Bestätigung erneut senden")}
+                              </Button>
+                            ) : null}
+                            {booking.emailDelivery?.status === "FAILED" ? (
+                              <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleRetryNotification(booking)}>
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                {tr("Retry customer email", "Kunden-E-Mail erneut senden")}
                               </Button>
                             ) : null}
                             {!["CANCELLED", "REJECTED", "COMPLETED"].includes(booking.status) ? (
@@ -1632,6 +1693,52 @@ export default function AdminDashboard({
                             <span className="text-muted-foreground">{tr("Payment:", "Zahlung:")}</span>
                             <span className="ml-2 font-medium">
                               {booking.paymentMethod === "TRANSFER" ? tr("Bank Transfer", "Banküberweisung") : tr("Pay at Pickup", "Zahlung bei Abholung")}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">{tr("Payment status:", "Zahlungsstatus:")}</span>
+                            <span className="ml-2 font-medium">
+                              {booking.paymentStatus === "DEPOSIT_PAID"
+                                ? tr("Deposit paid", "Anzahlung bezahlt")
+                                : tr(booking.paymentStatus.replaceAll("_", " "), ({ PENDING: "AUSSTEHEND", PAID: "BEZAHLT", FAILED: "FEHLGESCHLAGEN", REFUNDED: "ERSTATTET", PARTIALLY_REFUNDED: "TEILWEISE ERSTATTET" } as const)[booking.paymentStatus as Exclude<AdminBooking["paymentStatus"], "DEPOSIT_PAID">])}
+                            </span>
+                          </div>
+                          {booking.paymentMethod === "TRANSFER" ? (
+                            <div>
+                              <span className="text-muted-foreground">{tr("Expected deposit:", "Erwartete Anzahlung:")}</span>
+                              <span className="ml-2 font-medium">{formatCents(booking.depositAmount || booking.totalPrice, booking.currency)}</span>
+                            </div>
+                          ) : null}
+                          <div>
+                            <span className="text-muted-foreground">{tr("Received:", "Erhalten:")}</span>
+                            <span className="ml-2 font-medium">{formatCents(booking.amountReceived, booking.currency)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">{tr("Outstanding:", "Offen:")}</span>
+                            <span className="ml-2 font-medium">{formatCents(Math.max(booking.totalPrice - booking.amountReceived, 0), booking.currency)}</span>
+                          </div>
+                          {booking.paymentDueAt ? (
+                            <div>
+                              <span className="text-muted-foreground">{tr("Payment deadline:", "Zahlungsfrist:")}</span>
+                              <span className="ml-2 font-medium">{formatAdminDateTime(booking.paymentDueAt)}</span>
+                            </div>
+                          ) : null}
+                          {booking.paymentMethod === "TRANSFER" ? (
+                            <div>
+                              <span className="text-muted-foreground">{tr("Transfer reference:", "Verwendungszweck:")}</span>
+                              <span className="ml-2 font-mono font-medium">{booking.transferCode}</span>
+                            </div>
+                          ) : null}
+                          <div>
+                            <span className="text-muted-foreground">{tr("Customer email:", "Kunden-E-Mail:")}</span>
+                            <span className="ml-2 font-medium">
+                              {booking.emailDelivery
+                                ? booking.emailDelivery.status === "SENT"
+                                  ? tr("Sent", "Gesendet")
+                                  : booking.emailDelivery.status === "FAILED"
+                                    ? tr("Failed – retry available", "Fehlgeschlagen – erneut senden")
+                                    : tr("Queued", "In Warteschlange")
+                                : tr("No delivery recorded", "Keine Zustellung erfasst")}
                             </span>
                           </div>
                           <div>

@@ -8,6 +8,8 @@ import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-el
 import { PrismaBookingConfigurationRepository } from "@/lib/booking-configuration/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
+import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
+import { enqueueInitialBookingNotifications } from "@/lib/booking-notifications"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
 import type {
   ApplicationMutationInput,
@@ -964,12 +966,22 @@ export class PrismaBookingApplicationRepository
               guaranteeAmount: calculated.quote.payment.guaranteeAmount,
               transferCode: randomBytes(4).toString("hex").toUpperCase(),
               bookingNumber: `BK${Date.now().toString().slice(-8)}${randomBytes(2).toString("hex").toUpperCase()}`,
-              status: "CONFIRMED",
+              status: row.paymentMethod === "TRANSFER" ? "PENDING" : "CONFIRMED",
               paymentStatus: "PENDING",
               paymentMethod: row.paymentMethod,
-              confirmedAt: new Date(),
+              confirmedAt: row.paymentMethod === "PAY_AT_PICKUP" ? new Date() : null,
+              paymentDueAt:
+                row.paymentMethod === "TRANSFER"
+                  ? new Date(Date.now() + BOOKING_PAYMENT_WINDOW_MS)
+                  : null,
             },
           })
+          await enqueueInitialBookingNotifications(
+            tx,
+            booking.id,
+            booking.bookingNumber,
+            booking.paymentMethod,
+          )
           await tx.bookingPricingSnapshot.create({
             data: {
               bookingId: booking.id,

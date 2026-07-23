@@ -75,7 +75,9 @@ export function DocumentReviewClient({
       })
       const result = (await response.json()) as {
         code?: string
+        bookingCreated?: boolean
         bookingConfirmed?: boolean
+        awaitingPayment?: boolean
         confirmationEmailSent?: boolean
       }
       if (!response.ok) {
@@ -87,8 +89,8 @@ export function DocumentReviewClient({
         )
         return
       }
-      const confirmationQuery = result.bookingConfirmed
-        ? `?confirmationEmail=${result.confirmationEmailSent === false ? "failed" : "sent"}`
+      const confirmationQuery = result.bookingCreated
+        ? `?bookingState=${result.awaitingPayment ? "payment-pending" : "confirmed"}&confirmationEmail=${result.confirmationEmailSent === false ? "failed" : "sent"}`
         : ""
       router.push(`${returnTo}${confirmationQuery}`)
       router.refresh()

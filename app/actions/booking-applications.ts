@@ -20,7 +20,7 @@ import {
 import { BookingApplicationError } from "@/lib/booking-applications/errors"
 import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository"
 import { enforceRateLimit, PHASE8FB_RATE_LIMITS, RateLimitExceededError } from "@/lib/rate-limit"
-import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
+import { dispatchPendingBookingNotificationsForBooking } from "@/lib/booking-notifications"
 import { sendAdminBookingApplicationNotification, sendBookingApplicationCancelledEmail, sendBookingApplicationSubmittedEmail } from "@/lib/email"
 import { config } from "@/lib/config"
 import { logger } from "@/lib/logger"
@@ -338,12 +338,14 @@ export async function finalizeSavedBookingApplication(input: unknown) {
       ...value,
       customerUserId: user.id,
     })
-    const delivery = application.bookingId ? await deliverBookingConfirmation(application.bookingId) : undefined
+    const deliveries = application.bookingId
+      ? await dispatchPendingBookingNotificationsForBooking(application.bookingId)
+      : undefined
     return {
       applicationId: application.id,
       bookingId: application.bookingId,
       revision: application.revision,
-      confirmationEmailSent: delivery ? !delivery.error : undefined,
+      confirmationEmailSent: deliveries ? deliveries.some((delivery) => "sent" in delivery) : undefined,
     }
   } catch (error) {
     return publicError(error)

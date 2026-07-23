@@ -61,9 +61,9 @@ export async function getAdminStats() {
       prisma.booking.count(),
       prisma.car.count({ where: { isDeleted: false } }),
       prisma.user.count(),
-      prisma.booking.aggregate({
-        where: { paymentStatus: "PAID" },
-        _sum: { totalPrice: true },
+      prisma.payment.aggregate({
+        where: { status: "PAID" },
+        _sum: { amount: true },
       }),
       prisma.booking.findMany({
         take: 10,
@@ -85,7 +85,7 @@ export async function getAdminStats() {
         totalBookings,
         totalCars,
         totalUsers,
-        totalRevenue: totalRevenue._sum.totalPrice || 0,
+        totalRevenue: totalRevenue._sum.amount || 0,
       },
       bookingsByStatus,
       recentBookings,

@@ -51,8 +51,8 @@ export function PaymentDetailsForm({ value }: { value: PaymentDetailsValue }) {
       <div><h2 className="font-semibold">Bank transfer details</h2><p className="mt-1 text-sm text-muted-foreground">Shown on the booking page and in confirmations when bank transfer is used.</p></div>
       <div className="grid gap-4 sm:grid-cols-2">
         {(["bankName", "accountName", "accountNumber", "swiftCode", "iban"] as const).map((field) => {
-          const labels = { bankName: "Bank name", accountName: "Account holder", accountNumber: "Account number", swiftCode: "SWIFT / BIC", iban: "IBAN (optional)" }
-          return <div key={field} className="space-y-2"><Label htmlFor={field}>{labels[field]}</Label><Input id={field} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} required={field !== "iban"} /></div>
+          const labels = { bankName: "Bank name", accountName: "Account holder", accountNumber: "Account number", swiftCode: "SWIFT / BIC", iban: "IBAN" }
+          return <div key={field} className="space-y-2"><Label htmlFor={field}>{labels[field]}</Label><Input id={field} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} required /></div>
         })}
       </div>
       <div className="border-t pt-5"><h3 className="font-medium">Deposits</h3><p className="mt-1 text-sm text-muted-foreground">Choose how much customers pay or leave as security.</p></div>

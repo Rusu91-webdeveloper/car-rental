@@ -2,7 +2,7 @@ import { PrivateDocumentError } from "@/lib/private-documents/domain/errors"
 import type { DocumentReviewReasonValue } from "@/lib/private-documents/application/repository"
 import { loadPrivateDocumentRequestContext } from "@/lib/private-documents/server/request-context"
 import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository"
-import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
+import { dispatchPendingBookingNotificationsForBooking } from "@/lib/booking-notifications"
 import { prisma } from "@/lib/db"
 import { logger } from "@/lib/logger"
 import { sendDocumentReviewDecisionEmail } from "@/lib/email"
@@ -84,6 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ doc
       select: { bookingApplicationId: true },
     })
     let finalizedBookingId: string | undefined
+    let finalizedBookingStatus: "PENDING" | "CONFIRMED" | undefined
     let confirmationEmailSent: boolean | undefined
     if (binding?.bookingApplicationId) {
       const repository = new PrismaBookingApplicationRepository(prisma)
@@ -107,24 +108,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ doc
           })
           finalizedBookingId = finalized.bookingId
           if (finalizedBookingId) {
+            const finalizedBooking = await prisma.booking.findUnique({
+              where: { id: finalizedBookingId },
+              select: { status: true, paymentMethod: true },
+            })
+            finalizedBookingStatus = finalizedBooking?.status === "CONFIRMED" ? "CONFIRMED" : "PENDING"
             await prisma.adminAuditLog.create({
               data: {
                 adminId: context.actor.userId,
-                action: "BOOKING_CONFIRMED",
+                action: finalizedBooking?.status === "CONFIRMED" ? "BOOKING_CONFIRMED" : "BOOKING_CREATED",
                 targetType: "booking",
                 targetId: finalizedBookingId,
                 bookingId: finalizedBookingId,
                 oldValue: { status: "BOOKING_APPLICATION_DOCUMENT_REVIEW" },
-                newValue: { status: "CONFIRMED" },
+                newValue: {
+                  status: finalizedBooking?.status ?? "PENDING",
+                  paymentMethod: finalizedBooking?.paymentMethod,
+                },
                 reason: "All required customer documents were approved.",
               },
             })
-            const delivery = await deliverBookingConfirmation(finalizedBookingId)
-            confirmationEmailSent = !delivery.error
-            if (delivery.error)
+            const deliveries = await dispatchPendingBookingNotificationsForBooking(finalizedBookingId)
+            confirmationEmailSent = deliveries.some((delivery) => "sent" in delivery)
+            if (deliveries.some((delivery) => "error" in delivery))
               logger.error("booking.confirmation_email_failed_after_document_approval", {
                 bookingId: finalizedBookingId,
-                error: delivery.error,
               })
             revalidatePath("/admin")
             revalidatePath("/bookings")
@@ -208,7 +216,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ doc
         status: document.manualReviewStatus,
         reviewRevision: document.reviewRevision,
         bookingId: finalizedBookingId,
-        bookingConfirmed: Boolean(finalizedBookingId),
+        bookingCreated: Boolean(finalizedBookingId),
+        bookingConfirmed: finalizedBookingStatus === "CONFIRMED",
+        awaitingPayment: finalizedBookingStatus === "PENDING",
         confirmationEmailSent,
       },
       { headers: { "Cache-Control": "private, no-store" } },

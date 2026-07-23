@@ -12,7 +12,16 @@ import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
 import { logger } from "@/lib/logger"
-import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
+import {
+  BookingPaymentTransitionError,
+  confirmTransferDeposit as confirmTransferDepositTransition,
+  recordPickupPayment as recordPickupPaymentTransition,
+} from "@/lib/booking-payment-lifecycle"
+import {
+  dispatchBookingNotification,
+  dispatchPendingBookingNotificationsForBooking,
+  enqueueBookingNotification,
+} from "@/lib/booking-notifications"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -130,17 +139,27 @@ export async function updateBookingStatus(data: unknown) {
       return { error: "Booking not found" }
     }
 
+    if (validated.status === "PENDING" || validated.status === "CONFIRMED") {
+      return {
+        error:
+          validated.status === "CONFIRMED"
+            ? "Use the payment confirmation action to confirm a transfer booking."
+            : "Pending status is assigned automatically by the booking workflow.",
+      }
+    }
+    if (["CANCELLED", "REJECTED"].includes(validated.status) && !validated.reason?.trim()) {
+      return { error: "A reason is required when cancelling or rejecting a booking." }
+    }
+
     // Update booking in transaction with audit log
     await prisma.$transaction(async (tx) => {
       const oldStatus = booking.status
-      const nextPaymentStatus = validated.status === "COMPLETED" && booking.paymentStatus === "PENDING" ? "PAID" : booking.paymentStatus
-
       await tx.booking.update({
         where: { id: validated.bookingId },
         data: {
           status: validated.status,
-          paymentStatus: nextPaymentStatus,
-          confirmedAt: validated.status === "CONFIRMED" ? new Date() : booking.confirmedAt,
+          paymentStatus: booking.paymentStatus,
+          confirmedAt: booking.confirmedAt,
           cancelledAt: validated.status === "CANCELLED" ? new Date() : booking.cancelledAt,
           completedAt: validated.status === "COMPLETED" ? new Date() : booking.completedAt,
         },
@@ -150,14 +169,14 @@ export async function updateBookingStatus(data: unknown) {
       await tx.adminAuditLog.create({
         data: {
           adminId: admin.id,
-          action: validated.status === "CONFIRMED" ? "BOOKING_CONFIRMED" : validated.status === "CANCELLED" ? "BOOKING_CANCELLED" : "BOOKING_REJECTED",
+          action: validated.status === "CANCELLED" ? "BOOKING_CANCELLED" : validated.status === "REJECTED" ? "BOOKING_REJECTED" : "BOOKING_STATUS_CHANGED",
           targetType: "booking",
           targetId: validated.bookingId,
           bookingId: validated.bookingId,
           oldValue: { status: oldStatus, paymentStatus: booking.paymentStatus },
           newValue: {
             status: validated.status,
-            paymentStatus: nextPaymentStatus,
+            paymentStatus: booking.paymentStatus,
           },
           reason: validated.reason,
         },
@@ -176,41 +195,7 @@ export async function updateBookingStatus(data: unknown) {
 
     if (config.features.emailEnabled && booking.user?.email) {
       const bookingLocale = normalizeBookingLocale(booking.locale)
-      // Send appropriate email based on status
-      if (validated.status === "CONFIRMED" && booking.status !== "CONFIRMED") {
-        logger.info("[BOOKING] Sending CONFIRMED status emails:", {
-          bookingNumber: booking.bookingNumber,
-          userEmail: booking.user.email,
-          adminEmails: config.adminEmails,
-        })
-
-        const confirmationDelivery = await deliverBookingConfirmation(booking.id)
-        if (confirmationDelivery.error) {
-          logger.error("[BOOKING] Failed to send user confirmation email:", {
-            bookingNumber: booking.bookingNumber,
-            userEmail: booking.user.email,
-            error: confirmationDelivery.error,
-          })
-        } else {
-          logger.info("[BOOKING] ✅ User confirmation email sent successfully:", {
-            bookingNumber: booking.bookingNumber,
-            userEmail: booking.user.email,
-          })
-        }
-
-        if (confirmationDelivery.adminEmailError) {
-          logger.error("[BOOKING] Failed to send admin confirmation email:", {
-            bookingNumber: booking.bookingNumber,
-            adminEmails: config.adminEmails,
-            error: confirmationDelivery.adminEmailError,
-          })
-        } else {
-          logger.info("[BOOKING] ✅ Admin confirmation email sent successfully:", {
-            bookingNumber: booking.bookingNumber,
-            adminEmails: config.adminEmails,
-          })
-        }
-      } else if (validated.status === "COMPLETED") {
+      if (validated.status === "COMPLETED") {
         logger.info("[BOOKING] Sending COMPLETED status email:", {
           bookingNumber: booking.bookingNumber,
           userEmail: booking.user.email,
@@ -304,6 +289,88 @@ export async function updateBookingStatus(data: unknown) {
   }
 }
 
+const bookingPaymentActionSchema = z.object({ bookingId: z.string().min(1) })
+
+export async function confirmTransferDeposit(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const { bookingId } = bookingPaymentActionSchema.parse(data)
+    const result = await confirmTransferDepositTransition({ bookingId, adminId: admin.id })
+    const deliveries = await dispatchPendingBookingNotificationsForBooking(bookingId)
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    return {
+      success: true,
+      ...result,
+      confirmationEmailSent: deliveries.some((delivery) => "sent" in delivery),
+    }
+  } catch (error) {
+    logger.error("booking.transfer_payment_confirmation_failed", {
+      error: error instanceof Error ? error.name : "UnknownError",
+    })
+    if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
+    return { error: "The transfer payment could not be confirmed." }
+  }
+}
+
+export async function recordPickupPayment(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const { bookingId } = bookingPaymentActionSchema.parse(data)
+    const result = await recordPickupPaymentTransition({ bookingId, adminId: admin.id })
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    return { success: true, ...result }
+  } catch (error) {
+    logger.error("booking.pickup_payment_record_failed", {
+      error: error instanceof Error ? error.name : "UnknownError",
+    })
+    if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
+    return { error: "The pickup payment could not be recorded." }
+  }
+}
+
+const retryNotificationSchema = z.object({ deliveryId: z.string().min(1) })
+
+export async function retryBookingNotification(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const { deliveryId } = retryNotificationSchema.parse(data)
+    const notification = await prisma.bookingNotification.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, bookingId: true, status: true },
+    })
+    if (!notification) return { error: "Email delivery not found." }
+    if (notification.status === "SENT") return { error: "This email has already been delivered." }
+    await prisma.$transaction([
+      prisma.bookingNotification.update({
+        where: { id: notification.id },
+        data: { status: "PENDING", nextAttemptAt: new Date(), lastErrorCode: null },
+      }),
+      prisma.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "NOTIFICATION_RETRIED",
+          targetType: "booking-notification",
+          targetId: notification.id,
+          bookingId: notification.bookingId,
+          oldValue: { status: notification.status },
+          newValue: { status: "PENDING" },
+          reason: "Administrator requested another Gmail delivery attempt.",
+        },
+      }),
+    ])
+    const result = await dispatchBookingNotification(notification.id)
+    revalidatePath("/admin")
+    return "sent" in result ? { success: true } : { error: "Email delivery failed and will be retried automatically." }
+  } catch (error) {
+    logger.error("booking.notification_manual_retry_failed", error)
+    return { error: "The email could not be retried." }
+  }
+}
+
 const resendBookingConfirmationSchema = z.object({
   bookingId: z.string().min(1),
 })
@@ -314,7 +381,7 @@ export async function resendBookingConfirmationAsAdmin(data: unknown) {
     const { bookingId } = resendBookingConfirmationSchema.parse(data)
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { status: true },
+      include: { user: true, customerDriverSnapshot: true },
     })
     if (!booking) return { error: "Booking not found" }
     if (booking.status !== "CONFIRMED")
@@ -322,11 +389,21 @@ export async function resendBookingConfirmationAsAdmin(data: unknown) {
         error: "Only confirmed bookings can receive a confirmation email.",
       }
 
-    const result = await deliverBookingConfirmation(bookingId, {
-      manualResend: true,
+    const notification = await enqueueBookingNotification(prisma, {
+      bookingId,
+      bookingNumber: booking.bookingNumber,
+      event: booking.paymentMethod === "TRANSFER" ? "CUSTOMER_TRANSFER_CONFIRMED" : "CUSTOMER_CASH_CONFIRMATION",
     })
-    if (result.error) return { error: result.error }
-    return { success: true, customerEmail: result.customerEmail }
+    await prisma.bookingNotification.update({
+      where: { id: notification.id },
+      data: { status: "PENDING", nextAttemptAt: new Date(), sentAt: null, lastErrorCode: null },
+    })
+    const result = await dispatchBookingNotification(notification.id)
+    if (!("sent" in result)) return { error: "Email delivery failed and will be retried automatically." }
+    return {
+      success: true,
+      customerEmail: booking.customerDriverSnapshot?.email || booking.user.email,
+    }
   } catch (error) {
     logger.error("[RESEND_BOOKING_CONFIRMATION_ERROR]", error)
     return {

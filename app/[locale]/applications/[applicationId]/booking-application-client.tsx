@@ -303,8 +303,12 @@ export function BookingApplicationClient({
           </h2>
           <p className="mt-1 text-sm">
             {locale === "de"
-              ? "Ihre Buchungsanfrage ist gespeichert. Der Vermieter prüft jetzt die Dokumente. Nach der Freigabe wird die Buchung automatisch bestätigt und Ihnen per E-Mail zugesandt."
-              : "Your booking request is saved. The rental company will now review the documents. After approval, the booking is confirmed automatically and emailed to you."}
+              ? application.paymentMethod === "TRANSFER"
+                ? "Ihre Buchungsanfrage ist gespeichert. Nach der Dokumentenfreigabe wird das Fahrzeug 24 Stunden reserviert und Sie erhalten die Überweisungsdaten."
+                : "Ihre Buchungsanfrage ist gespeichert. Nach der Dokumentenfreigabe wird die Buchung mit Zahlung bei Abholung bestätigt."
+              : application.paymentMethod === "TRANSFER"
+                ? "Your request is saved. After document approval, the vehicle will be reserved for 24 hours and you will receive the bank-transfer details."
+                : "Your request is saved. After document approval, the pay-at-pickup booking will be confirmed."}
           </p>
           <Button className="mt-3" variant="outline" onClick={() => router.push("/bookings")}>
             {locale === "de" ? "Unter „Meine Fahrten“ verfolgen" : "Track in My Trips"}
@@ -317,8 +321,12 @@ export function BookingApplicationClient({
           <h2 className="font-semibold">{locale === "de" ? "Dokumente freigegeben" : "Documents approved"}</h2>
           <p className="mt-1 text-sm">
             {locale === "de"
-              ? "Ihre Dokumente sind freigegeben. Die Buchung wird automatisch bestätigt; Sie können die Bestätigung unten auch sofort abschließen."
-              : "Your documents are approved. The booking is confirmed automatically; you can also complete confirmation below if needed."}
+              ? application.paymentMethod === "TRANSFER"
+                ? "Ihre Dokumente sind freigegeben. Die Reservierung wird erstellt und wartet anschließend auf Ihre Anzahlung."
+                : "Ihre Dokumente sind freigegeben. Die Buchung mit Zahlung bei Abholung wird automatisch bestätigt."
+              : application.paymentMethod === "TRANSFER"
+                ? "Your documents are approved. The reservation will be created and will then await your deposit."
+                : "Your documents are approved. The pay-at-pickup booking will be confirmed automatically."}
           </p>
         </section>
       ) : null}

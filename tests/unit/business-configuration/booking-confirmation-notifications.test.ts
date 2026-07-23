@@ -6,13 +6,17 @@ import { paymentConfigurationSchema } from "@/lib/business-configuration/schema"
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8")
 
 describe("booking confirmation and offline payment instructions", () => {
-  it("routes confirmed-status delivery through the idempotent customer and admin delivery service", () => {
+  it("routes lifecycle delivery through the durable Gmail notification outbox", () => {
     const action = read("app/actions/bookings.ts")
     const email = read("lib/email.tsx")
+    const outbox = read("lib/booking-notifications.ts")
     const packageJson = read("package.json")
-    expect(action).toContain("deliverBookingConfirmation")
-    expect(action).toContain('validated.status === "CONFIRMED" && booking.status !== "CONFIRMED"')
+    expect(action).toContain("confirmTransferDepositTransition")
+    expect(action).toContain("retryBookingNotification")
     expect(action).not.toContain("sendBookingConfirmationEmail(")
+    expect(outbox).toContain("dispatchBookingNotification")
+    expect(outbox).toContain("CUSTOMER_TRANSFER_INSTRUCTIONS")
+    expect(outbox).toContain("CUSTOMER_TRANSFER_CONFIRMED")
     expect(email).toContain('from "nodemailer"')
     expect(email).not.toContain('from "resend"')
     expect(email).toContain("GMAIL_SMTP_USER")

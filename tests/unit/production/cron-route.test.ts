@@ -15,6 +15,7 @@ vi.mock("@/lib/booking-expiration", () => ({
     cancelled: 0,
     completed: 0,
     completionEmailsFailed: 0,
+    notifications: { examined: 0, sent: 0, failed: 0 },
   })),
 }))
 

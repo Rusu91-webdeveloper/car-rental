@@ -15,6 +15,18 @@ vi.mock("@/lib/db", () => ({
         companyName: "Synthetic Rentals",
         companyEmail: "support@example.invalid",
         supportEmail: "support@example.invalid",
+        companyPhone: "+49 30 123456",
+        companyAddress: "Teststrasse 1",
+        companyZipCode: "10115",
+        companyCity: "Berlin",
+        companyCountry: "Deutschland",
+        bankName: "Synthetic Bank",
+        accountName: "Synthetic Rentals GmbH",
+        accountNumber: "12345678",
+        swiftCode: "SYNTHDE1",
+        iban: "DE89370400440532013000",
+        depositPercentage: 0.1,
+        guaranteePercentage: 0,
       })),
     },
   },
@@ -156,5 +168,50 @@ describe("Gmail SMTP production email", () => {
     expect(smtpSend.mock.calls[1][0].html).toContain("Dokument ersetzen")
     expect(smtpSend.mock.calls[1][0].html).toContain("Die Rückseite ist nicht lesbar.")
     expect(smtpSend.mock.calls[1][0].messageId).toMatch(/^<[a-f0-9]{64}@example\.invalid>$/)
+  })
+
+  it("sends cash pickup details with the total and company address", async () => {
+    smtpSend.mockResolvedValue({ messageId: "cash-confirmation" })
+    const { sendPayAtPickupEmail } = await import("@/lib/email")
+    await sendPayAtPickupEmail({
+      to: "customer@example.invalid",
+      userName: "Erika Mustermann",
+      carName: "Testfahrzeug",
+      pickupDate: "01.08.2026, 10:00",
+      dropoffDate: "03.08.2026, 10:00",
+      location: "Berlin Hauptbahnhof",
+      totalPrice: 26000,
+      currency: "EUR",
+      guaranteeAmount: 0,
+      bookingNumber: "BK-CASH",
+      locale: "de",
+    })
+
+    const html = smtpSend.mock.calls[0][0].html
+    expect(html).toContain("Berlin Hauptbahnhof")
+    expect(html).toContain("Teststrasse 1, 10115 Berlin, Deutschland")
+    expect(html).toContain("€260.00")
+  })
+
+  it("sends the transfer confirmation without monetary amounts", async () => {
+    smtpSend.mockResolvedValue({ messageId: "transfer-confirmation" })
+    const { sendTransferPaymentConfirmedEmail } = await import("@/lib/email")
+    await sendTransferPaymentConfirmedEmail({
+      to: "customer@example.invalid",
+      userName: "Erika Mustermann",
+      carName: "Testfahrzeug",
+      pickupDate: "01.08.2026, 10:00",
+      dropoffDate: "03.08.2026, 10:00",
+      location: "Berlin Hauptbahnhof",
+      bookingNumber: "BK-TRANSFER",
+      locale: "de",
+    })
+
+    const html = smtpSend.mock.calls[0][0].html
+    expect(html).toContain("Buchung bestätigt")
+    expect(html).toContain("Berlin Hauptbahnhof")
+    expect(html).toContain("Teststrasse 1, 10115 Berlin, Deutschland")
+    expect(html).not.toContain("Gesamtbetrag")
+    expect(html).not.toMatch(/\d+[,.]\d{2}\s*€/)
   })
 })

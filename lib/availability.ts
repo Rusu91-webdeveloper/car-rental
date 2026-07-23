@@ -17,9 +17,13 @@ export async function isCarAvailable(
     where: {
       carId,
       id: excludeBookingId ? { not: excludeBookingId } : undefined,
-      status: {
-        in: ["PENDING", "CONFIRMED", "IN_PROGRESS"],
-      },
+      OR: [
+        { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
+        {
+          status: "PENDING",
+          OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: new Date() } }],
+        },
+      ],
       AND: [
         {
           pickupDate: {
@@ -62,9 +66,13 @@ export async function getUnavailableDates(carId: string): Promise<{ start: Date;
     prisma.booking.findMany({
       where: {
         carId,
-        status: {
-          in: ["PENDING", "CONFIRMED", "IN_PROGRESS"],
-        },
+        OR: [
+          { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
+          {
+            status: "PENDING",
+            OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: new Date() } }],
+          },
+        ],
       },
       select: {
         pickupDate: true,

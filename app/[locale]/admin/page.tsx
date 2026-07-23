@@ -9,6 +9,7 @@ import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
 import type { Car, User } from "@prisma/client"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 
 export const dynamic = "force-dynamic"
 
@@ -69,6 +70,7 @@ export default async function AdminPage({
   // At this point, user is guaranteed to be non-null and ADMIN
   const adminUser = user!
   const capabilities = await getBusinessConfigurationCapabilities()
+  await runBookingLifecycleMaintenance()
 
   const [cars, bookings, bookingApplications, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
     await Promise.all([
@@ -81,6 +83,16 @@ export default async function AdminPage({
         include: {
           pricingSnapshot: true,
           insuranceSnapshot: true,
+          payments: {
+            where: { status: "PAID" },
+            select: { amount: true, receivedAt: true },
+          },
+          notifications: {
+            where: { recipient: "CUSTOMER" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, event: true, status: true, sentAt: true, lastErrorCode: true },
+          },
           customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
           legalAcceptances: {
             include: {
@@ -106,6 +118,7 @@ export default async function AdminPage({
           pickupAt: true,
           returnAt: true,
           pickupLocation: true,
+          paymentMethod: true,
           updatedAt: true,
           pricingQuotes: {
             where: { isCurrent: true },
@@ -256,8 +269,20 @@ export default async function AdminPage({
         totalPrice: booking.pricingSnapshot?.grandTotal ?? booking.totalPrice,
         currency: booking.pricingSnapshot?.currency ?? "EUR",
         guaranteeAmount: booking.guaranteeAmount,
+        bookingNumber: booking.bookingNumber,
+        transferCode: booking.transferCode,
+        depositAmount: booking.depositAmount,
         status: booking.status,
+        paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod,
+        paymentDueAt: booking.paymentDueAt?.toISOString() ?? null,
+        amountReceived: booking.payments.reduce((sum, payment) => sum + payment.amount, 0),
+        emailDelivery: booking.notifications[0]
+          ? {
+              ...booking.notifications[0],
+              sentAt: booking.notifications[0].sentAt?.toISOString() ?? null,
+            }
+          : null,
         createdAt: booking.createdAt.toISOString(),
         provenance: {
           configurationReleaseId: booking.pricingSnapshot?.configurationReleaseId ?? null,
@@ -307,6 +332,7 @@ export default async function AdminPage({
         location: application.pickupLocation,
         totalPrice: application.pricingQuotes[0]?.grandTotal ?? null,
         currency: application.pricingQuotes[0]?.currency ?? "EUR",
+        paymentMethod: application.paymentMethod,
         updatedAt: application.updatedAt.toISOString(),
       }))}
       users={users.map((item: User) => ({

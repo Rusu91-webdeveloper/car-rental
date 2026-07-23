@@ -24,10 +24,10 @@ export default async function ApplicationReviewWorkspace({
   searchParams,
 }: {
   params: Promise<{ locale: string; applicationId: string }>
-  searchParams: Promise<{ confirmationEmail?: string }>
+  searchParams: Promise<{ confirmationEmail?: string; bookingState?: string }>
 }) {
   const { locale, applicationId } = await params
-  const { confirmationEmail } = await searchParams
+  const { confirmationEmail, bookingState } = await searchParams
   const tr = (english: string, german: string) => (locale === "de" ? german : english)
   const [documentContext, capabilities] = await Promise.all([
     loadRestrictedDocumentActor(),
@@ -274,10 +274,10 @@ export default async function ApplicationReviewWorkspace({
           </Card>
 
           {application.status === "READY_TO_FINALIZE" ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"><CheckCircle2 className="h-5 w-5" /><p className="mt-2 font-semibold">{tr("Review complete", "Prüfung abgeschlossen")}</p><p className="mt-1 text-sm">{tr("The system is confirming the booking automatically.", "Das System bestätigt die Buchung automatisch.")}</p></div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"><CheckCircle2 className="h-5 w-5" /><p className="mt-2 font-semibold">{tr("Review complete", "Prüfung abgeschlossen")}</p><p className="mt-1 text-sm">{application.paymentMethod === "TRANSFER" ? tr("The system is creating a 24-hour payment reservation.", "Das System erstellt eine 24-stündige Zahlungsreservierung.") : tr("The system is confirming the pay-at-pickup booking.", "Das System bestätigt die Buchung mit Zahlung bei Abholung.")}</p></div>
           ) : null}
           {application.status === "FINALIZED" && application.bookingId ? (
-            <div className={`rounded-xl border p-4 ${confirmationEmail === "failed" ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-200 bg-emerald-50 text-emerald-950"}`}><CheckCircle2 className="h-5 w-5" /><p className="mt-2 font-semibold">{tr("Booking confirmed", "Buchung bestätigt")}</p><p className="mt-1 text-sm">{confirmationEmail === "failed" ? tr("The booking is confirmed, but the email provider did not accept the confirmation message. Open the booking and use Resend confirmation.", "Die Buchung ist bestätigt, aber der E-Mail-Anbieter hat die Bestätigungsnachricht nicht angenommen. Öffnen Sie die Buchung und verwenden Sie „Bestätigung erneut senden“.") : tr("The customer confirmation email was sent automatically. You can resend it from the booking card if needed.", "Die Bestätigungs-E-Mail wurde automatisch an den Kunden gesendet. Sie können sie bei Bedarf über die Buchungskarte erneut senden.")}</p><Button className="mt-3" size="sm" asChild><Link href="/admin?section=bookings">{tr("Open confirmed booking", "Bestätigte Buchung öffnen")}</Link></Button></div>
+            <div className={`rounded-xl border p-4 ${confirmationEmail === "failed" ? "border-amber-300 bg-amber-50 text-amber-950" : bookingState === "payment-pending" ? "border-blue-200 bg-blue-50 text-blue-950" : "border-emerald-200 bg-emerald-50 text-emerald-950"}`}><CheckCircle2 className="h-5 w-5" /><p className="mt-2 font-semibold">{bookingState === "payment-pending" ? tr("Booking awaiting payment", "Buchung wartet auf Zahlung") : tr("Booking confirmed", "Buchung bestätigt")}</p><p className="mt-1 text-sm">{confirmationEmail === "failed" ? tr("The booking was created, but the email provider did not accept the customer message. Open the booking and retry the customer email.", "Die Buchung wurde erstellt, aber der E-Mail-Anbieter hat die Kundennachricht nicht angenommen. Öffnen Sie die Buchung und senden Sie die Kunden-E-Mail erneut.") : bookingState === "payment-pending" ? tr("The vehicle is reserved for 24 hours and the customer received the bank-transfer instructions.", "Das Fahrzeug ist 24 Stunden reserviert und der Kunde hat die Überweisungsdaten erhalten.") : tr("The cash-at-pickup booking is confirmed and the customer received the pickup details.", "Die Buchung mit Zahlung bei Abholung ist bestätigt und der Kunde hat die Abholdaten erhalten.")}</p><Button className="mt-3" size="sm" asChild><Link href="/admin?section=bookings">{tr("Open booking", "Buchung öffnen")}</Link></Button></div>
           ) : null}
           {CLOSED_STATUSES.has(application.status) && application.status !== "FINALIZED" ? (
             <div className="rounded-xl border bg-muted/30 p-4"><CircleAlert className="h-5 w-5" /><p className="mt-2 font-semibold">{applicationStatus(application.status, locale)}</p><p className="mt-1 text-sm text-muted-foreground">{application.terminalReason || tr("This application is closed.", "Dieser Antrag ist geschlossen.")}</p></div>

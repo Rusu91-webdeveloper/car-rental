@@ -1,10 +1,10 @@
-import type { Prisma, PrismaClient } from "@prisma/client"
+import type { PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
-import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { config } from "@/lib/config"
 import { sendBookingCompletionReviewEmail } from "@/lib/email"
+import { enqueueBookingNotification, processBookingNotificationOutbox } from "@/lib/booking-notifications"
 
-type DbClient = PrismaClient | Prisma.TransactionClient
+type DbClient = PrismaClient
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 const formatDateForLocale = (date: Date, locale: string) =>
   new Date(date).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
@@ -17,22 +17,42 @@ const formatDateForLocale = (date: Date, locale: string) =>
   })
 
 export async function cancelExpiredBookings(db: DbClient = prisma, now = new Date()) {
-  const cutoff = new Date(now.getTime() - BOOKING_PAYMENT_WINDOW_MS)
-
-  const { count } = await db.booking.updateMany({
+  const candidates = await db.booking.findMany({
     where: {
       status: "PENDING",
       paymentStatus: "PENDING",
       paymentMethod: "TRANSFER",
-      createdAt: { lt: cutoff },
+      paymentDueAt: { lte: now },
     },
-    data: {
-      status: "CANCELLED",
-      cancelledAt: now,
-    },
+    select: { id: true, bookingNumber: true },
+    orderBy: { paymentDueAt: "asc" },
+    take: 200,
   })
-
-  return count
+  let cancelled = 0
+  for (const candidate of candidates) {
+    const changed = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${candidate.id} FOR UPDATE`
+      const result = await tx.booking.updateMany({
+        where: {
+          id: candidate.id,
+          status: "PENDING",
+          paymentStatus: "PENDING",
+          paymentMethod: "TRANSFER",
+          paymentDueAt: { lte: now },
+        },
+        data: { status: "CANCELLED", cancelledAt: now },
+      })
+      if (!result.count) return false
+      await enqueueBookingNotification(tx, {
+        bookingId: candidate.id,
+        bookingNumber: candidate.bookingNumber,
+        event: "CUSTOMER_TRANSFER_EXPIRED",
+      })
+      return true
+    })
+    if (changed) cancelled += 1
+  }
+  return cancelled
 }
 
 export async function completeFinishedBookings(now = new Date()) {
@@ -72,7 +92,6 @@ export async function completeFinishedBookings(now = new Date()) {
       data: {
         status: "COMPLETED",
         completedAt: now,
-        paymentStatus: booking.paymentStatus === "PENDING" ? "PAID" : booking.paymentStatus,
       },
     })
 
@@ -107,31 +126,22 @@ export async function completeFinishedBookings(now = new Date()) {
     }
   }
 
-  // Backfill old completed bookings so verified reviews become available immediately.
-  const normalizedCompletedPayments = await prisma.booking.updateMany({
-    where: {
-      status: "COMPLETED",
-      paymentStatus: "PENDING",
-    },
-    data: {
-      paymentStatus: "PAID",
-    },
-  })
-
   return {
     completed: completedCount,
     completionEmailsSent,
     completionEmailsFailed,
-    normalizedCompletedPayments: normalizedCompletedPayments.count,
+    normalizedCompletedPayments: 0,
   }
 }
 
 export async function runBookingLifecycleMaintenance(now = new Date()) {
   const cancelled = await cancelExpiredBookings(prisma, now)
   const completionResult = await completeFinishedBookings(now)
+  const notifications = await processBookingNotificationOutbox()
 
   return {
     cancelled,
     ...completionResult,
+    notifications,
   }
 }

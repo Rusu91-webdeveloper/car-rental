@@ -66,6 +66,7 @@ export interface CompanySetupDetails {
   accountName: string
   accountNumber: string
   swiftCode: string
+  iban?: string | null
   supportEmail: string
   adminEmail: string
 }
@@ -177,7 +178,8 @@ export function buildOwnerSettingsGuide(input: OwnerSettingsGuideInput): OwnerSe
       isRealValue(input.company.bankName) &&
       isRealValue(input.company.accountName) &&
       isRealValue(input.company.accountNumber) &&
-      isRealValue(input.company.swiftCode),
+      isRealValue(input.company.swiftCode) &&
+      isRealValue(input.company.iban),
   )
   const hasNotificationContacts = Boolean(
     input.company && isRealValue(input.company.supportEmail) && isRealValue(input.company.adminEmail),

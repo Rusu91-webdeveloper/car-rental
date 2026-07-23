@@ -124,7 +124,7 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(documentReview).toContain("router.push(`${returnTo}${confirmationQuery}`)")
   })
 
-  it("confirms the booking and emails the customer after the final document approval", () => {
+  it("creates the payment-method-specific booking and queues customer email after final document approval", () => {
     const reviewRoute = read("app/api/private-documents/[documentId]/review/route.ts")
     const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
     const delivery = read("lib/booking-confirmation-delivery.ts")
@@ -133,13 +133,14 @@ describe("Phase 8F-B application and UI integration", () => {
 
     expect(reviewRoute).toContain('body.decision === "APPROVED" && readiness.ready')
     expect(reviewRoute).toContain("repository.finalize")
-    expect(reviewRoute).toContain("deliverBookingConfirmation")
-    expect(adapter).toContain('status: "CONFIRMED"')
-    expect(adapter).toContain("confirmedAt: new Date()")
+    expect(reviewRoute).toContain("dispatchPendingBookingNotificationsForBooking")
+    expect(adapter).toContain('row.paymentMethod === "TRANSFER" ? "PENDING" : "CONFIRMED"')
+    expect(adapter).toContain("enqueueInitialBookingNotifications")
     expect(delivery).toContain("sendBookingConfirmationEmail")
     expect(delivery).toContain("sendAdminBookingConfirmationNotification")
-    expect(applicationActions).toContain("deliverBookingConfirmation")
+    expect(applicationActions).toContain("dispatchPendingBookingNotificationsForBooking")
     expect(adminDashboard).toContain("resendBookingConfirmationAsAdmin")
+    expect(adminDashboard).toContain("handleConfirmTransferDeposit")
     expect(adminDashboard).toContain("Cancel / remove")
     expect(applicationActions).toContain("cancelBookingApplicationAsAdmin")
   })

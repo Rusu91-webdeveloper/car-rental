@@ -19,9 +19,9 @@ function isAuthorized(request: Request) {
 
 function summarize(result: Awaited<ReturnType<typeof runBookingLifecycleMaintenance>>) {
   return {
-    examined: result.cancelled + result.completed,
-    succeeded: result.cancelled + result.completed,
-    failed: result.completionEmailsFailed,
+    examined: result.cancelled + result.completed + result.notifications.examined,
+    succeeded: result.cancelled + result.completed + result.notifications.sent,
+    failed: result.completionEmailsFailed + result.notifications.failed,
   }
 }
 

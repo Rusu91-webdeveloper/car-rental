@@ -335,6 +335,19 @@ export async function updatePaymentInstructionDraft(input: {
   const client = input.db ?? prisma
   return client.$transaction(async (tx) => {
     await requireCapability(tx, input.actorId, CAPABILITIES.PAYMENTS_MANAGE)
+    if (input.enabledMethods.includes("BANK_TRANSFER")) {
+      const company = await tx.companySettings.findUnique({
+        where: { id: "company-settings" },
+        select: { accountName: true, iban: true },
+      })
+      if (!company?.accountName.trim() || !company.iban?.trim()) {
+        throw new ConfigurationWorkflowError(
+          "RELEASE_INCOMPLETE",
+          "Add a valid account holder and IBAN before enabling bank transfer.",
+          "VALIDATION",
+        )
+      }
+    }
     await lockVersion(tx, { id: input.versionId, domain: "PAYMENTS", revision: input.expectedRevision, actorId: input.actorId, summary: input.changeSummary })
     const existing = await tx.paymentConfigVersion.findUniqueOrThrow({ where: { configurationVersionId: input.versionId } })
     const configuration: PaymentConfiguration = {
