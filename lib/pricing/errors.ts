@@ -42,8 +42,9 @@ export function publicPricingErrorMessage(error: PricingError): string {
       return "Please select a valid pickup and drop-off period."
     case "RATE_NOT_FOUND":
     case "RATE_DISABLED":
-    case "VEHICLE_NOT_IN_RATE_SET":
       return "Pricing is not available for this vehicle."
+    case "VEHICLE_NOT_IN_RATE_SET":
+      return "This vehicle's price has not been published yet. Please choose another vehicle or contact the rental company."
     case "INVALID_TIMEZONE":
     case "INVALID_RATE":
     case "MIXED_CURRENCY":

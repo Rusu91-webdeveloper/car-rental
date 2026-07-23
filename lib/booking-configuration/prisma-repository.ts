@@ -30,6 +30,7 @@ export interface ActivePhase6Record {
   releaseValidationStatus: string
   businessTimeZone: string
   currency: string
+  minimumRentalMinutes: number
   insuranceVersionId: string
   insuranceVersionStatus: string
   insuranceValidationStatus: string
@@ -60,6 +61,7 @@ export class PrismaBookingConfigurationRepository {
       where: { status: "ACTIVE" },
       include: {
         generalRentalConfig: true,
+        pricingBillingConfig: true,
         insuranceConfig: {
           include: {
             version: true,
@@ -92,6 +94,7 @@ export class PrismaBookingConfigurationRepository {
       releaseValidationStatus: release.validationStatus,
       businessTimeZone: release.generalRentalConfig.businessTimeZone,
       currency: release.generalRentalConfig.currency,
+      minimumRentalMinutes: release.pricingBillingConfig.minimumRentalMinutes,
       insuranceVersionId: release.insuranceConfigVersionId,
       insuranceVersionStatus: release.insuranceConfig.version.status,
       insuranceValidationStatus: release.insuranceConfig.version.validationStatus,

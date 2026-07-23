@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleAlert } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
+import Link from "@/navigation";
 import { getCompanySettings } from "@/app/actions/settings";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { BusinessSetupGuide } from "@/components/admin/business-setup-guide";
@@ -87,6 +88,27 @@ export default async function BusinessSettingsPage({
           ) : null}
         </div>
       </div>
+      {overview.activeRelease && overview.draftRelease ? (
+        <div className="flex flex-col gap-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">
+              {de ? "Gespeicherte Änderungen sind noch nicht live" : "Saved changes are not live yet"}
+            </p>
+            <p className="mt-1 text-sm text-amber-900/80">
+              {de
+                ? "Neue Fahrzeugpreise und geänderte Mietregeln gelten erst, nachdem Sie sie geprüft und veröffentlicht haben."
+                : "New vehicle prices and changed rental rules apply only after you review and publish them."}
+            </p>
+          </div>
+          <Link
+            href="/admin/advanced/configuration"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-amber-950 px-4 py-2 text-sm font-medium text-white hover:bg-amber-900"
+          >
+            {de ? "Prüfen und veröffentlichen" : "Review and publish"}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      ) : null}
       {shouldRecoverActivation ? <OwnerSetupActivationRecovery /> : null}
       {!hasSetup ? (
         <StartBusinessSetup />

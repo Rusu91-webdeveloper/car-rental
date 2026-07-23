@@ -90,6 +90,17 @@ describe("owner-facing admin information architecture", () => {
     expect(navigation).toContain('href="/admin/advanced/configuration"')
   })
 
+  it("lets owners review and publish saved changes instead of hiding a completed draft", () => {
+    const settings = source("app/[locale]/admin/settings/page.tsx")
+    const publicationPage = source("app/[locale]/admin/advanced/configuration/page.tsx")
+
+    expect(settings).toContain("Saved changes are not live yet")
+    expect(settings).toContain("Review and publish")
+    expect(settings).toContain('href="/admin/advanced/configuration"')
+    expect(publicationPage).not.toContain('user?.role === "ADMIN"')
+    expect(publicationPage).not.toContain('redirect({ href: "/admin/settings"')
+  })
+
   it("preserves role checks and restricted-document navigation", () => {
     const layout = source("app/[locale]/admin/layout.tsx")
     const navigation = source("components/admin/admin-navigation.tsx")

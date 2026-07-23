@@ -101,6 +101,7 @@ export interface PublicBookingConfiguration {
   customerDriverConfigVersionId?: string
   bookingWorkflowConfigVersionId?: string
   businessTimeZone: string
+  minimumRentalMinutes: number
   fields: EffectiveBookingField[]
   steps: EffectiveBookingStep[]
   insurance?: ActiveInsuranceOffer

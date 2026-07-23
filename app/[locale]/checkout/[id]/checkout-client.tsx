@@ -17,6 +17,34 @@ import { CalendarIcon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { BookingCustomerDriverInput, PublicBookingConfiguration } from "@/lib/booking-configuration/types"
 import { LegalContent } from "@/components/legal/legal-content"
+import {
+  isRentalDurationTooShort,
+  minimumRentalDays,
+  minimumRentalPeriodMessage,
+  minimumReturnAt,
+} from "@/lib/booking-configuration/minimum-rental"
+
+const formatDateKey = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+const formatDatetimeLocal = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: number = 10) => {
+  const date = new Date(dateString)
+  date.setHours(defaultHour, 0, 0, 0)
+  return formatDatetimeLocal(date)
+}
 
 export function CheckoutClient({
   locale,
@@ -48,30 +76,6 @@ export function CheckoutClient({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-
-  const formatDateKey = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
-  }
-
-  // Format as datetime-local string (YYYY-MM-DDTHH:mm)
-  const formatDatetimeLocal = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    const hours = String(date.getHours()).padStart(2, "0")
-    const minutes = String(date.getMinutes()).padStart(2, "0")
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
-
-  // Convert YYYY-MM-DD format to datetime-local format (YYYY-MM-DDTHH:mm)
-  const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: number = 10) => {
-    const date = new Date(dateString)
-    date.setHours(defaultHour, 0, 0, 0)
-    return formatDatetimeLocal(date)
-  }
 
   // Get dates from URL params or use defaults
   const getInitialDates = () => {
@@ -243,6 +247,8 @@ export function CheckoutClient({
   >(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(true)
+  const configuredMinimumDays = minimumRentalDays(bookingConfiguration.minimumRentalMinutes)
+  const minimumDurationMessage = minimumRentalPeriodMessage(locale, bookingConfiguration.minimumRentalMinutes)
 
   const updateQueryParams = (updates: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -350,25 +356,28 @@ export function CheckoutClient({
       return true
     }
 
-    const pickupDay = new Date(pickupDateValue)
-    pickupDay.setHours(0, 0, 0, 0)
+    const earliestDropoffDay = minimumReturnAt(
+      pickupDateValue,
+      bookingConfiguration.minimumRentalMinutes,
+    )
+    earliestDropoffDay.setHours(0, 0, 0, 0)
 
     const selectedDay = new Date(date)
     selectedDay.setHours(0, 0, 0, 0)
-    return selectedDay < pickupDay
+    return selectedDay < earliestDropoffDay
   }
 
   const findNextValidDropoff = (pickup: Date, seedDropoff?: Date) => {
     const base = seedDropoff && !Number.isNaN(seedDropoff.getTime()) ? new Date(seedDropoff) : new Date(pickup)
     const candidate = new Date(base)
+    const earliestDropoff = minimumReturnAt(pickup, bookingConfiguration.minimumRentalMinutes)
 
-    if (candidate <= pickup) {
-      candidate.setTime(pickup.getTime())
-      candidate.setDate(candidate.getDate() + 1)
+    if (candidate < earliestDropoff) {
+      candidate.setTime(earliestDropoff.getTime())
     }
 
     for (let i = 0; i < 370; i += 1) {
-      if (candidate > pickup && !isUnavailableDate(candidate) && !rangeHasUnavailableDays(pickup, candidate)) {
+      if (candidate >= earliestDropoff && !isUnavailableDate(candidate) && !rangeHasUnavailableDays(pickup, candidate)) {
         return candidate
       }
       candidate.setDate(candidate.getDate() + 1)
@@ -425,15 +434,12 @@ export function CheckoutClient({
     if (!Number.isNaN(currentPickup.getTime())) {
       let nextDropoff = new Date(parsedDropoff)
 
-      if (nextDropoff <= currentPickup) {
-        const isSameCalendarDay = formatDateKey(nextDropoff) === formatDateKey(currentPickup)
-        if (!isSameCalendarDay) {
-          setError("Drop-off must be after pickup.")
-          return false
-        }
-
-        nextDropoff = new Date(currentPickup)
-        nextDropoff.setMinutes(nextDropoff.getMinutes() + 60)
+      if (
+        nextDropoff <= currentPickup ||
+        isRentalDurationTooShort(currentPickup, nextDropoff, bookingConfiguration.minimumRentalMinutes)
+      ) {
+        setError(minimumDurationMessage)
+        return false
       }
 
       if (rangeHasUnavailableDays(currentPickup, nextDropoff)) {
@@ -510,6 +516,13 @@ export function CheckoutClient({
       return
     }
 
+    if (isRentalDurationTooShort(pickup, dropoff, bookingConfiguration.minimumRentalMinutes)) {
+      setQuote(null)
+      setQuoteError(minimumDurationMessage)
+      setIsQuoteLoading(false)
+      return
+    }
+
     let current = true
     setQuote(null)
     setQuoteError(null)
@@ -532,7 +545,15 @@ export function CheckoutClient({
     return () => {
       current = false
     }
-  }, [car.id, dropoffDate, insuranceSelected, paymentMethod, pickupDate])
+  }, [
+    bookingConfiguration.minimumRentalMinutes,
+    car.id,
+    dropoffDate,
+    insuranceSelected,
+    minimumDurationMessage,
+    paymentMethod,
+    pickupDate,
+  ])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const days = quote?.chargeableDays ?? 0
@@ -564,6 +585,11 @@ export function CheckoutClient({
 
     if (dropoff <= pickup) {
       setError("Drop-off must be after pickup.")
+      return
+    }
+
+    if (isRentalDurationTooShort(pickup, dropoff, bookingConfiguration.minimumRentalMinutes)) {
+      setError(minimumDurationMessage)
       return
     }
 
@@ -749,6 +775,23 @@ export function CheckoutClient({
                 ? "Loading unavailable dates..."
                 : "Booked dates are red in the date picker and cannot be selected."}
             </p>
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground" role="status">
+              <span className="font-medium">
+                {locale === "de" ? "Mindestmietdauer" : "Minimum rental period"}: {configuredMinimumDays}{" "}
+                {locale === "de"
+                  ? configuredMinimumDays === 1
+                    ? "Tag"
+                    : "Tage"
+                  : configuredMinimumDays === 1
+                    ? "day"
+                    : "days"}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {locale === "de"
+                  ? "Frühere Rückgabetermine können nicht ausgewählt werden."
+                  : "Earlier drop-off times cannot be selected."}
+              </span>
+            </div>
             {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
 
             <div className="space-y-2">

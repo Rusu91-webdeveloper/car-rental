@@ -117,7 +117,14 @@ export async function resolvePublicBookingConfiguration(input: {
     input.vehicleId,
     input.locale,
   )
-  if (!record) return { mode: "LEGACY", businessTimeZone: "UTC", fields: [], steps: [] }
+  if (!record)
+    return {
+      mode: "LEGACY",
+      businessTimeZone: "UTC",
+      minimumRentalMinutes: 1,
+      fields: [],
+      steps: [],
+    }
   assertActivePhase6Configuration(record)
   const legal = resolveLegalRequirements(record, input.locale)
   const availableForVehicle =
@@ -129,6 +136,7 @@ export async function resolvePublicBookingConfiguration(input: {
     customerDriverConfigVersionId: record.customerDriverVersionId,
     bookingWorkflowConfigVersionId: record.workflowVersionId,
     businessTimeZone: record.businessTimeZone,
+    minimumRentalMinutes: record.minimumRentalMinutes,
     fields: resolveEffectiveBookingFields(record.customerDriver),
     steps: resolveEffectiveBookingFlow(record.workflow, record.legal),
     insurance: {
