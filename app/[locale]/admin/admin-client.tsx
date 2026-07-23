@@ -17,7 +17,8 @@ import {
   updateCar as updateCarAction,
   deleteCar as deleteCarAction,
 } from "@/app/actions/cars"
-import { updateBookingStatus } from "@/app/actions/bookings"
+import { resendBookingConfirmationAsAdmin, updateBookingStatus } from "@/app/actions/bookings"
+import { cancelBookingApplicationAsAdmin } from "@/app/actions/booking-applications"
 import { deleteReviewAsAdmin } from "@/app/actions/reviews"
 import {
   createAdminUser,
@@ -49,6 +50,7 @@ import {
   FileCheck2,
   ArrowRight,
   RefreshCw,
+  Mail,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
@@ -142,6 +144,7 @@ interface AdminBookingApplication {
     | "EXPIRED"
     | "CANCELLED"
     | "REJECTED"
+  revision: number
   pickupDate: string
   dropoffDate: string
   location: string
@@ -206,6 +209,7 @@ export default function AdminDashboard({
   const [isPending, startTransition] = useTransition()
   const [carsState, setCarsState] = useState<AdminCar[]>(cars)
   const [bookingsState, setBookingsState] = useState<AdminBooking[]>(bookings)
+  const [bookingApplicationsState, setBookingApplicationsState] = useState<AdminBookingApplication[]>(bookingApplications)
   const [usersState, setUsersState] = useState<AdminUser[]>(users)
   const [reviewsState, setReviewsState] = useState<AdminReview[]>(reviews)
   const [manualReservationsState, setManualReservationsState] = useState<AdminManualReservation[]>(manualReservations)
@@ -214,7 +218,7 @@ export default function AdminDashboard({
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false)
   const [editCarId, setEditCarId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [filterStatus, setFilterStatus] = useState<string>(initialSection === "bookings" ? "active" : "all")
   const locale = useLocale()
   const tr = (english: string, german: string) => (locale === "de" ? german : english)
   const actionError = (message: string) => tr(message, "Der Vorgang konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.")
@@ -225,7 +229,7 @@ export default function AdminDashboard({
     if (!ADMIN_SECTIONS.has(section)) return
     setActiveTab(section)
     setSearchTerm("")
-    setFilterStatus("all")
+    setFilterStatus(section === "bookings" ? "active" : "all")
 
     const destination = new URL(window.location.href)
     if (section === "overview") destination.searchParams.delete("section")
@@ -238,7 +242,7 @@ export default function AdminDashboard({
       const nextSection = section && ADMIN_SECTIONS.has(section) ? section : "overview"
       setActiveTab(nextSection)
       setSearchTerm("")
-      setFilterStatus("all")
+      setFilterStatus(nextSection === "bookings" ? "active" : "all")
     }
     const handleSectionChange = (event: Event) => {
       applySection((event as CustomEvent<{ section?: string }>).detail?.section ?? null)
@@ -329,7 +333,7 @@ export default function AdminDashboard({
     })
     .reduce((sum, booking) => sum + booking.totalPrice, 0)
   const customerCount = usersState.filter((user) => user.role === "USER").length
-  const pendingApplicationReviews = bookingApplications.filter(
+  const pendingApplicationReviews = bookingApplicationsState.filter(
     (application) => application.status === "AWAITING_DOCUMENT_REVIEW",
   ).length
   const displayedDocumentReviewCount = canReviewDocuments ? (documentReviewCount ?? pendingApplicationReviews) : pendingApplicationReviews
@@ -341,7 +345,7 @@ export default function AdminDashboard({
       AWAITING_DOCUMENT_UPLOAD: { en: "Documents required", de: "Dokumente erforderlich" },
       AWAITING_DOCUMENT_REVIEW: { en: "Awaiting document review", de: "Dokumentenprüfung ausstehend" },
       CUSTOMER_ACTION_REQUIRED: { en: "Customer action required", de: "Kundenaktion erforderlich" },
-      READY_TO_FINALIZE: { en: "Customer can finalize", de: "Kunde kann abschließen" },
+      READY_TO_FINALIZE: { en: "Ready for automatic confirmation", de: "Bereit zur automatischen Bestätigung" },
       FINALIZING: { en: "Finalizing", de: "Wird abgeschlossen" },
       FINALIZED: { en: "Finalized", de: "Abgeschlossen" },
       EXPIRED: { en: "Expired", de: "Abgelaufen" },
@@ -376,7 +380,10 @@ export default function AdminDashboard({
       (car?.nameDe || "").toLowerCase().includes(normalizedSearch) ||
       user?.name?.toLowerCase().includes(normalizedSearch) ||
       user?.email.toLowerCase().includes(normalizedSearch)
-    const matchesFilter = filterStatus === "all" || booking.status === filterStatus
+    const matchesFilter =
+      filterStatus === "all" ||
+      (filterStatus === "active" && !["CANCELLED", "REJECTED", "COMPLETED"].includes(booking.status)) ||
+      booking.status === filterStatus
     return matchesSearch && matchesFilter
   })
 
@@ -718,14 +725,59 @@ export default function AdminDashboard({
     })
   }
 
-  const handleUpdateBookingStatus = (bookingId: string, status: AdminBooking["status"]) => {
+  const handleUpdateBookingStatus = (bookingId: string, status: AdminBooking["status"], reason?: string) => {
     startTransition(async () => {
-      const result = await updateBookingStatus({ bookingId, status })
+      const result = await updateBookingStatus({ bookingId, status, reason })
       if (result?.error) {
-        alert(actionError(result.error))
+        toast({ title: tr("Booking could not be updated", "Buchung konnte nicht aktualisiert werden"), description: actionError(result.error), variant: "destructive" })
         return
       }
       setBookingsState((prev) => prev.map((booking) => (booking.id === bookingId ? { ...booking, status } : booking)))
+      toast({
+        title: status === "CANCELLED" ? tr("Booking cancelled", "Buchung storniert") : tr("Booking updated", "Buchung aktualisiert"),
+        description: status === "CANCELLED"
+          ? tr("The booking no longer blocks the car's dates. Its audit record has been retained.", "Die Buchung blockiert die Fahrzeugdaten nicht mehr. Der Prüfverlauf wurde aufbewahrt.")
+          : tr("The booking status was saved.", "Der Buchungsstatus wurde gespeichert."),
+      })
+    })
+  }
+
+  const handleCancelBooking = (booking: AdminBooking) => {
+    if (!confirm(tr(
+      "Cancel this booking? The dates will be released and the customer will be notified. The legal audit record will be retained.",
+      "Diese Buchung stornieren? Die Daten werden freigegeben und der Kunde wird benachrichtigt. Der rechtliche Prüfverlauf bleibt erhalten.",
+    ))) return
+    handleUpdateBookingStatus(booking.id, "CANCELLED", "Cancelled and removed from active bookings by administrator.")
+  }
+
+  const handleCancelApplication = (application: AdminBookingApplication) => {
+    if (!confirm(tr(
+      "Cancel and remove this application from the active list? No booking will be created.",
+      "Diesen Antrag stornieren und aus der aktiven Liste entfernen? Es wird keine Buchung erstellt.",
+    ))) return
+    startTransition(async () => {
+      const result = await cancelBookingApplicationAsAdmin({
+        applicationId: application.id,
+        expectedRevision: application.revision,
+        reason: "Cancelled and removed from the active application list by administrator.",
+      })
+      if (result?.error) {
+        toast({ title: tr("Application could not be cancelled", "Antrag konnte nicht storniert werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      setBookingApplicationsState((previous) => previous.filter((item) => item.id !== application.id))
+      toast({ title: tr("Application removed", "Antrag entfernt"), description: tr("No booking was created. The audit record was retained.", "Es wurde keine Buchung erstellt. Der Prüfverlauf wurde aufbewahrt.") })
+    })
+  }
+
+  const handleResendConfirmation = (bookingId: string) => {
+    startTransition(async () => {
+      const result = await resendBookingConfirmationAsAdmin({ bookingId })
+      if (result?.error) {
+        toast({ title: tr("Email could not be sent", "E-Mail konnte nicht gesendet werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      toast({ title: tr("Confirmation email sent", "Bestätigungs-E-Mail gesendet"), description: tr(`Delivered to ${result.customerEmail}.`, `An ${result.customerEmail} zugestellt.`) })
     })
   }
 
@@ -1263,13 +1315,13 @@ export default function AdminDashboard({
                   <CardTitle>{tr("Booking applications before confirmation", "Buchungsanträge vor der Bestätigung")}</CardTitle>
                   <CardDescription>
                     {tr(
-                      "These requests are saved, but they are not bookings until document review and customer finalization are complete.",
-                      "Diese Anfragen sind gespeichert, werden aber erst nach Dokumentenprüfung und Abschluss durch den Kunden zu Buchungen.",
+                      "These requests become confirmed bookings automatically when all required documents are approved.",
+                      "Diese Anfragen werden automatisch zu bestätigten Buchungen, sobald alle erforderlichen Dokumente freigegeben sind.",
                     )}
                   </CardDescription>
                 </div>
                 <Badge variant={pendingApplicationReviews > 0 ? "destructive" : "secondary"}>
-                  {bookingApplications.length}
+                  {bookingApplicationsState.length}
                 </Badge>
               </div>
             </CardHeader>
@@ -1294,12 +1346,12 @@ export default function AdminDashboard({
                 </Alert>
               ) : null}
 
-              {bookingApplications.length === 0 ? (
+              {bookingApplicationsState.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  {tr("No open or recently closed applications.", "Keine offenen oder kürzlich geschlossenen Anträge.")}
+                  {tr("No open applications.", "Keine offenen Anträge.")}
                 </p>
               ) : (
-                bookingApplications.map((application) => {
+                bookingApplicationsState.map((application) => {
                   const car = carsState.find((item) => item.id === application.carId)
                   const customer = usersState.find((item) => item.id === application.userId)
                   const isClosed = ["CANCELLED", "EXPIRED", "REJECTED"].includes(application.status)
@@ -1333,8 +1385,8 @@ export default function AdminDashboard({
                           {application.status === "READY_TO_FINALIZE" ? (
                             <p className="text-sm text-emerald-700">
                               {tr(
-                                "Documents are approved. The customer must now finalize this application in My Trips.",
-                                "Die Dokumente sind freigegeben. Der Kunde muss den Antrag jetzt unter „Meine Fahrten“ abschließen.",
+                                "Documents are approved. The booking is being confirmed automatically.",
+                                "Die Dokumente sind freigegeben. Die Buchung wird automatisch bestätigt.",
                               )}
                             </p>
                           ) : null}
@@ -1347,13 +1399,21 @@ export default function AdminDashboard({
                             </p>
                           ) : null}
                         </div>
-                        {application.status === "AWAITING_DOCUMENT_REVIEW" && canReviewDocuments ? (
-                          <Button size="sm" asChild>
-                            <Link href={`/admin/documents/applications/${application.id}`}>
-                              {tr("Review application", "Antrag prüfen")}
-                            </Link>
-                          </Button>
-                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          {application.status === "AWAITING_DOCUMENT_REVIEW" && canReviewDocuments ? (
+                            <Button size="sm" asChild>
+                              <Link href={`/admin/documents/applications/${application.id}`}>
+                                {tr("Review application", "Antrag prüfen")}
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {!isClosed ? (
+                            <Button variant="destructive" size="sm" disabled={isPending} onClick={() => handleCancelApplication(application)}>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              {tr("Cancel / remove", "Stornieren / entfernen")}
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   )
@@ -1441,6 +1501,7 @@ export default function AdminDashboard({
                 <SelectValue placeholder={tr("Filter by status", "Nach Status filtern")} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="active">{tr("Active bookings", "Aktive Buchungen")}</SelectItem>
                 <SelectItem value="all">{tr("All statuses", "Alle Status")}</SelectItem>
                 <SelectItem value="PENDING">{tr("Pending", "Ausstehend")}</SelectItem>
                 <SelectItem value="CONFIRMED">{tr("Confirmed", "Bestätigt")}</SelectItem>
@@ -1531,6 +1592,18 @@ export default function AdminDashboard({
                                 </SelectItem>
                               </SelectContent>
                             </Select>
+                            {booking.status === "CONFIRMED" ? (
+                              <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleResendConfirmation(booking.id)}>
+                                <Mail className="mr-2 h-4 w-4" />
+                                {tr("Resend confirmation", "Bestätigung erneut senden")}
+                              </Button>
+                            ) : null}
+                            {!["CANCELLED", "REJECTED", "COMPLETED"].includes(booking.status) ? (
+                              <Button variant="destructive" size="sm" disabled={isPending} onClick={() => handleCancelBooking(booking)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {tr("Cancel / remove", "Stornieren / entfernen")}
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
 

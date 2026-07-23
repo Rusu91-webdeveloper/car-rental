@@ -95,13 +95,14 @@ export default async function AdminPage({
       prisma.bookingApplication.findMany({
         where: {
           bookingId: null,
-          status: { notIn: ["FINALIZING", "FINALIZED"] },
+          status: { notIn: ["FINALIZING", "FINALIZED", "CANCELLED", "EXPIRED", "REJECTED"] },
         },
         select: {
           id: true,
           customerUserId: true,
           carId: true,
           status: true,
+          revision: true,
           pickupAt: true,
           returnAt: true,
           pickupLocation: true,
@@ -300,6 +301,7 @@ export default async function AdminPage({
         userId: application.customerUserId,
         carId: application.carId,
         status: application.status,
+        revision: application.revision,
         pickupDate: application.pickupAt.toISOString(),
         dropoffDate: application.returnAt.toISOString(),
         location: application.pickupLocation,

@@ -55,9 +55,11 @@ describe("Resend-only production email", () => {
     expect(result).toEqual({ success: true, id: "synthetic-message" })
     expect(resendSend).toHaveBeenCalledOnce()
     const message = resendSend.mock.calls[0][0]
+    const requestOptions = resendSend.mock.calls[0][1]
     expect(message.from).toBe("Synthetic Rentals <bookings@example.invalid>")
     expect(message.html).toContain("Use reference &lt;SYNTHETIC-BOOKING&gt;.")
     expect(message.html).toContain("Bank Transfer")
+    expect(requestOptions).toEqual({ idempotencyKey: "booking-confirmation-SYNTHETIC-BOOKING" })
   })
 
   it("returns a stable failure without leaking provider details", async () => {

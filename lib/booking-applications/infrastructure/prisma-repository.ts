@@ -964,9 +964,10 @@ export class PrismaBookingApplicationRepository
               guaranteeAmount: calculated.quote.payment.guaranteeAmount,
               transferCode: randomBytes(4).toString("hex").toUpperCase(),
               bookingNumber: `BK${Date.now().toString().slice(-8)}${randomBytes(2).toString("hex").toUpperCase()}`,
-              status: "PENDING",
+              status: "CONFIRMED",
               paymentStatus: "PENDING",
               paymentMethod: row.paymentMethod,
+              confirmedAt: new Date(),
             },
           })
           await tx.bookingPricingSnapshot.create({

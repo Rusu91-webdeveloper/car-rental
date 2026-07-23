@@ -114,7 +114,26 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(workspace).toContain("Customer and driver")
     expect(workspace).toContain("Document checklist")
     expect(workspace).toContain("Legal acceptances")
-    expect(documentReview).toContain("router.push(returnTo)")
+    expect(documentReview).toContain("router.push(`${returnTo}${confirmationQuery}`)")
+  })
+
+  it("confirms the booking and emails the customer after the final document approval", () => {
+    const reviewRoute = read("app/api/private-documents/[documentId]/review/route.ts")
+    const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
+    const delivery = read("lib/booking-confirmation-delivery.ts")
+    const adminDashboard = read("app/[locale]/admin/admin-client.tsx")
+    const applicationActions = read("app/actions/booking-applications.ts")
+
+    expect(reviewRoute).toContain('body.decision === "APPROVED" && readiness.ready')
+    expect(reviewRoute).toContain("repository.finalize")
+    expect(reviewRoute).toContain("deliverBookingConfirmation")
+    expect(adapter).toContain('status: "CONFIRMED"')
+    expect(adapter).toContain("confirmedAt: new Date()")
+    expect(delivery).toContain("sendBookingConfirmationEmail")
+    expect(applicationActions).toContain("deliverBookingConfirmation")
+    expect(adminDashboard).toContain("resendBookingConfirmationAsAdmin")
+    expect(adminDashboard).toContain("Cancel / remove")
+    expect(applicationActions).toContain("cancelBookingApplicationAsAdmin")
   })
 
   it("repairs uninitialized policy permissions without assigning restricted roles", () => {

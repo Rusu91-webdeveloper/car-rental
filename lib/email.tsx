@@ -23,6 +23,7 @@ type SendEmailInput = {
   subject: string
   html: string
   replyTo?: string
+  idempotencyKey?: string
 }
 
 /**
@@ -111,7 +112,7 @@ function resolveSupportEmail(
   )
 }
 
-async function sendEmail({ to, subject, html, replyTo }: SendEmailInput) {
+async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEmailInput) {
   const configStatus = getEmailConfigStatus()
 
   // Validate email configuration
@@ -142,13 +143,16 @@ async function sendEmail({ to, subject, html, replyTo }: SendEmailInput) {
   }
 
   try {
-    const { data, error } = await getResend().emails.send({
-      from: emailFrom,
-      to,
-      subject,
-      html,
-      ...(replyTo ? { replyTo } : {}),
-    })
+    const { data, error } = await getResend().emails.send(
+      {
+        from: emailFrom,
+        to,
+        subject,
+        html,
+        ...(replyTo ? { replyTo } : {}),
+      },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    )
 
     if (error) {
       safeEmailConsole.error("[EMAIL_ERROR] Resend send failed:", {
@@ -254,6 +258,7 @@ interface BookingEmailData {
   paymentMode?: "BOOKING_REQUEST" | "BANK_TRANSFER" | "CASH_ON_PICKUP"
   paymentInstructions?: string
   showPaymentInstructions?: boolean
+  idempotencyKey?: string
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
@@ -354,6 +359,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     const { id, error } = await sendEmail({
       to: data.to,
       subject: `${subjectHeading} - ${data.carName}`,
+      idempotencyKey: data.idempotencyKey || `booking-confirmation-${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>

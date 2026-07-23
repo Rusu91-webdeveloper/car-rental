@@ -303,8 +303,8 @@ export function BookingApplicationClient({
           </h2>
           <p className="mt-1 text-sm">
             {locale === "de"
-              ? "Ihre Buchungsanfrage ist gespeichert. Der Vermieter prüft jetzt die Dokumente. Nach der Freigabe können Sie die Buchung unter „Meine Fahrten“ abschließen."
-              : "Your booking request is saved. The rental company will now review the documents. After approval, you can finalize the booking from My Trips."}
+              ? "Ihre Buchungsanfrage ist gespeichert. Der Vermieter prüft jetzt die Dokumente. Nach der Freigabe wird die Buchung automatisch bestätigt und Ihnen per E-Mail zugesandt."
+              : "Your booking request is saved. The rental company will now review the documents. After approval, the booking is confirmed automatically and emailed to you."}
           </p>
           <Button className="mt-3" variant="outline" onClick={() => router.push("/bookings")}>
             {locale === "de" ? "Unter „Meine Fahrten“ verfolgen" : "Track in My Trips"}
@@ -317,8 +317,8 @@ export function BookingApplicationClient({
           <h2 className="font-semibold">{locale === "de" ? "Dokumente freigegeben" : "Documents approved"}</h2>
           <p className="mt-1 text-sm">
             {locale === "de"
-              ? "Schließen Sie jetzt die Buchung ab. Erst danach wird die Reservierung verbindlich erstellt."
-              : "Finalize the booking now. The reservation is created only after this final step."}
+              ? "Ihre Dokumente sind freigegeben. Die Buchung wird automatisch bestätigt; Sie können die Bestätigung unten auch sofort abschließen."
+              : "Your documents are approved. The booking is confirmed automatically; you can also complete confirmation below if needed."}
           </p>
         </section>
       ) : null}
@@ -340,7 +340,7 @@ export function BookingApplicationClient({
           <Button disabled={isPending} onClick={() => mutate(() => submitBookingApplicationForReview({ applicationId: application.id, expectedRevision: application.revision }))}>Submit uploaded files for review</Button>
         ) : null}
         {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
-          <Button disabled={isPending} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>Finalize booking</Button>
+          <Button disabled={isPending} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>{locale === "de" ? "Bestätigung jetzt abschließen" : "Complete confirmation now"}</Button>
         ) : null}
         <AlertDialog>
           <AlertDialogTrigger asChild>

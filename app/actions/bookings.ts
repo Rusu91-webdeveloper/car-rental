@@ -19,6 +19,7 @@ import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
 import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
 import { logger } from "@/lib/logger"
 import { loadBookingConfirmationConfiguration } from "@/lib/booking-confirmation-configuration"
+import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -352,6 +353,31 @@ export async function updateBookingStatus(data: unknown) {
     }
 
     return { error: "Failed to update booking status" }
+  }
+}
+
+const resendBookingConfirmationSchema = z.object({
+  bookingId: z.string().min(1),
+})
+
+export async function resendBookingConfirmationAsAdmin(data: unknown) {
+  try {
+    await requireAdmin()
+    const { bookingId } = resendBookingConfirmationSchema.parse(data)
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { status: true },
+    })
+    if (!booking) return { error: "Booking not found" }
+    if (booking.status !== "CONFIRMED")
+      return { error: "Only confirmed bookings can receive a confirmation email." }
+
+    const result = await deliverBookingConfirmation(bookingId, { manualResend: true })
+    if (result.error) return { error: result.error }
+    return { success: true, customerEmail: result.customerEmail }
+  } catch (error) {
+    logger.error("[RESEND_BOOKING_CONFIRMATION_ERROR]", error)
+    return { error: error instanceof Error ? error.message : "Failed to resend confirmation email" }
   }
 }
 

@@ -73,7 +73,11 @@ export function DocumentReviewClient({
           safeReviewerNote: note || undefined,
         }),
       })
-      const result = (await response.json()) as { code?: string }
+      const result = (await response.json()) as {
+        code?: string
+        bookingConfirmed?: boolean
+        confirmationEmailSent?: boolean
+      }
       if (!response.ok) {
         if (response.status === 401) window.location.reload()
         setMessage(
@@ -83,7 +87,10 @@ export function DocumentReviewClient({
         )
         return
       }
-      router.push(returnTo)
+      const confirmationQuery = result.bookingConfirmed
+        ? `?confirmationEmail=${result.confirmationEmailSent === false ? "failed" : "sent"}`
+        : ""
+      router.push(`${returnTo}${confirmationQuery}`)
       router.refresh()
     })
 

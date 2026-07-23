@@ -1,7 +1,8 @@
 "use server"
 
 import { z } from "zod"
-import { requireAuth } from "@/lib/auth"
+import { requireAdmin, requireAuth } from "@/lib/auth"
+import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import {
   cancelBookingApplication,
@@ -19,6 +20,7 @@ import {
 import { BookingApplicationError } from "@/lib/booking-applications/errors"
 import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository"
 import { enforceRateLimit, PHASE8FB_RATE_LIMITS, RateLimitExceededError } from "@/lib/rate-limit"
+import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
 
 const customerSchema = z.object({
   firstName: z.string().optional(),
@@ -214,7 +216,15 @@ export async function finalizeSavedBookingApplication(input: unknown) {
       ...value,
       customerUserId: user.id,
     })
-    return { applicationId: application.id, bookingId: application.bookingId, revision: application.revision }
+    const delivery = application.bookingId
+      ? await deliverBookingConfirmation(application.bookingId)
+      : undefined
+    return {
+      applicationId: application.id,
+      bookingId: application.bookingId,
+      revision: application.revision,
+      confirmationEmailSent: delivery ? !delivery.error : undefined,
+    }
   } catch (error) {
     return publicError(error)
   }
@@ -232,6 +242,54 @@ export async function cancelSavedBookingApplication(input: unknown) {
       reason: "Cancelled by customer.",
     })
     return { applicationId: application.id, revision: application.revision }
+  } catch (error) {
+    return publicError(error)
+  }
+}
+
+const adminCancelApplicationSchema = z.object({
+  applicationId: z.string().min(1),
+  expectedRevision: z.number().int().positive(),
+  reason: z.string().trim().min(3).max(500).default("Cancelled by administrator."),
+})
+
+export async function cancelBookingApplicationAsAdmin(input: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const value = adminCancelApplicationSchema.parse(input)
+    const current = await prisma.bookingApplication.findUnique({
+      where: { id: value.applicationId },
+      select: { customerUserId: true, status: true, revision: true },
+    })
+    if (!current) return { error: "Booking application not found." }
+
+    const repository = new PrismaBookingApplicationRepository(prisma)
+    const application = await cancelBookingApplication(repository, {
+      applicationId: value.applicationId,
+      customerUserId: current.customerUserId,
+      expectedRevision: value.expectedRevision,
+      reason: value.reason,
+    })
+
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: admin.id,
+        action: "BOOKING_CANCELLED",
+        targetType: "booking_application",
+        targetId: application.id,
+        oldValue: { status: current.status, revision: current.revision },
+        newValue: { status: application.status, revision: application.revision },
+        reason: value.reason,
+      },
+    })
+
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    return {
+      applicationId: application.id,
+      status: application.status,
+      revision: application.revision,
+    }
   } catch (error) {
     return publicError(error)
   }

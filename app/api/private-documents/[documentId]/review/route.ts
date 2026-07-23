@@ -2,8 +2,11 @@ import { PrivateDocumentError } from "@/lib/private-documents/domain/errors";
 import type { DocumentReviewReasonValue } from "@/lib/private-documents/application/repository";
 import { loadPrivateDocumentRequestContext } from "@/lib/private-documents/server/request-context";
 import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/infrastructure/prisma-repository";
+import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery";
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { enforceRateLimit, PHASE8FB_RATE_LIMITS } from "@/lib/rate-limit";
+import { revalidatePath } from "next/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,15 +67,54 @@ export async function POST(
       where: { customerDocuments: { some: { id: document.id } } },
       select: { bookingApplicationId: true },
     });
-    if (binding?.bookingApplicationId)
-      await new PrismaBookingApplicationRepository(prisma).evaluateReadiness(
-        binding.bookingApplicationId,
-      );
+    let finalizedBookingId: string | undefined;
+    let confirmationEmailSent: boolean | undefined;
+    if (binding?.bookingApplicationId) {
+      const repository = new PrismaBookingApplicationRepository(prisma);
+      const readiness = await repository.evaluateReadiness(binding.bookingApplicationId);
+      if (body.decision === "APPROVED" && readiness.ready) {
+        const readyApplication = await repository.load(binding.bookingApplicationId);
+        if (readyApplication?.status === "READY_TO_FINALIZE") {
+          const finalized = await repository.finalize({
+            applicationId: readyApplication.id,
+            customerUserId: readyApplication.customerUserId,
+            expectedRevision: readyApplication.revision,
+          });
+          finalizedBookingId = finalized.bookingId;
+          if (finalizedBookingId) {
+            await prisma.adminAuditLog.create({
+              data: {
+                adminId: context.actor.userId,
+                action: "BOOKING_CONFIRMED",
+                targetType: "booking",
+                targetId: finalizedBookingId,
+                bookingId: finalizedBookingId,
+                oldValue: { status: "BOOKING_APPLICATION_DOCUMENT_REVIEW" },
+                newValue: { status: "CONFIRMED" },
+                reason: "All required customer documents were approved.",
+              },
+            });
+            const delivery = await deliverBookingConfirmation(finalizedBookingId);
+            confirmationEmailSent = !delivery.error;
+            if (delivery.error)
+              logger.error("booking.confirmation_email_failed_after_document_approval", {
+                bookingId: finalizedBookingId,
+                error: delivery.error,
+              });
+            revalidatePath("/admin");
+            revalidatePath("/bookings");
+          }
+        }
+      }
+    }
     return Response.json(
       {
         documentId: document.id,
         status: document.manualReviewStatus,
         reviewRevision: document.reviewRevision,
+        bookingId: finalizedBookingId,
+        bookingConfirmed: Boolean(finalizedBookingId),
+        confirmationEmailSent,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
