@@ -361,6 +361,17 @@ export default function AdminDashboard({
       timeStyle: "short",
       timeZone: "Europe/Berlin",
     }).format(new Date(value))
+  const formatAdminDate = (value: string) =>
+    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+      dateStyle: "medium",
+      timeZone: "Europe/Berlin",
+    }).format(new Date(value))
+  const formatAdminDateTime = (value: string) =>
+    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Europe/Berlin",
+    }).format(new Date(value))
 
   const filteredCars = carsState.filter((car) => {
     const matchesSearch =
@@ -1119,7 +1130,7 @@ export default function AdminDashboard({
                           {bookingUser.name || bookingUser.email}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(booking.createdAt).toLocaleDateString(locale)}
+                          {formatAdminDate(booking.createdAt)}
                         </div>
                       </div>
                       <div className="flex items-center justify-between sm:block sm:text-right">
@@ -1431,6 +1442,7 @@ export default function AdminDashboard({
             <CardContent className="space-y-6">
               <ManualReservationForm
                 cars={carsState}
+                referenceTime={generatedAt}
                 onSubmit={handleCreateManualReservation}
                 isSubmitting={isPending}
               />
@@ -1458,10 +1470,10 @@ export default function AdminDashboard({
                                 {tr("Reserved for", "Reserviert für")} {reservation.customerName} • {reservation.customerPhone}
                               </p>
                               <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-                                <p>{tr("Pick-up:", "Abholung:")} {new Date(reservation.pickupDate).toLocaleString(locale)}</p>
-                                <p>{tr("Drop-off:", "Rückgabe:")} {new Date(reservation.dropoffDate).toLocaleString(locale)}</p>
+                                <p>{tr("Pick-up:", "Abholung:")} {formatAdminDateTime(reservation.pickupDate)}</p>
+                                <p>{tr("Drop-off:", "Rückgabe:")} {formatAdminDateTime(reservation.dropoffDate)}</p>
                                 <p>{tr("Price:", "Preis:")} {formatCents(reservation.totalPrice)}</p>
-                                <p>{tr("Created:", "Erstellt:")} {new Date(reservation.createdAt).toLocaleDateString(locale)}</p>
+                                <p>{tr("Created:", "Erstellt:")} {formatAdminDate(reservation.createdAt)}</p>
                               </div>
                             </div>
 
@@ -1625,13 +1637,13 @@ export default function AdminDashboard({
                           <div>
                             <span className="text-muted-foreground">{tr("Pick-up:", "Abholung:")}</span>
                             <span className="ml-2 font-medium">
-                              {new Date(booking.pickupDate).toLocaleDateString(locale)}
+                              {formatAdminDate(booking.pickupDate)}
                             </span>
                           </div>
                           <div>
                             <span className="text-muted-foreground">{tr("Drop-off:", "Rückgabe:")}</span>
                             <span className="ml-2 font-medium">
-                              {new Date(booking.dropoffDate).toLocaleDateString(locale)}
+                              {formatAdminDate(booking.dropoffDate)}
                             </span>
                           </div>
                           {booking.guaranteeAmount > 0 && (
@@ -1658,12 +1670,12 @@ export default function AdminDashboard({
                               </p>
                               {booking.customer.phone && <p>{tr("Phone:", "Telefon:")} {booking.customer.phone}</p>}
                               {booking.customer.dateOfBirth && (
-                                <p>{tr("Date of birth:", "Geburtsdatum:")} {new Date(booking.customer.dateOfBirth).toLocaleDateString(locale)}</p>
+                                <p>{tr("Date of birth:", "Geburtsdatum:")} {formatAdminDate(booking.customer.dateOfBirth)}</p>
                               )}
                               {booking.customer.licenceNumber && <p>{tr("Licence:", "Führerschein:")} {booking.customer.licenceNumber}</p>}
                               <p className="text-xs text-muted-foreground">
                                 {booking.customer.validatedAt
-                                  ? tr(`Checked ${new Date(booking.customer.validatedAt).toLocaleString(locale)}`, `Geprüft am ${new Date(booking.customer.validatedAt).toLocaleString(locale)}`)
+                                  ? tr(`Checked ${formatAdminDateTime(booking.customer.validatedAt)}`, `Geprüft am ${formatAdminDateTime(booking.customer.validatedAt)}`)
                                   : tr("Saved with this booking", "Mit dieser Buchung gespeichert")}
                               </p>
                             </div>
@@ -1681,7 +1693,7 @@ export default function AdminDashboard({
                                   >
                                     {acceptance.title}
                                   </a>{" "}
-                                  · {acceptance.locale} · {tr("accepted", "akzeptiert")} {new Date(acceptance.acceptedAt).toLocaleString(locale)} ·{" "}
+                                  · {acceptance.locale} · {tr("accepted", "akzeptiert")} {formatAdminDateTime(acceptance.acceptedAt)} ·{" "}
                                   {tr(acceptance.source.replaceAll("_", " "), ({ CUSTOMER_CHECKBOX: "KUNDEN-CHECKBOX", CUSTOMER_SUBMISSION: "KUNDENÜBERMITTLUNG", STAFF_RECORDED: "VON MITARBEITER ERFASST" } as const)[acceptance.source])}
                                 </p>
                               ))}
@@ -1780,7 +1792,7 @@ export default function AdminDashboard({
                           </div>
                           <div>
                             <span className="text-muted-foreground">{tr("Joined:", "Registriert:")}</span>
-                            <span className="ml-2 font-medium">{new Date(user.createdAt).toLocaleDateString(locale)}</span>
+                            <span className="ml-2 font-medium">{formatAdminDate(user.createdAt)}</span>
                           </div>
                         </div>
                       </div>
@@ -1891,7 +1903,7 @@ export default function AdminDashboard({
 
                       <p className="break-all text-xs text-muted-foreground">
                         {tr("By", "Von")} {review.userName || review.userEmail} ({review.userEmail}) •{" "}
-                        {new Date(review.createdAt).toLocaleString(locale)}
+                        {formatAdminDateTime(review.createdAt)}
                       </p>
                     </div>
 
@@ -2135,33 +2147,55 @@ interface UserFormValues {
 
 function ManualReservationForm({
   cars,
+  referenceTime,
   onSubmit,
   isSubmitting = false,
 }: {
   cars: AdminCar[]
+  referenceTime: string
   onSubmit: (reservation: ManualReservationFormValues) => void
   isSubmitting?: boolean
 }) {
   const locale = useLocale()
   const tr = (english: string, german: string) => (locale === "de" ? german : english)
   const formatDatetimeLocal = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    const hours = String(date.getHours()).padStart(2, "0")
-    const minutes = String(date.getMinutes()).padStart(2, "0")
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(date).map((part) => [part.type, part.value]),
+    )
+    const { year, month, day, hour: hours, minute: minutes } = parts
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
   const createInitialDates = () => {
-    const pickup = new Date()
-    pickup.setDate(pickup.getDate() + 1)
-    pickup.setHours(10, 0, 0, 0)
-    const dropoff = new Date(pickup)
-    dropoff.setDate(dropoff.getDate() + 2)
+    const referenceParts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date(referenceTime)).map((part) => [part.type, part.value]),
+    )
+    const base = new Date(Date.UTC(
+      Number(referenceParts.year),
+      Number(referenceParts.month) - 1,
+      Number(referenceParts.day),
+    ))
+    const dateAtOffset = (days: number) => {
+      const date = new Date(base)
+      date.setUTCDate(date.getUTCDate() + days)
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}T10:00`
+    }
     return {
-      pickupDate: formatDatetimeLocal(pickup),
-      dropoffDate: formatDatetimeLocal(dropoff),
+      pickupDate: dateAtOffset(1),
+      dropoffDate: dateAtOffset(3),
     }
   }
 
@@ -2323,7 +2357,7 @@ function ManualReservationForm({
             id="reservationPickupDate"
             type="datetime-local"
             value={formData.pickupDate}
-            min={formatDatetimeLocal(new Date())}
+            min={formatDatetimeLocal(new Date(referenceTime))}
             onChange={(event) =>
               setFormData((prev) => ({
                 ...prev,
