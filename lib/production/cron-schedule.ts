@@ -6,12 +6,12 @@ export const BOOKING_NOTIFICATION_JOB = "booking-notifications" as const
 export const PRODUCTION_CRON_SCHEDULES = [
   {
     path: "/api/cron/cancel-expired-bookings",
-    schedule: "*/10 * * * *",
+    schedule: "5 2 * * *",
     jobs: [BOOKING_MAINTENANCE_JOB],
   },
   {
     path: "/api/cron/booking-notifications",
-    schedule: "5-59/10 * * * *",
+    schedule: "25 2 * * *",
     jobs: [BOOKING_NOTIFICATION_JOB],
   },
   {
