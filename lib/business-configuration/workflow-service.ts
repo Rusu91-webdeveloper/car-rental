@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
+import { minimumRentalDays } from "@/lib/booking-configuration/minimum-rental"
 import { money } from "@/lib/pricing/money"
 import {
   CONFIGURATION_DOMAIN_IDS,
@@ -610,7 +611,11 @@ function pricingExamples(release: ReleaseAggregate) {
       : config.mixedDurationStrategy === "LOWEST_VALID_TOTAL"
         ? "LOWEST_VALID_PRICE"
         : "DAILY_ONLY"
-  return [1, 7, 10, 30].map((days) => {
+  const configuredMinimumDays = minimumRentalDays(config.minimumRentalMinutes)
+  const exampleDays = [...new Set([configuredMinimumDays, 7, 10, 30])].filter(
+    (days) => days >= configuredMinimumDays,
+  )
+  return exampleDays.map((days) => {
     const pickupAt = new Date("2030-01-01T10:00:00.000Z")
     const returnAt = new Date(pickupAt.getTime() + days * 86_400_000)
     const quote = calculatePricing({

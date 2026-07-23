@@ -67,6 +67,17 @@ describe("configuration release workflow", () => {
     expect(JSON.stringify(preview)).not.toContain("storageKey")
   })
 
+  it("never previews a rental shorter than the configured minimum", () => {
+    const active = validReleaseAggregate({ id: "active", status: "ACTIVE" })
+    const draft = withVersion(validReleaseAggregate(), "pricing-billing", 2)
+    draft.domains["pricing-billing"]!.minimumRentalMinutes = 2_880
+    draft.domains["pricing-billing"]!.minimumChargeDays = 2
+
+    const preview = buildReleasePreview(draft, active, vehicles)
+
+    expect(preview.pricingExamples.map(({ days }) => days)).toEqual([2, 7, 10, 30])
+  })
+
   it("reports a no-change release without inventing differences", () => {
     const active = validReleaseAggregate({ id: "active", status: "ACTIVE" })
     const preview = buildReleasePreview(validReleaseAggregate(), active, vehicles)
