@@ -56,13 +56,14 @@ npm run db:seed    # Add sample data
 2. Forward webhooks: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
 3. Copy webhook secret to: `STRIPE_WEBHOOK_SECRET=whsec_...`
 
-### 4. Email - Resend (Optional)
+### 4. Email - Gmail SMTP
 
-1. Go to [Resend](https://resend.com)
-2. Get your API key
+1. Use a dedicated Gmail or Google Workspace mailbox.
+2. Enable Google 2-Step Verification and create a 16-character App Password.
 3. Add to Vars:
-   - `RESEND_API_KEY=re_...`
-   - `EMAIL_FROM=noreply@yourdomain.com`
+   - `GMAIL_SMTP_USER=bookings@example.com`
+   - `GMAIL_SMTP_APP_PASSWORD=<16-character-app-password>`
+   - `EMAIL_FROM="Qujo Autovermietung GmbH <bookings@example.com>"`
 
 ### 5. App URL
 
@@ -96,9 +97,12 @@ To manually make a user an admin:
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Stripe public key
 - `STRIPE_WEBHOOK_SECRET` - Stripe webhook secret
 
+**Required for transactional email:**
+- `GMAIL_SMTP_USER` - Dedicated Gmail or Google Workspace mailbox
+- `GMAIL_SMTP_APP_PASSWORD` - Google App Password, never the normal account password
+- `EMAIL_FROM` - Sender name and authenticated mailbox
+
 **Optional:**
-- `RESEND_API_KEY` - Email service
-- `EMAIL_FROM` - Sender email address
 - `ADMIN_EMAILS` - Comma-separated list of admin email addresses
 - `NEXT_PUBLIC_APP_URL` - Alternative app URL (falls back to NEXTAUTH_URL)
 

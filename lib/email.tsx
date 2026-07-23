@@ -1,4 +1,5 @@
-import { Resend } from "resend"
+import { createHash } from "node:crypto"
+import nodemailer, { type Transporter } from "nodemailer"
 import { formatCents } from "@/lib/money"
 import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
 import { getPaymentDetails } from "@/lib/payment-details"
@@ -22,12 +23,26 @@ const safeEmailConsole = {
     logger.error("email.operation_failed")
   },
 }
-const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "Qujo Autovermietung <noreply@qujo.de>"
-let resend: Resend | undefined
+const gmailUser = (process.env.GMAIL_SMTP_USER || process.env.EMAIL_USER)?.trim()
+const gmailAppPassword = (process.env.GMAIL_SMTP_APP_PASSWORD || process.env.EMAIL_PASS)?.replace(/\s+/g, "")
+const emailFrom = process.env.EMAIL_FROM || (gmailUser ? `Qujo Autovermietung <${gmailUser}>` : "Qujo Autovermietung <noreply@qujo.de>")
+let smtpTransport: Transporter | undefined
 
-function getResend() {
-  resend ??= new Resend(process.env.RESEND_API_KEY)
-  return resend
+function getSmtpTransport() {
+  if (!gmailUser || !gmailAppPassword) {
+    throw new Error("Gmail SMTP is not configured")
+  }
+  smtpTransport ??= nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: gmailUser,
+      pass: gmailAppPassword,
+    },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  })
+  return smtpTransport
 }
 
 type SendEmailInput = {
@@ -42,11 +57,11 @@ type SendEmailInput = {
  * Validates email configuration and returns status information
  */
 export function getEmailConfigStatus() {
-  const hasResend = Boolean(process.env.RESEND_API_KEY)
+  const hasGmailSmtp = Boolean(gmailUser && gmailAppPassword)
 
   return {
-    enabled: hasResend,
-    provider: hasResend ? "Resend" : "None",
+    enabled: hasGmailSmtp,
+    provider: hasGmailSmtp ? "Gmail SMTP" : "None",
     from: emailFrom,
   }
 }
@@ -115,7 +130,7 @@ async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEma
 
   // Validate email configuration
   if (!configStatus.enabled) {
-    const errorMsg = "Email provider not configured. Please set RESEND_API_KEY"
+    const errorMsg = "Email provider not configured. Please set GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD"
     safeEmailConsole.error("[EMAIL_ERROR] Configuration:", configStatus)
     safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
@@ -133,40 +148,28 @@ async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEma
   // Log email configuration status
   safeEmailConsole.log(`[EMAIL] Sending via ${configStatus.provider} to:`, recipients.join(", "))
 
-  if (!process.env.RESEND_API_KEY) {
-    const errorMsg = "Email provider not configured. Resend API key is missing"
-    safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
-    return { error: errorMsg }
-  }
-
   try {
-    const { data, error } = await getResend().emails.send(
-      {
-        from: emailFrom,
-        to,
-        subject: subject
-          .replace(/[\r\n]+/g, " ")
-          .trim()
-          .slice(0, 255),
-        html,
-        ...(replyTo ? { replyTo } : {}),
-      },
-      idempotencyKey ? { idempotencyKey } : undefined,
-    )
+    const messageIdDomain = gmailUser?.split("@")[1] || "qujo-email.local"
+    const messageId = idempotencyKey
+      ? `<${createHash("sha256").update(idempotencyKey).digest("hex")}@${messageIdDomain}>`
+      : undefined
+    const result = await getSmtpTransport().sendMail({
+      from: emailFrom,
+      to,
+      subject: subject
+        .replace(/[\r\n]+/g, " ")
+        .trim()
+        .slice(0, 255),
+      html,
+      ...(replyTo ? { replyTo } : {}),
+      ...(messageId ? { messageId } : {}),
+    })
 
-    if (error) {
-      safeEmailConsole.error("[EMAIL_ERROR] Resend send failed:", {
-        error: error.message || "Unknown Resend error",
-        to: recipients,
-      })
-      return { error: "Email delivery failed" }
-    }
-
-    safeEmailConsole.log(`[EMAIL] Resend email sent successfully (id: ${data?.id})`)
-    return { id: data?.id }
+    safeEmailConsole.log(`[EMAIL] Gmail SMTP email accepted (id: ${result.messageId})`)
+    return { id: result.messageId }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown Resend error"
-    safeEmailConsole.error("[EMAIL_ERROR] Resend exception:", {
+    const errorMessage = error instanceof Error ? error.message : "Unknown Gmail SMTP error"
+    safeEmailConsole.error("[EMAIL_ERROR] Gmail SMTP exception:", {
       error: errorMessage,
       to: recipients,
     })

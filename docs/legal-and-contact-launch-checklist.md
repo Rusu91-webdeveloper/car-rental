@@ -20,12 +20,13 @@ Do not deploy while the Impressum omits the address, email, phone, managing dire
 
 Configure all of the following in the production environment:
 
-- `RESEND_API_KEY`
-- `EMAIL_FROM` using a sender on a domain verified in Resend
+- `GMAIL_SMTP_USER` using a dedicated business-controlled Gmail or Google Workspace mailbox
+- `GMAIL_SMTP_APP_PASSWORD` using a 16-character Google App Password, never the normal account password
+- `EMAIL_FROM` using the authenticated mailbox or a verified Gmail Send As alias
 - `ADMIN_EMAILS` and/or the owner notification email in **Admin → Customer messages**
 - `RATE_LIMIT_HASH_SECRET` with a unique random value of at least 32 characters
 
-The contact form validates input on the server, uses a honeypot, applies shared database rate limits, sends through Resend, and sets the visitor address as `Reply-To`. Perform a live smoke test from the deployed Contact page and confirm receipt and reply routing before launch.
+The contact form validates input on the server, uses a honeypot, applies shared database rate limits, sends through Gmail SMTP, and sets the visitor address as `Reply-To`. Perform a live smoke test from the deployed Contact page and confirm receipt and reply routing before launch.
 
 ## 3. Legal documents used at checkout
 

@@ -13,10 +13,11 @@ describe("booking confirmation and offline payment instructions", () => {
     expect(action).toContain("deliverBookingConfirmation")
     expect(action).toContain('validated.status === "CONFIRMED" && booking.status !== "CONFIRMED"')
     expect(action).not.toContain("sendBookingConfirmationEmail(")
-    expect(email).toContain('from "resend"')
-    expect(email).not.toContain("nodemailer")
-    expect(email).not.toContain("EMAIL_HOST")
-    expect(packageJson).not.toContain('"nodemailer"')
+    expect(email).toContain('from "nodemailer"')
+    expect(email).not.toContain('from "resend"')
+    expect(email).toContain("GMAIL_SMTP_USER")
+    expect(packageJson).toContain('"nodemailer"')
+    expect(packageJson).not.toContain('"resend"')
   })
 
   it("uses versioned application snapshots for payment and confirmation content", () => {

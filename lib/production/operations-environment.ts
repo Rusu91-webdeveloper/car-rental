@@ -55,7 +55,8 @@ export function readProductionOperationsEnvironment(
     alertingConfigured:
       ownership.alertResponder &&
       Boolean(env.PRODUCTION_ALERT_RECIPIENT) &&
-      Boolean(env.RESEND_API_KEY),
+      Boolean(env.GMAIL_SMTP_USER) &&
+      Boolean(env.GMAIL_SMTP_APP_PASSWORD),
     legacyAlertAttestation: env.PRODUCTION_ALERTING_ATTESTED === "true",
     enabledWorkerJobs,
     allWorkerJobsEnabled: PRODUCTION_WORKER_JOBS.every((job) => enabledWorkerJobs.has(job)),

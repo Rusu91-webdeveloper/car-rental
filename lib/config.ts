@@ -17,7 +17,10 @@ export const config = {
 
   // Features
   features: {
-    emailEnabled: !!process.env.RESEND_API_KEY,
+    emailEnabled: Boolean(
+      (process.env.GMAIL_SMTP_USER || process.env.EMAIL_USER) &&
+      (process.env.GMAIL_SMTP_APP_PASSWORD || process.env.EMAIL_PASS),
+    ),
     authEnabled: !!googleClientId && !!googleClientSecret && !!nextAuthSecret,
   },
 

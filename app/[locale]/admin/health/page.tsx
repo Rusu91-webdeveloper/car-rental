@@ -57,7 +57,7 @@ const remediationDe: Record<string, string> = {
   "review-queue": "Bearbeiten Sie überfällige Dokumentenprüfungen.",
   retention: "Prüfen und bearbeiten Sie fällige Löschvorgänge.",
   audit: "Stellen Sie sicher, dass sicherheitsrelevante Aktionen protokolliert werden.",
-  emails: "Konfigurieren Sie Resend und eine verifizierte Absenderadresse.",
+  emails: "Konfigurieren Sie Gmail SMTP, ein App-Passwort und die Absenderadresse.",
 }
 
 export default async function ProductionHealthPage() {

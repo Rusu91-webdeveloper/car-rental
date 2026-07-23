@@ -452,7 +452,7 @@ export async function getProductionHealthReport(now = new Date()) {
     status: emailStatus.enabled ? "READY" : "NOT_CONFIGURED",
     evidence: emailStatus.enabled ? `${emailStatus.provider} is configured; this check sends no message.` : "No email provider is configured.",
     blockedReason: emailStatus.enabled ? undefined : "Transactional and alert-test email delivery require a configured provider.",
-    remediation: emailStatus.enabled ? "Use the protected alert test for delivery evidence." : "Configure a verified Resend sender and API key.",
+    remediation: emailStatus.enabled ? "Use the protected alert test for delivery evidence." : "Configure the Gmail SMTP account, App Password, and sender address.",
     verificationMode: "AUTOMATIC",
   }))
 

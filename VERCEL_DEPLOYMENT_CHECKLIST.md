@@ -61,15 +61,11 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_... or pk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-**Optional (for emails):**
+**Required for emails:**
 ```env
-RESEND_API_KEY=re_...
-EMAIL_FROM=noreply@yourdomain.com
-# OR use SMTP:
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
-EMAIL_USER=your_email@example.com
-EMAIL_PASS=your_password
+GMAIL_SMTP_USER=bookings@example.com
+GMAIL_SMTP_APP_PASSWORD=<16-character-google-app-password>
+EMAIL_FROM="Qujo Autovermietung GmbH <bookings@example.com>"
 ```
 
 **Optional (admin configuration):**
@@ -301,4 +297,3 @@ Before deploying, ensure:
 
 **Last Updated**: $(date)
 **Build Tested**: ✅ Successful
-

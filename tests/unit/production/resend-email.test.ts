@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const resendSend = vi.hoisted(() => vi.fn())
+const smtpSend = vi.hoisted(() => vi.fn())
 const logError = vi.hoisted(() => vi.fn())
 
-vi.mock("resend", () => ({
-  Resend: class {
-    emails = { send: resendSend }
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport: () => ({ sendMail: smtpSend }),
   },
 }))
 vi.mock("@/lib/db", () => ({
@@ -23,20 +23,21 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: logError },
 }))
 
-describe("Resend-only production email", () => {
+describe("Gmail SMTP production email", () => {
   beforeEach(() => {
     vi.resetModules()
-    resendSend.mockReset()
+    smtpSend.mockReset()
     logError.mockReset()
-    process.env.RESEND_API_KEY = "re_synthetic"
+    delete process.env.RESEND_API_KEY
+    delete process.env.EMAIL_USER
+    delete process.env.EMAIL_PASS
+    process.env.GMAIL_SMTP_USER = "bookings@example.invalid"
+    process.env.GMAIL_SMTP_APP_PASSWORD = "abcdefghijklmnop"
     process.env.EMAIL_FROM = "Synthetic Rentals <bookings@example.invalid>"
   })
 
-  it("delivers configured offline instructions through the single Resend sender", async () => {
-    resendSend.mockResolvedValue({
-      data: { id: "synthetic-message" },
-      error: null,
-    })
+  it("delivers configured offline instructions through the Gmail SMTP sender", async () => {
+    smtpSend.mockResolvedValue({ messageId: "synthetic-message" })
     const { sendBookingConfirmationEmail } = await import("@/lib/email")
     const result = await sendBookingConfirmationEmail({
       to: "customer@example.invalid",
@@ -56,22 +57,16 @@ describe("Resend-only production email", () => {
     })
 
     expect(result).toEqual({ success: true, id: "synthetic-message" })
-    expect(resendSend).toHaveBeenCalledOnce()
-    const message = resendSend.mock.calls[0][0]
-    const requestOptions = resendSend.mock.calls[0][1]
+    expect(smtpSend).toHaveBeenCalledOnce()
+    const message = smtpSend.mock.calls[0][0]
     expect(message.from).toBe("Synthetic Rentals <bookings@example.invalid>")
     expect(message.html).toContain("Use reference &lt;SYNTHETIC-BOOKING&gt;.")
     expect(message.html).toContain("Bank Transfer")
-    expect(requestOptions).toEqual({
-      idempotencyKey: "booking-confirmation-SYNTHETIC-BOOKING",
-    })
+    expect(message.messageId).toMatch(/^<[a-f0-9]{64}@example\.invalid>$/)
   })
 
   it("returns a stable failure without leaking provider details", async () => {
-    resendSend.mockResolvedValue({
-      data: null,
-      error: { message: "provider-secret-detail" },
-    })
+    smtpSend.mockRejectedValue(new Error("provider-secret-detail"))
     const { sendBookingConfirmationEmail } = await import("@/lib/email")
     const result = await sendBookingConfirmationEmail({
       to: "customer@example.invalid",
@@ -90,10 +85,7 @@ describe("Resend-only production email", () => {
   })
 
   it("delivers contact messages to the owner with safe HTML and reply routing", async () => {
-    resendSend.mockResolvedValue({
-      data: { id: "synthetic-contact" },
-      error: null,
-    })
+    smtpSend.mockResolvedValue({ messageId: "synthetic-contact" })
     const { sendContactMessageEmail } = await import("@/lib/email")
     const result = await sendContactMessageEmail({
       to: ["owner@example.invalid"],
@@ -105,7 +97,7 @@ describe("Resend-only production email", () => {
     })
 
     expect(result).toEqual({ id: "synthetic-contact" })
-    const message = resendSend.mock.calls[0][0]
+    const message = smtpSend.mock.calls[0][0]
     expect(message.to).toEqual(["owner@example.invalid"])
     expect(message.replyTo).toBe("visitor@example.invalid")
     expect(message.subject).toBe("[Kontakt] Rental & availability")
@@ -116,10 +108,7 @@ describe("Resend-only production email", () => {
   })
 
   it("acknowledges a contact enquiry in the selected customer language", async () => {
-    resendSend.mockResolvedValue({
-      data: { id: "synthetic-ack" },
-      error: null,
-    })
+    smtpSend.mockResolvedValue({ messageId: "synthetic-ack" })
     const { sendContactAcknowledgementEmail } = await import("@/lib/email")
     await sendContactAcknowledgementEmail({
       to: "visitor@example.invalid",
@@ -129,20 +118,15 @@ describe("Resend-only production email", () => {
       idempotencyKey: "contact-customer-synthetic",
     })
 
-    const message = resendSend.mock.calls[0][0]
+    const message = smtpSend.mock.calls[0][0]
     expect(message.subject).toContain("Wir haben Ihre Nachricht erhalten")
     expect(message.html).toContain("Vielen Dank für Ihre Nachricht")
     expect(message.html).toContain("Erika &lt;Mustermann&gt;")
-    expect(resendSend.mock.calls[0][1]).toEqual({
-      idempotencyKey: "contact-customer-synthetic",
-    })
+    expect(message.messageId).toMatch(/^<[a-f0-9]{64}@example\.invalid>$/)
   })
 
   it("sends document submission and replacement emails with stable event keys", async () => {
-    resendSend.mockResolvedValue({
-      data: { id: "synthetic-application" },
-      error: null,
-    })
+    smtpSend.mockResolvedValue({ messageId: "synthetic-application" })
     const { sendBookingApplicationSubmittedEmail, sendDocumentReviewDecisionEmail } = await import("@/lib/email")
     const common = {
       applicationId: "application-1",
@@ -167,12 +151,10 @@ describe("Resend-only production email", () => {
       idempotencyKey: "document-review-1-replacement-2",
     })
 
-    expect(resendSend).toHaveBeenCalledTimes(2)
-    expect(resendSend.mock.calls[0][0].html).toContain("Unterlagen erfolgreich eingereicht")
-    expect(resendSend.mock.calls[1][0].html).toContain("Dokument ersetzen")
-    expect(resendSend.mock.calls[1][0].html).toContain("Die Rückseite ist nicht lesbar.")
-    expect(resendSend.mock.calls[1][1]).toEqual({
-      idempotencyKey: "document-review-1-replacement-2",
-    })
+    expect(smtpSend).toHaveBeenCalledTimes(2)
+    expect(smtpSend.mock.calls[0][0].html).toContain("Unterlagen erfolgreich eingereicht")
+    expect(smtpSend.mock.calls[1][0].html).toContain("Dokument ersetzen")
+    expect(smtpSend.mock.calls[1][0].html).toContain("Die Rückseite ist nicht lesbar.")
+    expect(smtpSend.mock.calls[1][0].messageId).toMatch(/^<[a-f0-9]{64}@example\.invalid>$/)
   })
 })
