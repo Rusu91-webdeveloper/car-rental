@@ -8,7 +8,7 @@ describe("Phase 8F-B application and UI integration", () => {
   it("uses forward-only database gates for shared location and manual approval", () => {
     const migration = read("prisma/migrations/20260713141000_enforce_phase8fb_shared_location_and_review/migration.sql")
     expect(migration).toContain('CHECK ("pickupLocation" = "returnLocation")')
-    expect(migration).toContain('document."manualReviewStatus" = \'APPROVED\'')
+    expect(migration).toContain("document.\"manualReviewStatus\" = 'APPROVED'")
     expect(migration).toContain("BookingApplication_manual_review_gate")
   })
 
@@ -30,7 +30,8 @@ describe("Phase 8F-B application and UI integration", () => {
       "app/api/private-documents/[documentId]/view/route.ts",
       "app/api/private-documents/[documentId]/download/route.ts",
       "app/api/internal/phase8fb/[job]/route.ts",
-    ]) expect(read(path).length).toBeGreaterThan(20)
+    ])
+      expect(read(path).length).toBeGreaterThan(20)
   })
 
   it("locks application and car and writes all snapshots in serializable finalization", () => {
@@ -40,7 +41,13 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain("TransactionIsolationLevel.Serializable")
     expect(adapter).toContain("maxWait: 10_000")
     expect(adapter).toContain("timeout: 30_000")
-    for (const snapshot of ["bookingPricingSnapshot.create", "bookingCustomerDriverSnapshot.create", "bookingInsuranceSnapshot.create", "bookingLegalAcceptance.createMany", "customerDocument.updateMany"])
+    for (const snapshot of [
+      "bookingPricingSnapshot.create",
+      "bookingCustomerDriverSnapshot.create",
+      "bookingInsuranceSnapshot.create",
+      "bookingLegalAcceptance.createMany",
+      "customerDocument.updateMany",
+    ])
       expect(adapter).toContain(snapshot)
     expect(adapter).toContain('status: "FINALIZED"')
   })
@@ -130,10 +137,22 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('status: "CONFIRMED"')
     expect(adapter).toContain("confirmedAt: new Date()")
     expect(delivery).toContain("sendBookingConfirmationEmail")
+    expect(delivery).toContain("sendAdminBookingConfirmationNotification")
     expect(applicationActions).toContain("deliverBookingConfirmation")
     expect(adminDashboard).toContain("resendBookingConfirmationAsAdmin")
     expect(adminDashboard).toContain("Cancel / remove")
     expect(applicationActions).toContain("cancelBookingApplicationAsAdmin")
+  })
+
+  it("emails both sides during document handoff and tells the customer when replacement is required", () => {
+    const reviewRoute = read("app/api/private-documents/[documentId]/review/route.ts")
+    const applicationActions = read("app/actions/booking-applications.ts")
+
+    expect(applicationActions).toContain("sendBookingApplicationSubmittedEmail")
+    expect(applicationActions).toContain("sendAdminBookingApplicationNotification")
+    expect(reviewRoute).toContain("sendDocumentReviewDecisionEmail")
+    expect(reviewRoute).toContain("repository.markCustomerActionRequired")
+    expect(reviewRoute).toContain('reason: "DOCUMENT_REPLACEMENT_REQUIRED"')
   })
 
   it("repairs uninitialized policy permissions without assigning restricted roles", () => {

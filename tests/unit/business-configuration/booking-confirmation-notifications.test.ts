@@ -6,14 +6,13 @@ import { paymentConfigurationSchema } from "@/lib/business-configuration/schema"
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8")
 
 describe("booking confirmation and offline payment instructions", () => {
-  it("keeps one existing email sender and enriches the confirmed-status transition", () => {
+  it("routes confirmed-status delivery through the idempotent customer and admin delivery service", () => {
     const action = read("app/actions/bookings.ts")
     const email = read("lib/email.tsx")
     const packageJson = read("package.json")
-    expect(action).toContain("sendBookingConfirmationEmail")
-    expect(action).toContain("loadBookingConfirmationConfiguration")
+    expect(action).toContain("deliverBookingConfirmation")
     expect(action).toContain('validated.status === "CONFIRMED" && booking.status !== "CONFIRMED"')
-    expect(action.match(/sendBookingConfirmationEmail\(/g)).toHaveLength(1)
+    expect(action).not.toContain("sendBookingConfirmationEmail(")
     expect(email).toContain('from "resend"')
     expect(email).not.toContain("nodemailer")
     expect(email).not.toContain("EMAIL_HOST")
@@ -49,12 +48,15 @@ describe("booking confirmation and offline payment instructions", () => {
         { method: "CASH_ON_PICKUP", enabled: true },
       ],
       instructions: [
-        { method: "BANK_TRANSFER", locale: "en", instructions: "Use the reference." },
+        {
+          method: "BANK_TRANSFER",
+          locale: "en",
+          instructions: "Use the reference.",
+        },
       ],
     })
     expect(parsed.success).toBe(false)
-    if (!parsed.success)
-      expect(parsed.error.issues.some(({ message }) => message.includes("payments.instructions_required"))).toBe(true)
+    if (!parsed.success) expect(parsed.error.issues.some(({ message }) => message.includes("payments.instructions_required"))).toBe(true)
   })
 
   it("migrates legacy instructions to their version default method", () => {

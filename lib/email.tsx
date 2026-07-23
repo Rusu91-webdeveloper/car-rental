@@ -6,9 +6,21 @@ import { prisma } from "@/lib/db"
 import { logger } from "@/lib/logger"
 
 const safeEmailConsole = {
-  log(message: string, ...discarded: unknown[]) { void message; void discarded; logger.info("email.operation_succeeded") },
-  warn(message: string, ...discarded: unknown[]) { void message; void discarded; logger.warn("email.operation_skipped") },
-  error(message: string, ...discarded: unknown[]) { void message; void discarded; logger.error("email.operation_failed") },
+  log(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.info("email.operation_succeeded")
+  },
+  warn(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.warn("email.operation_skipped")
+  },
+  error(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.error("email.operation_failed")
+  },
 }
 const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "Qujo Autovermietung <noreply@qujo.de>"
 let resend: Resend | undefined
@@ -63,10 +75,7 @@ type LegalAcceptanceEmailReference = {
   acceptedAt: Date
 }
 
-function legalAcceptanceReferencesHtml(
-  references: LegalAcceptanceEmailReference[] | undefined,
-  locale: EmailLocale,
-) {
+function legalAcceptanceReferencesHtml(references: LegalAcceptanceEmailReference[] | undefined, locale: EmailLocale) {
   if (!references?.length) return ""
   const language = locale === "de" ? "de-DE" : "en-US"
   return references
@@ -85,12 +94,7 @@ function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 }
 
 function configuredTextHtml(value: string | undefined) {
@@ -103,13 +107,7 @@ function resolveSupportEmail(
     companyEmail?: string | null
   } | null,
 ): string {
-  return (
-    settings?.supportEmail ||
-    settings?.companyEmail ||
-    process.env.SUPPORT_EMAIL ||
-    process.env.ADMIN_EMAIL ||
-    extractEmailAddress(emailFrom)
-  )
+  return settings?.supportEmail || settings?.companyEmail || process.env.SUPPORT_EMAIL || process.env.ADMIN_EMAIL || extractEmailAddress(emailFrom)
 }
 
 async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEmailInput) {
@@ -117,8 +115,7 @@ async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEma
 
   // Validate email configuration
   if (!configStatus.enabled) {
-    const errorMsg =
-      "Email provider not configured. Please set RESEND_API_KEY"
+    const errorMsg = "Email provider not configured. Please set RESEND_API_KEY"
     safeEmailConsole.error("[EMAIL_ERROR] Configuration:", configStatus)
     safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
@@ -147,7 +144,10 @@ async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEma
       {
         from: emailFrom,
         to,
-        subject,
+        subject: subject
+          .replace(/[\r\n]+/g, " ")
+          .trim()
+          .slice(0, 255),
         html,
         ...(replyTo ? { replyTo } : {}),
       },
@@ -181,14 +181,29 @@ export async function sendContactMessageEmail(input: {
   subject: string
   message: string
   locale: "de" | "en"
+  idempotencyKey?: string
 }) {
-  const labels = input.locale === "de"
-    ? { heading: "Neue Nachricht über das Kontaktformular", name: "Name", email: "E-Mail", subject: "Betreff", message: "Nachricht" }
-    : { heading: "New contact form message", name: "Name", email: "Email", subject: "Subject", message: "Message" }
+  const labels =
+    input.locale === "de"
+      ? {
+          heading: "Neue Nachricht über das Kontaktformular",
+          name: "Name",
+          email: "E-Mail",
+          subject: "Betreff",
+          message: "Nachricht",
+        }
+      : {
+          heading: "New contact form message",
+          name: "Name",
+          email: "Email",
+          subject: "Subject",
+          message: "Message",
+        }
 
   return sendEmail({
     to: input.to,
     replyTo: input.email,
+    idempotencyKey: input.idempotencyKey,
     subject: `[Kontakt] ${input.subject}`,
     html: `
       <!doctype html>
@@ -213,11 +228,190 @@ export async function sendContactMessageEmail(input: {
   })
 }
 
-export async function sendProductionAlertTest(input: {
+export async function sendContactAcknowledgementEmail(input: { to: string; name: string; subject: string; locale: "de" | "en"; idempotencyKey: string }) {
+  const isGerman = input.locale === "de"
+  const companySettings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: { companyName: true, companyEmail: true, supportEmail: true },
+  })
+  const companyName = companySettings?.companyName || "Qujo Autovermietung GmbH"
+  const supportEmail = resolveSupportEmail(companySettings)
+  return sendEmail({
+    to: input.to,
+    replyTo: supportEmail || undefined,
+    idempotencyKey: input.idempotencyKey,
+    subject: isGerman ? `Wir haben Ihre Nachricht erhalten: ${input.subject}` : `We received your message: ${input.subject}`,
+    html: `
+      <!doctype html>
+      <html lang="${input.locale}">
+        <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
+          <div style="max-width:640px;margin:0 auto;padding:32px 20px">
+            <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
+              <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">${escapeHtml(companyName)}</p>
+              <h1 style="margin:0 0 18px;font-size:24px">${isGerman ? "Vielen Dank für Ihre Nachricht" : "Thank you for your message"}</h1>
+              <p>${isGerman ? "Hallo" : "Hello"} ${escapeHtml(input.name)},</p>
+              <p>${isGerman ? "wir haben Ihre Anfrage erhalten und melden uns so schnell wie möglich bei Ihnen." : "we received your enquiry and will reply as soon as possible."}</p>
+              <p><strong>${isGerman ? "Betreff" : "Subject"}:</strong> ${escapeHtml(input.subject)}</p>
+              <p style="margin-top:24px;color:#5f6d65;font-size:14px">${isGerman ? "Bei dringenden Fragen erreichen Sie uns unter" : "For urgent questions, contact us at"} ${escapeHtml(supportEmail)}.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  })
+}
+
+type BookingApplicationEmailData = {
+  applicationId: string
   to: string
-  requestedAt: Date
-  environment: string
+  userName: string
+  carName: string
+  pickupDate: string
+  returnDate: string
+  location: string
+  locale: "de" | "en"
+  idempotencyKey: string
+}
+
+function applicationDetailsHtml(data: Omit<BookingApplicationEmailData, "to">, isGerman: boolean) {
+  return `
+    <div style="margin:22px 0;padding:18px;border:1px solid #e2e7e3;border-radius:12px;background:#f8faf8">
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${escapeHtml(data.carName)}</p>
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong> ${escapeHtml(data.pickupDate)}</p>
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Rückgabe" : "Return"}:</strong> ${escapeHtml(data.returnDate)}</p>
+      <p style="margin:0"><strong>${isGerman ? "Ort" : "Location"}:</strong> ${escapeHtml(data.location)}</p>
+    </div>
+  `
+}
+
+function applicationEmailHtml(input: {
+  locale: "de" | "en"
+  userName: string
+  heading: string
+  body: string
+  details: string
+  actionUrl?: string
+  actionLabel?: string
 }) {
+  const isGerman = input.locale === "de"
+  return `
+    <!doctype html>
+    <html lang="${input.locale}">
+      <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
+        <div style="max-width:640px;margin:0 auto;padding:32px 20px">
+          <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
+            <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">Qujo Autovermietung GmbH</p>
+            <h1 style="margin:0 0 18px;font-size:24px">${input.heading}</h1>
+            <p>${isGerman ? "Hallo" : "Hello"} ${escapeHtml(input.userName)},</p>
+            <p>${input.body}</p>
+            ${input.details}
+            ${input.actionUrl && input.actionLabel ? `<p style="margin:26px 0 4px"><a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background:#123c2d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:9px;font-weight:700">${input.actionLabel}</a></p>` : ""}
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+}
+
+export async function sendBookingApplicationSubmittedEmail(data: BookingApplicationEmailData) {
+  const isGerman = data.locale === "de"
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Ihre Unterlagen werden geprüft – ${data.carName}` : `Your documents are being reviewed – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Unterlagen erfolgreich eingereicht" : "Documents submitted successfully",
+      body: isGerman
+        ? "Wir haben Ihre Unterlagen erhalten. Unser Team prüft sie jetzt. Sie erhalten eine weitere E-Mail, sobald die Prüfung abgeschlossen ist oder wir ein neues Dokument benötigen."
+        : "We received your documents and our team is reviewing them now. We will email you again when the review is complete or if a replacement document is required.",
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/applications/${data.applicationId}`,
+      actionLabel: isGerman ? "Antrag ansehen" : "View application",
+    }),
+  })
+}
+
+export async function sendAdminBookingApplicationNotification(
+  data: Omit<BookingApplicationEmailData, "to"> & {
+    to: string[]
+    customerEmail: string
+  },
+) {
+  const isGerman = data.locale === "de"
+  return sendEmail({
+    to: data.to,
+    replyTo: data.customerEmail,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Neue Dokumentenprüfung – ${data.carName}` : `New document review – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: isGerman ? "Team" : "Team",
+      heading: isGerman ? "Ein neuer Antrag wartet auf Prüfung" : "A new application is ready for review",
+      body: `${isGerman ? "Kunde" : "Customer"}: ${escapeHtml(data.userName)} (${escapeHtml(data.customerEmail)})`,
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/admin/documents/applications/${data.applicationId}`,
+      actionLabel: isGerman ? "Unterlagen prüfen" : "Review documents",
+    }),
+  })
+}
+
+export async function sendDocumentReviewDecisionEmail(
+  data: BookingApplicationEmailData & {
+    decision: "REJECTED" | "REPLACEMENT_REQUIRED"
+    documentName: string
+    reason?: string
+  },
+) {
+  const isGerman = data.locale === "de"
+  const replacement = data.decision === "REPLACEMENT_REQUIRED"
+  const reason = data.reason?.trim()
+  const reasonHtml = reason ? `<br><strong>${isGerman ? "Hinweis des Prüfteams" : "Reviewer note"}:</strong> ${escapeHtml(reason)}` : ""
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Aktion erforderlich: ${data.documentName}` : `Action required: ${data.documentName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Ein Dokument benötigt Ihre Aufmerksamkeit" : "A document needs your attention",
+      body: replacement
+        ? isGerman
+          ? `Bitte laden Sie eine neue Version von „${escapeHtml(data.documentName)}“ hoch.${reasonHtml}`
+          : `Please upload a new version of “${escapeHtml(data.documentName)}”.${reasonHtml}`
+        : isGerman
+          ? `„${escapeHtml(data.documentName)}“ konnte nicht freigegeben werden. Bitte öffnen Sie Ihren Antrag und folgen Sie den angezeigten Schritten.${reasonHtml}`
+          : `“${escapeHtml(data.documentName)}” could not be approved. Open your application and follow the steps shown.${reasonHtml}`,
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/applications/${data.applicationId}`,
+      actionLabel: isGerman ? "Dokument ersetzen" : "Replace document",
+    }),
+  })
+}
+
+export async function sendBookingApplicationCancelledEmail(data: BookingApplicationEmailData & { reason?: string }) {
+  const isGerman = data.locale === "de"
+  const reasonHtml = data.reason?.trim() ? `<br><strong>${isGerman ? "Grund" : "Reason"}:</strong> ${escapeHtml(data.reason)}` : ""
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Antrag storniert – ${data.carName}` : `Application cancelled – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Ihr Buchungsantrag wurde storniert" : "Your booking application was cancelled",
+      body: `${isGerman ? "Der Buchungsantrag wurde storniert. Bei Fragen antworten Sie bitte auf diese E-Mail." : "The booking application was cancelled. Reply to this email if you have questions."}${reasonHtml}`,
+      details: applicationDetailsHtml(data, isGerman),
+    }),
+  })
+}
+
+function configAppUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/$/, "")
+}
+
+export async function sendProductionAlertTest(input: { to: string; requestedAt: Date; environment: string }) {
   return sendEmail({
     to: input.to,
     subject: "[TEST ONLY] Car Rental production alert delivery verification",
@@ -296,23 +490,32 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     const isGerman = locale === "de"
 
     const paymentMode = data.paymentMode
-    const isTransfer = paymentMode
-      ? paymentMode === "BANK_TRANSFER"
-      : (data.paymentMethod || "TRANSFER") === "TRANSFER"
+    const isTransfer = paymentMode ? paymentMode === "BANK_TRANSFER" : (data.paymentMethod || "TRANSFER") === "TRANSFER"
     const paymentMethodLabel =
       paymentMode === "BOOKING_REQUEST"
-        ? isGerman ? "Rechnung" : "Invoice"
+        ? isGerman
+          ? "Rechnung"
+          : "Invoice"
         : paymentMode === "BANK_TRANSFER"
-          ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+          ? isGerman
+            ? "Bankuberweisung"
+            : "Bank Transfer"
           : paymentMode === "CASH_ON_PICKUP"
-            ? isGerman ? "Barzahlung bei Abholung" : "Cash at Pickup"
+            ? isGerman
+              ? "Barzahlung bei Abholung"
+              : "Cash at Pickup"
             : isTransfer
-              ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+              ? isGerman
+                ? "Bankuberweisung"
+                : "Bank Transfer"
               : data.paymentMethod === "CARD"
-                ? isGerman ? "Karte" : "Card"
-                : isGerman ? "Zahlung bei Abholung" : "Pay at Pickup"
-    const confirmationHeading =
-      data.confirmationHeading?.trim() || (isGerman ? "Buchung bestatigt!" : "Booking Confirmed!")
+                ? isGerman
+                  ? "Karte"
+                  : "Card"
+                : isGerman
+                  ? "Zahlung bei Abholung"
+                  : "Pay at Pickup"
+    const confirmationHeading = data.confirmationHeading?.trim() || (isGerman ? "Buchung bestatigt!" : "Booking Confirmed!")
     const subjectHeading = confirmationHeading.replace(/[\r\n]+/g, " ")
     const configuredContentHtml = configuredTextHtml(data.confirmationContent)
     const paymentInstructionsHtml =
@@ -345,12 +548,12 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
         `
       : isTransfer
-      ? `
+        ? `
                   <li>${isGerman ? "Speichern Sie Ihren Uberweisungscode" : "Save your transfer code"} (${data.transferCode || "-"})</li>
                   <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
         `
-      : `
+        : `
                   <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
                   <li>${isGerman ? "Die Zahlung bei Abholung mit der gewahlten Methode abschliessen" : "Complete payment using your selected method at pickup"}</li>
@@ -469,14 +672,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   }
 }
 
-export async function sendBookingStatusEmail(
-  to: string,
-  userName: string,
-  carName: string,
-  status: string,
-  bookingNumber: string,
-  locale?: "de" | "en",
-) {
+export async function sendBookingStatusEmail(to: string, userName: string, carName: string, status: string, bookingNumber: string, locale?: "de" | "en") {
   try {
     const configStatus = getEmailConfigStatus()
     safeEmailConsole.log("[EMAIL] Attempting to send booking status email:", {
@@ -506,9 +702,7 @@ export async function sendBookingStatusEmail(
     switch (status) {
       case "CONFIRMED":
         subject = `${isGerman ? "Buchung bestatigt" : "Booking Confirmed"} - ${carName}`
-        message = isGerman
-          ? "Ihre Buchung wurde von unserem Team bestatigt. Alles ist bereit."
-          : "Your booking has been confirmed by our team. You're all set!"
+        message = isGerman ? "Ihre Buchung wurde von unserem Team bestatigt. Alles ist bereit." : "Your booking has been confirmed by our team. You're all set!"
         break
       case "CANCELLED":
         subject = `${isGerman ? "Buchung storniert" : "Booking Cancelled"} - ${carName}`
@@ -539,6 +733,7 @@ export async function sendBookingStatusEmail(
     const { id, error } = await sendEmail({
       to,
       subject,
+      idempotencyKey: `booking-status-${bookingNumber}-${status.toLowerCase()}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -626,6 +821,7 @@ export async function sendBookingCompletionReviewEmail(data: {
 
     const { id, error } = await sendEmail({
       to: data.to,
+      idempotencyKey: `booking-completion-${data.bookingNumber}`,
       subject: `${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for choosing us"} - ${data.carName}`,
       html: `
         <!DOCTYPE html>
@@ -1163,11 +1359,7 @@ export async function sendAdminBookingNotification(data: {
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
-      new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
-          Boolean(email),
-        ),
-      ),
+      new Set([data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string => Boolean(email))),
     )
 
     if (recipients.length === 0) {
@@ -1396,7 +1588,11 @@ export async function sendAdminBookingConfirmationNotification(data: {
   totalPrice: number
   currency?: string
   guaranteeAmount: number
-  transferCode: string
+  transferCode?: string
+  paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
+  paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED"
+  customerNotified?: boolean
+  locale?: "de" | "en"
   bookingNumber: string
   bookingId: string
 }) {
@@ -1421,12 +1617,30 @@ export async function sendAdminBookingConfirmationNotification(data: {
     const companyName = companySettings?.companyName || "Car Rental Company"
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
+    const paymentSummary =
+      data.paymentStatus === "PAID"
+        ? isGerman
+          ? "Die Zahlung ist als bezahlt markiert."
+          : "Payment is marked as paid."
+        : data.paymentMethod === "PAY_AT_PICKUP"
+          ? isGerman
+            ? "Die Zahlung ist bei der Abholung fällig."
+            : "Payment is due at pick-up."
+          : isGerman
+            ? "Die Banküberweisung ist noch zu prüfen."
+            : "The bank transfer is still pending verification."
+    const notificationSummary =
+      data.customerNotified === false
+        ? isGerman
+          ? "Die Kunden-E-Mail konnte nicht zugestellt werden und muss erneut versendet werden."
+          : "The customer email could not be delivered and must be resent."
+        : isGerman
+          ? "Der Kunde wurde benachrichtigt."
+          : "The customer has been notified."
     const recipients = Array.from(
-      new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
-          Boolean(email),
-        ),
-      ),
+      new Set([data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string => Boolean(email))),
     )
 
     if (recipients.length === 0) {
@@ -1451,7 +1665,8 @@ export async function sendAdminBookingConfirmationNotification(data: {
 
     const { id, error } = await sendEmail({
       to: recipients,
-      subject: `✅ Booking Confirmed - ${data.carName} (${data.bookingNumber})`,
+      idempotencyKey: `booking-confirmation-admin-${data.bookingNumber}`,
+      subject: isGerman ? `Buchung bestätigt – ${data.carName} (${data.bookingNumber})` : `Booking confirmed – ${data.carName} (${data.bookingNumber})`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1479,7 +1694,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
                 <p><strong>A booking has been confirmed and is ready for pickup.</strong></p>
                 
                 <div class="success-box">
-                  <p style="margin: 0;"><strong>✅ Confirmed:</strong> Payment received and booking is confirmed. Customer has been notified.</p>
+                  <p style="margin: 0;"><strong>${isGerman ? "Bestätigt" : "Confirmed"}:</strong> ${paymentSummary} ${notificationSummary}</p>
                 </div>
 
                 <div class="details">
@@ -1524,10 +1739,14 @@ export async function sendAdminBookingConfirmationNotification(data: {
 
                 <div class="details">
                   <h3 style="margin-top: 0;">Payment Details</h3>
-                  <div style="margin-bottom: 10px;">
+                  ${
+                    data.transferCode
+                      ? `<div style="margin-bottom: 10px;">
                     <strong>Transfer Reference Code:</strong>
                     <div class="transfer-code">${data.transferCode}</div>
-                  </div>
+                  </div>`
+                      : ""
+                  }
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Amount:</strong></span>
                     <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice, data.currency)}</span>
@@ -1546,7 +1765,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
                   <ol style="margin: 10px 0; padding-left: 20px;">
                     <li>Prepare the vehicle for pickup</li>
-                    <li>Verify customer's transfer code: <strong>${data.transferCode}</strong></li>
+                    ${data.transferCode ? `<li>Verify customer's transfer code: <strong>${data.transferCode}</strong></li>` : ""}
                     <li>Ensure all documentation is ready</li>
                     <li>Customer will arrive on: <strong>${data.pickupDate}</strong></li>
                   </ol>

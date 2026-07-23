@@ -33,7 +33,10 @@ describe("Resend-only production email", () => {
   })
 
   it("delivers configured offline instructions through the single Resend sender", async () => {
-    resendSend.mockResolvedValue({ data: { id: "synthetic-message" }, error: null })
+    resendSend.mockResolvedValue({
+      data: { id: "synthetic-message" },
+      error: null,
+    })
     const { sendBookingConfirmationEmail } = await import("@/lib/email")
     const result = await sendBookingConfirmationEmail({
       to: "customer@example.invalid",
@@ -59,11 +62,16 @@ describe("Resend-only production email", () => {
     expect(message.from).toBe("Synthetic Rentals <bookings@example.invalid>")
     expect(message.html).toContain("Use reference &lt;SYNTHETIC-BOOKING&gt;.")
     expect(message.html).toContain("Bank Transfer")
-    expect(requestOptions).toEqual({ idempotencyKey: "booking-confirmation-SYNTHETIC-BOOKING" })
+    expect(requestOptions).toEqual({
+      idempotencyKey: "booking-confirmation-SYNTHETIC-BOOKING",
+    })
   })
 
   it("returns a stable failure without leaking provider details", async () => {
-    resendSend.mockResolvedValue({ data: null, error: { message: "provider-secret-detail" } })
+    resendSend.mockResolvedValue({
+      data: null,
+      error: { message: "provider-secret-detail" },
+    })
     const { sendBookingConfirmationEmail } = await import("@/lib/email")
     const result = await sendBookingConfirmationEmail({
       to: "customer@example.invalid",
@@ -82,7 +90,10 @@ describe("Resend-only production email", () => {
   })
 
   it("delivers contact messages to the owner with safe HTML and reply routing", async () => {
-    resendSend.mockResolvedValue({ data: { id: "synthetic-contact" }, error: null })
+    resendSend.mockResolvedValue({
+      data: { id: "synthetic-contact" },
+      error: null,
+    })
     const { sendContactMessageEmail } = await import("@/lib/email")
     const result = await sendContactMessageEmail({
       to: ["owner@example.invalid"],
@@ -102,5 +113,66 @@ describe("Resend-only production email", () => {
     expect(message.html).toContain("Rental &amp; availability")
     expect(message.html).toContain("Please check &lt;b&gt;tomorrow&lt;/b&gt;.")
     expect(message.html).not.toContain("<script>")
+  })
+
+  it("acknowledges a contact enquiry in the selected customer language", async () => {
+    resendSend.mockResolvedValue({
+      data: { id: "synthetic-ack" },
+      error: null,
+    })
+    const { sendContactAcknowledgementEmail } = await import("@/lib/email")
+    await sendContactAcknowledgementEmail({
+      to: "visitor@example.invalid",
+      name: "Erika <Mustermann>",
+      subject: "Mietwagen",
+      locale: "de",
+      idempotencyKey: "contact-customer-synthetic",
+    })
+
+    const message = resendSend.mock.calls[0][0]
+    expect(message.subject).toContain("Wir haben Ihre Nachricht erhalten")
+    expect(message.html).toContain("Vielen Dank für Ihre Nachricht")
+    expect(message.html).toContain("Erika &lt;Mustermann&gt;")
+    expect(resendSend.mock.calls[0][1]).toEqual({
+      idempotencyKey: "contact-customer-synthetic",
+    })
+  })
+
+  it("sends document submission and replacement emails with stable event keys", async () => {
+    resendSend.mockResolvedValue({
+      data: { id: "synthetic-application" },
+      error: null,
+    })
+    const { sendBookingApplicationSubmittedEmail, sendDocumentReviewDecisionEmail } = await import("@/lib/email")
+    const common = {
+      applicationId: "application-1",
+      to: "driver@example.invalid",
+      userName: "Erika Mustermann",
+      carName: "Testfahrzeug",
+      pickupDate: "01.08.2026, 10:00",
+      returnDate: "03.08.2026, 10:00",
+      location: "Berlin",
+      locale: "de" as const,
+    }
+
+    await sendBookingApplicationSubmittedEmail({
+      ...common,
+      idempotencyKey: "application-submitted-customer-1-8",
+    })
+    await sendDocumentReviewDecisionEmail({
+      ...common,
+      decision: "REPLACEMENT_REQUIRED",
+      documentName: "Führerschein",
+      reason: "Die Rückseite ist nicht lesbar.",
+      idempotencyKey: "document-review-1-replacement-2",
+    })
+
+    expect(resendSend).toHaveBeenCalledTimes(2)
+    expect(resendSend.mock.calls[0][0].html).toContain("Unterlagen erfolgreich eingereicht")
+    expect(resendSend.mock.calls[1][0].html).toContain("Dokument ersetzen")
+    expect(resendSend.mock.calls[1][0].html).toContain("Die Rückseite ist nicht lesbar.")
+    expect(resendSend.mock.calls[1][1]).toEqual({
+      idempotencyKey: "document-review-1-replacement-2",
+    })
   })
 })

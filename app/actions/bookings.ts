@@ -5,20 +5,13 @@ import { prisma } from "@/lib/db"
 import { requireAuth, requireAdmin } from "@/lib/auth"
 import { updateBookingStatusSchema } from "@/lib/validations"
 import { config } from "@/lib/config"
-import {
-  sendBookingStatusEmail,
-  sendAdminBookingConfirmationNotification,
-  sendBookingConfirmationEmail,
-  sendBookingCompletionReviewEmail,
-} from "@/lib/email"
+import { sendBookingStatusEmail, sendBookingCompletionReviewEmail } from "@/lib/email"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { z } from "zod"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
-import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
 import { logger } from "@/lib/logger"
-import { loadBookingConfirmationConfiguration } from "@/lib/booking-confirmation-configuration"
 import { deliverBookingConfirmation } from "@/lib/booking-confirmation-delivery"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
@@ -140,8 +133,7 @@ export async function updateBookingStatus(data: unknown) {
     // Update booking in transaction with audit log
     await prisma.$transaction(async (tx) => {
       const oldStatus = booking.status
-      const nextPaymentStatus =
-        validated.status === "COMPLETED" && booking.paymentStatus === "PENDING" ? "PAID" : booking.paymentStatus
+      const nextPaymentStatus = validated.status === "COMPLETED" && booking.paymentStatus === "PENDING" ? "PAID" : booking.paymentStatus
 
       await tx.booking.update({
         where: { id: validated.bookingId },
@@ -158,12 +150,7 @@ export async function updateBookingStatus(data: unknown) {
       await tx.adminAuditLog.create({
         data: {
           adminId: admin.id,
-          action:
-            validated.status === "CONFIRMED"
-              ? "BOOKING_CONFIRMED"
-              : validated.status === "CANCELLED"
-                ? "BOOKING_CANCELLED"
-                : "BOOKING_REJECTED",
+          action: validated.status === "CONFIRMED" ? "BOOKING_CONFIRMED" : validated.status === "CANCELLED" ? "BOOKING_CANCELLED" : "BOOKING_REJECTED",
           targetType: "booking",
           targetId: validated.bookingId,
           bookingId: validated.bookingId,
@@ -197,34 +184,12 @@ export async function updateBookingStatus(data: unknown) {
           adminEmails: config.adminEmails,
         })
 
-        const userCarName = bookingLocale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name
-        const confirmationConfiguration = await loadBookingConfirmationConfiguration(booking.id)
-        const userConfirmationResult = await sendBookingConfirmationEmail({
-          to: booking.user.email,
-          userName: booking.user.name || booking.user.email,
-          carName: userCarName,
-          pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
-          dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
-          location: booking.location,
-          totalPrice: bookingTotalFromSnapshot(booking),
-          currency: booking.pricingSnapshot?.currency,
-          guaranteeAmount: booking.guaranteeAmount,
-          transferCode: booking.paymentMethod === "TRANSFER" ? booking.transferCode : undefined,
-          paymentMethod: booking.paymentMethod,
-          bookingNumber: booking.bookingNumber,
-          locale: bookingLocale,
-          confirmationHeading: confirmationConfiguration.heading,
-          confirmationContent: confirmationConfiguration.content,
-          paymentMode: confirmationConfiguration.paymentMode,
-          paymentInstructions: confirmationConfiguration.paymentInstructions,
-          showPaymentInstructions: confirmationConfiguration.showPaymentInstructions,
-        })
-
-        if (userConfirmationResult.error) {
+        const confirmationDelivery = await deliverBookingConfirmation(booking.id)
+        if (confirmationDelivery.error) {
           logger.error("[BOOKING] Failed to send user confirmation email:", {
             bookingNumber: booking.bookingNumber,
             userEmail: booking.user.email,
-            error: userConfirmationResult.error,
+            error: confirmationDelivery.error,
           })
         } else {
           logger.info("[BOOKING] ✅ User confirmation email sent successfully:", {
@@ -233,28 +198,11 @@ export async function updateBookingStatus(data: unknown) {
           })
         }
 
-        // Send confirmation notification to admin
-        const adminConfirmationResult = await sendAdminBookingConfirmationNotification({
-          adminEmails: config.adminEmails,
-          userName: booking.user.name || booking.user.email,
-          userEmail: booking.user.email,
-          carName: booking.car.name,
-          pickupDate: formatDateForLocale(booking.pickupDate, "en"),
-          dropoffDate: formatDateForLocale(booking.dropoffDate, "en"),
-          location: booking.location,
-          totalPrice: bookingTotalFromSnapshot(booking),
-          currency: booking.pricingSnapshot?.currency,
-          guaranteeAmount: booking.guaranteeAmount,
-          transferCode: booking.transferCode,
-          bookingNumber: booking.bookingNumber,
-          bookingId: booking.id,
-        })
-
-        if (adminConfirmationResult.error) {
+        if (confirmationDelivery.adminEmailError) {
           logger.error("[BOOKING] Failed to send admin confirmation email:", {
             bookingNumber: booking.bookingNumber,
             adminEmails: config.adminEmails,
-            error: adminConfirmationResult.error,
+            error: confirmationDelivery.adminEmailError,
           })
         } else {
           logger.info("[BOOKING] ✅ Admin confirmation email sent successfully:", {
@@ -370,14 +318,20 @@ export async function resendBookingConfirmationAsAdmin(data: unknown) {
     })
     if (!booking) return { error: "Booking not found" }
     if (booking.status !== "CONFIRMED")
-      return { error: "Only confirmed bookings can receive a confirmation email." }
+      return {
+        error: "Only confirmed bookings can receive a confirmation email.",
+      }
 
-    const result = await deliverBookingConfirmation(bookingId, { manualResend: true })
+    const result = await deliverBookingConfirmation(bookingId, {
+      manualResend: true,
+    })
     if (result.error) return { error: result.error }
     return { success: true, customerEmail: result.customerEmail }
   } catch (error) {
     logger.error("[RESEND_BOOKING_CONFIRMATION_ERROR]", error)
-    return { error: error instanceof Error ? error.message : "Failed to resend confirmation email" }
+    return {
+      error: error instanceof Error ? error.message : "Failed to resend confirmation email",
+    }
   }
 }
 
