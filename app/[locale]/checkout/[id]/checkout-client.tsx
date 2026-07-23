@@ -224,7 +224,9 @@ export function CheckoutClient({
   const [error, setError] = useState<string | null>(null)
   const [pickupCalendarOpen, setPickupCalendarOpen] = useState(false)
   const [dropoffCalendarOpen, setDropoffCalendarOpen] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">("TRANSFER")
+  const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">(
+    bookingConfiguration.payment?.defaultMethod ?? "TRANSFER",
+  )
   const [customer, setCustomer] = useState<BookingCustomerDriverInput>(initialCustomer)
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
   const [insuranceSelected, setInsuranceSelected] = useState(
@@ -563,6 +565,7 @@ export function CheckoutClient({
   const depositPercent = Math.round((quote?.depositRateBps ?? 0) / 100)
   const guaranteePercent = Math.round((quote?.guaranteeRateBps ?? 0) / 100)
   const depositCents = quote?.depositAmount ?? 0
+  const advanceCents = depositCents > 0 ? depositCents : paymentMethod === "TRANSFER" ? totalCents : 0
   const guaranteeCents = quote?.guaranteeAmount ?? 0
   const quoteCurrency = quote?.currency ?? "EUR"
   const bookingSetupUnavailable = bookingConfiguration.mode !== "ACTIVE_RELEASE"
@@ -992,51 +995,30 @@ export function CheckoutClient({
 
           {/* Payment Method */}
           <div className="bg-background rounded-xl p-4 border border-border space-y-3">
-            <h3 className="font-semibold text-lg">Payment Method</h3>
-
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("TRANSFER")}
-              className={`w-full text-left rounded-lg border p-3 transition ${
-                paymentMethod === "TRANSFER"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">Bank Transfer</p>
-                  <p className="text-sm text-muted-foreground">
-                    Transfer the deposit securely after booking confirmation.
-                  </p>
+            <h3 className="font-semibold text-lg">{locale === "de" ? "Zahlungsmethode" : "Payment method"}</h3>
+            {(bookingConfiguration.payment?.methods ?? [
+              { method: "TRANSFER" as const, configuredMode: "BANK_TRANSFER" as const, label: "Bank transfer", description: "Full payment by bank transfer before confirmation." },
+              { method: "PAY_AT_PICKUP" as const, configuredMode: "CASH_ON_PICKUP" as const, label: "Pay at pickup", description: "Full payment when collecting the vehicle." },
+            ]).map((method) => (
+              <button
+                key={method.method}
+                type="button"
+                onClick={() => setPaymentMethod(method.method)}
+                className={`w-full text-left rounded-lg border p-3 transition ${
+                  paymentMethod === method.method
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                    : "border-border hover:bg-muted/50"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{method.label}</p>
+                    <p className="text-sm text-muted-foreground">{method.description}</p>
+                  </div>
+                  <div className={`mt-1 h-4 w-4 rounded-full border ${paymentMethod === method.method ? "border-primary bg-primary" : "border-muted-foreground"}`} />
                 </div>
-                <div
-                  className={`mt-1 h-4 w-4 rounded-full border ${paymentMethod === "TRANSFER" ? "border-primary bg-primary" : "border-muted-foreground"}`}
-                />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("PAY_AT_PICKUP")}
-              className={`w-full text-left rounded-lg border p-3 transition ${
-                paymentMethod === "PAY_AT_PICKUP"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">Pay at Pickup</p>
-                  <p className="text-sm text-muted-foreground">
-                    Pay the full amount in person when collecting the vehicle.
-                  </p>
-                </div>
-                <div
-                  className={`mt-1 h-4 w-4 rounded-full border ${paymentMethod === "PAY_AT_PICKUP" ? "border-primary bg-primary" : "border-muted-foreground"}`}
-                />
-              </div>
-            </button>
+              </button>
+            ))}
           </div>
 
           {/* Price Summary */}
@@ -1082,12 +1064,22 @@ export function CheckoutClient({
                   <span className="font-semibold">Total</span>
                   <span className="font-bold text-xl">{formatCents(totalCents, quoteCurrency)}</span>
                 </div>
-                {paymentMethod === "TRANSFER" && (
+                {advanceCents > 0 && (
                   <div className="flex justify-between text-sm pt-2 border-t border-border/70">
-                    <span className="text-muted-foreground">Deposit due now ({depositPercent}%)</span>
-                    <span className="font-medium">{formatCents(depositCents, quoteCurrency)}</span>
+                    <span className="text-muted-foreground">
+                      {depositCents > 0
+                        ? `${locale === "de" ? "Anzahlung vor Bestätigung" : "Deposit before confirmation"} (${depositPercent}%)`
+                        : locale === "de" ? "Vollständige Zahlung vor Bestätigung" : "Full payment before confirmation"}
+                    </span>
+                    <span className="font-medium">{formatCents(advanceCents, quoteCurrency)}</span>
                   </div>
                 )}
+                {advanceCents < totalCents ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{locale === "de" ? "Restbetrag bei Abholung" : "Remaining at pickup"}</span>
+                    <span className="font-medium">{formatCents(totalCents - advanceCents, quoteCurrency)}</span>
+                  </div>
+                ) : null}
                 {guaranteeCents > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Refundable guarantee hold ({guaranteePercent}%)</span>

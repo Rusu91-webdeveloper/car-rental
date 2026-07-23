@@ -19,6 +19,8 @@ import {
 } from "@/app/actions/cars"
 import {
   confirmTransferDeposit,
+  closeRefundReviewWithoutRefund,
+  recordBookingRefund,
   recordPickupPayment,
   resendBookingConfirmationAsAdmin,
   retryBookingNotification,
@@ -105,14 +107,21 @@ interface AdminBooking {
   bookingNumber: string
   transferCode: string
   depositAmount: number
+  advancePaymentAmount: number
   status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "REJECTED"
   paymentStatus: "PENDING" | "DEPOSIT_PAID" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED"
   paymentMethod: "TRANSFER" | "PAY_AT_PICKUP"
   paymentDueAt: string | null
   amountReceived: number
+  refundReviewStatus: "NOT_REQUIRED" | "PENDING" | "RESOLVED"
+  paymentPolicy: {
+    depositEnabled: boolean
+    depositRateBps: number | null
+    remainingBalanceRule: "NOT_APPLICABLE" | "ON_PICKUP" | "BEFORE_PICKUP"
+  } | null
   emailDelivery: {
     id: string
-    event: "CUSTOMER_TRANSFER_INSTRUCTIONS" | "CUSTOMER_CASH_CONFIRMATION" | "CUSTOMER_TRANSFER_CONFIRMED" | "CUSTOMER_TRANSFER_EXPIRED" | "ADMIN_BOOKING_CREATED"
+    event: "CUSTOMER_TRANSFER_INSTRUCTIONS" | "CUSTOMER_CASH_CONFIRMATION" | "CUSTOMER_TRANSFER_CONFIRMED" | "CUSTOMER_TRANSFER_EXPIRED" | "CUSTOMER_ADVANCE_INSTRUCTIONS" | "CUSTOMER_BOOKING_CONFIRMED" | "CUSTOMER_BALANCE_RECEIPT" | "CUSTOMER_BOOKING_CANCELLED" | "CUSTOMER_REFUND_CONFIRMED" | "CUSTOMER_PAYMENT_EXPIRED" | "ADMIN_BOOKING_CREATED"
     status: "PENDING" | "PROCESSING" | "SENT" | "FAILED"
     sentAt: string | null
     lastErrorCode: string | null
@@ -775,13 +784,15 @@ export default function AdminDashboard({
       "Cancel this booking? The dates will be released and the customer will be notified. The legal audit record will be retained.",
       "Diese Buchung stornieren? Die Daten werden freigegeben und der Kunde wird benachrichtigt. Der rechtliche Prüfverlauf bleibt erhalten.",
     ))) return
-    handleUpdateBookingStatus(booking.id, "CANCELLED", "Cancelled and removed from active bookings by administrator.")
+    const reason = prompt(tr("Reason for cancellation:", "Grund für die Stornierung:"))?.trim()
+    if (!reason) return
+    handleUpdateBookingStatus(booking.id, "CANCELLED", reason)
   }
 
   const handleConfirmTransferDeposit = (booking: AdminBooking) => {
     if (!confirm(tr(
-      `Confirm receipt of ${formatCents(booking.depositAmount || booking.totalPrice, booking.currency)} and confirm this booking?`,
-      `Eingang von ${formatCents(booking.depositAmount || booking.totalPrice, booking.currency)} bestätigen und diese Buchung freigeben?`,
+      `Confirm receipt of ${formatCents(booking.advancePaymentAmount || booking.depositAmount || booking.totalPrice, booking.currency)} and confirm this booking?`,
+      `Eingang von ${formatCents(booking.advancePaymentAmount || booking.depositAmount || booking.totalPrice, booking.currency)} bestätigen und diese Buchung freigeben?`,
     ))) return
     startTransition(async () => {
       const result = await confirmTransferDeposit({ bookingId: booking.id })
@@ -805,6 +816,41 @@ export default function AdminDashboard({
           ? tr("The booking is confirmed and the pickup email was sent.", "Die Buchung ist bestätigt und die Abhol-E-Mail wurde gesendet.")
           : tr("The booking is confirmed. Email delivery is queued for retry.", "Die Buchung ist bestätigt. Die E-Mail-Zustellung wird erneut versucht."),
       })
+      router.refresh()
+    })
+  }
+
+  const handleRecordRefund = (booking: AdminBooking) => {
+    const refundable = Math.max(booking.amountReceived, 0)
+    const rawAmount = prompt(tr(
+      `Refund amount in EUR (maximum ${(refundable / 100).toFixed(2)}):`,
+      `Erstattungsbetrag in EUR (maximal ${(refundable / 100).toFixed(2)}):`,
+    ), (refundable / 100).toFixed(2))
+    if (!rawAmount) return
+    const amount = Math.round(Number(rawAmount.replace(",", ".")) * 100)
+    const reason = prompt(tr("Reason for this refund:", "Grund für diese Erstattung:"))?.trim()
+    if (!Number.isInteger(amount) || amount <= 0 || !reason) return
+    startTransition(async () => {
+      const result = await recordBookingRefund({ bookingId: booking.id, amount, reason })
+      if (result?.error) {
+        toast({ title: tr("Refund could not be recorded", "Erstattung konnte nicht erfasst werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      toast({ title: tr("Refund recorded", "Erstattung erfasst"), description: tr("The ledger and customer notification were updated.", "Zahlungsverlauf und Kundenbenachrichtigung wurden aktualisiert.") })
+      router.refresh()
+    })
+  }
+
+  const handleCloseRefundReview = (booking: AdminBooking) => {
+    const reason = prompt(tr("Why is no further refund due?", "Warum ist keine weitere Erstattung fällig?"))?.trim()
+    if (!reason) return
+    startTransition(async () => {
+      const result = await closeRefundReviewWithoutRefund({ bookingId: booking.id, reason })
+      if (result?.error) {
+        toast({ title: tr("Refund review could not be closed", "Erstattungsprüfung konnte nicht abgeschlossen werden"), description: actionError(result.error), variant: "destructive" })
+        return
+      }
+      toast({ title: tr("Refund review resolved", "Erstattungsprüfung abgeschlossen") })
       router.refresh()
     })
   }
@@ -1637,20 +1683,24 @@ export default function AdminDashboard({
                             >
                               {tr(booking.status.replaceAll("_", " "), ({ PENDING: "AUSSTEHEND", CONFIRMED: "BESTÄTIGT", IN_PROGRESS: "IN BEARBEITUNG", COMPLETED: "ABGESCHLOSSEN", CANCELLED: "STORNIERT", REJECTED: "ABGELEHNT" } as const)[booking.status])}
                             </Badge>
-                            {booking.status === "PENDING" && booking.paymentMethod === "TRANSFER" && booking.paymentStatus === "PENDING" ? (
+                            {booking.status === "PENDING" && booking.advancePaymentAmount > 0 && booking.paymentStatus === "PENDING" ? (
                               <Button size="sm" disabled={isPending} onClick={() => handleConfirmTransferDeposit(booking)}>
                                 <CheckCircle className="mr-2 h-4 w-4" />
-                                {tr("Mark deposit received", "Anzahlung bestätigen")}
+                                {booking.depositAmount > 0 && booking.depositAmount < booking.totalPrice
+                                  ? tr("Mark deposit received", "Anzahlung bestätigen")
+                                  : tr("Mark full transfer received", "Vollständige Überweisung bestätigen")}
                               </Button>
                             ) : null}
-                            {booking.paymentMethod === "PAY_AT_PICKUP" && booking.paymentStatus !== "PAID" && ["CONFIRMED", "IN_PROGRESS", "COMPLETED"].includes(booking.status) ? (
+                            {booking.status === "CONFIRMED" && booking.paymentStatus !== "PAID" && booking.amountReceived < booking.totalPrice ? (
                               <Button size="sm" disabled={isPending} onClick={() => handleRecordPickupPayment(booking)}>
                                 <DollarSign className="mr-2 h-4 w-4" />
-                                {tr("Mark cash received", "Barzahlung bestätigen")}
+                                {booking.amountReceived > 0
+                                  ? tr("Mark remaining balance received", "Restbetrag bestätigen")
+                                  : tr("Mark full pickup payment received", "Vollständige Abholzahlung bestätigen")}
                               </Button>
                             ) : null}
                             {booking.status === "CONFIRMED" ? (
-                              <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleUpdateBookingStatus(booking.id, "IN_PROGRESS")}>
+                              <Button variant="outline" size="sm" disabled={isPending || booking.paymentStatus !== "PAID"} onClick={() => handleUpdateBookingStatus(booking.id, "IN_PROGRESS")}>
                                 {tr("Start rental", "Miete starten")}
                               </Button>
                             ) : null}
@@ -1676,6 +1726,16 @@ export default function AdminDashboard({
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 {tr("Cancel / remove", "Stornieren / entfernen")}
                               </Button>
+                            ) : null}
+                            {booking.refundReviewStatus === "PENDING" && booking.amountReceived > 0 ? (
+                              <>
+                                <Button variant="outline" size="sm" disabled={isPending} onClick={() => handleRecordRefund(booking)}>
+                                  {tr("Record refund", "Erstattung erfassen")}
+                                </Button>
+                                <Button variant="ghost" size="sm" disabled={isPending} onClick={() => handleCloseRefundReview(booking)}>
+                                  {tr("Close refund review", "Erstattungsprüfung schließen")}
+                                </Button>
+                              </>
                             ) : null}
                           </div>
                         </div>
@@ -1703,10 +1763,10 @@ export default function AdminDashboard({
                                 : tr(booking.paymentStatus.replaceAll("_", " "), ({ PENDING: "AUSSTEHEND", PAID: "BEZAHLT", FAILED: "FEHLGESCHLAGEN", REFUNDED: "ERSTATTET", PARTIALLY_REFUNDED: "TEILWEISE ERSTATTET" } as const)[booking.paymentStatus as Exclude<AdminBooking["paymentStatus"], "DEPOSIT_PAID">])}
                             </span>
                           </div>
-                          {booking.paymentMethod === "TRANSFER" ? (
+                          {booking.advancePaymentAmount > 0 ? (
                             <div>
-                              <span className="text-muted-foreground">{tr("Expected deposit:", "Erwartete Anzahlung:")}</span>
-                              <span className="ml-2 font-medium">{formatCents(booking.depositAmount || booking.totalPrice, booking.currency)}</span>
+                              <span className="text-muted-foreground">{tr("Required advance:", "Erforderliche Vorauszahlung:")}</span>
+                              <span className="ml-2 font-medium">{formatCents(booking.advancePaymentAmount, booking.currency)}</span>
                             </div>
                           ) : null}
                           <div>
@@ -1716,6 +1776,10 @@ export default function AdminDashboard({
                           <div>
                             <span className="text-muted-foreground">{tr("Outstanding:", "Offen:")}</span>
                             <span className="ml-2 font-medium">{formatCents(Math.max(booking.totalPrice - booking.amountReceived, 0), booking.currency)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">{tr("Refund review:", "Erstattungsprüfung:")}</span>
+                            <span className="ml-2 font-medium">{tr(booking.refundReviewStatus.replaceAll("_", " "), ({ NOT_REQUIRED: "NICHT ERFORDERLICH", PENDING: "AUSSTEHEND", RESOLVED: "ABGESCHLOSSEN" } as const)[booking.refundReviewStatus])}</span>
                           </div>
                           {booking.paymentDueAt ? (
                             <div>

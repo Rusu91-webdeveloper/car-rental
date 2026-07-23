@@ -7,6 +7,7 @@ import { loadNotificationConfigurationPage } from "@/lib/notification-configurat
 import { PaymentInstructionForm } from "@/components/business-configuration/notification-configuration-form"
 import { ConfirmationContentForm } from "@/components/business-configuration/confirmation-content-form"
 import { NotificationDraftControl } from "@/components/business-configuration/notification-draft-control"
+import { prisma } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -28,13 +29,17 @@ export default async function ConfigurationSectionPage({ params }: { params: Pro
   const overview = await loadConfigurationOverview({ includeAudit: false })
   const status = overview.domainStatuses.find(({ domain }) => domain === metadata.domain)
   if (section === "payments" || section === "confirmations") {
-    const data = await loadNotificationConfigurationPage()
+    const [data, paymentProfile] = await Promise.all([
+      loadNotificationConfigurationPage(),
+      section === "payments" ? prisma.companySettings.findUnique({ where: { id: "company-settings" } }) : null,
+    ])
+    if (section === "payments" && !paymentProfile) throw new Error("Payment settings are unavailable.")
     return (
       <div className="space-y-6">
         <div><h1 className="text-2xl font-bold">{metadata.label}</h1><p className="mt-1 text-sm text-muted-foreground">{metadata.note}</p></div>
         <section className="rounded-xl border bg-background p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">Current status</h2><p className="mt-2 text-sm text-muted-foreground">Live: {status?.liveVersion ? `Version ${status.liveVersion}` : "Not configured"} · Draft: {status?.draftVersion ? `Version ${status.draftVersion}` : "None"}</p></div>{status ? <ConfigurationStatusBadge status={status.status} /> : null}</div></section>
         <NotificationDraftControl key={data.draftRelease?.revision ?? "no-draft"} data={data} canEdit={capabilities.canEdit && capabilities.canManagePayments && capabilities.canManageConfirmations} />
-        {section === "payments" ? <PaymentInstructionForm key={`${data.draftPayment?.id ?? "live"}-${data.draftPayment?.revision ?? 0}`} data={data} canEdit={capabilities.canManagePayments} /> : <ConfirmationContentForm key={`${data.draftConfirmation?.id ?? "live"}-${data.draftConfirmation?.revision ?? 0}`} data={data} canEdit={capabilities.canManageConfirmations} />}
+        {section === "payments" ? <PaymentInstructionForm key={`${data.draftPayment?.id ?? "live"}-${data.draftPayment?.revision ?? 0}`} data={data} paymentProfile={paymentProfile!} canEdit={capabilities.canManagePayments} /> : <ConfirmationContentForm key={`${data.draftConfirmation?.id ?? "live"}-${data.draftConfirmation?.revision ?? 0}`} data={data} canEdit={capabilities.canManageConfirmations} />}
         <Link href="/admin/business-configuration/overview" className="inline-block text-sm font-medium text-primary hover:underline">Back to Overview</Link>
       </div>
     )

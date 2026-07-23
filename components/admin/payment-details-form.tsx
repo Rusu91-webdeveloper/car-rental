@@ -12,7 +12,6 @@ interface PaymentDetailsValue {
   accountNumber: string
   swiftCode: string
   iban: string | null
-  depositPercentage: number
   guaranteePercentage: number
 }
 
@@ -23,7 +22,6 @@ export function PaymentDetailsForm({ value }: { value: PaymentDetailsValue }) {
     accountNumber: value.accountNumber,
     swiftCode: value.swiftCode,
     iban: value.iban ?? "",
-    depositPercent: Math.round(value.depositPercentage * 100),
     guaranteePercent: Math.round(value.guaranteePercentage * 100),
   })
   const [message, setMessage] = useState<string>()
@@ -41,7 +39,6 @@ export function PaymentDetailsForm({ value }: { value: PaymentDetailsValue }) {
             accountNumber: form.accountNumber,
             swiftCode: form.swiftCode,
             iban: form.iban,
-            depositPercentage: form.depositPercent / 100,
             guaranteePercentage: form.guaranteePercent / 100,
           })
           setMessage("error" in result ? result.error : "Payment details saved.")
@@ -55,9 +52,8 @@ export function PaymentDetailsForm({ value }: { value: PaymentDetailsValue }) {
           return <div key={field} className="space-y-2"><Label htmlFor={field}>{labels[field]}</Label><Input id={field} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} required /></div>
         })}
       </div>
-      <div className="border-t pt-5"><h3 className="font-medium">Deposits</h3><p className="mt-1 text-sm text-muted-foreground">Choose how much customers pay or leave as security.</p></div>
+      <div className="border-t pt-5"><h3 className="font-medium">Security deposit</h3><p className="mt-1 text-sm text-muted-foreground">The booking deposit is configured in the published payment choices below. This setting is the separate refundable damage guarantee.</p></div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="deposit">Booking deposit</Label><div className="relative"><Input id="deposit" type="number" min={0} max={100} value={form.depositPercent} onChange={(event) => setForm((current) => ({ ...current, depositPercent: Number(event.target.value) }))} /><span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span></div><p className="text-xs text-muted-foreground">Amount the customer pays to secure a booking.</p></div>
         <div className="space-y-2"><Label htmlFor="guarantee">Refundable damage deposit</Label><div className="relative"><Input id="guarantee" type="number" min={0} max={100} value={form.guaranteePercent} onChange={(event) => setForm((current) => ({ ...current, guaranteePercent: Number(event.target.value) }))} /><span className="absolute right-3 top-2 text-sm text-muted-foreground">%</span></div><p className="text-xs text-muted-foreground">Refundable amount held against damage or extra charges.</p></div>
       </div>
       <div className="flex items-center gap-3"><Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save payment details"}</Button>{message ? <p className="text-sm text-muted-foreground" role="status">{message}</p> : null}</div>

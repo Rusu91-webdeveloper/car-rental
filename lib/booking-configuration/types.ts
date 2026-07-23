@@ -105,5 +105,18 @@ export interface PublicBookingConfiguration {
   fields: EffectiveBookingField[]
   steps: EffectiveBookingStep[]
   insurance?: ActiveInsuranceOffer
+  payment?: {
+    configurationVersionId: string
+    methods: Array<{
+      method: "TRANSFER" | "PAY_AT_PICKUP"
+      configuredMode: "BANK_TRANSFER" | "CASH_ON_PICKUP"
+      label: string
+      description: string
+      instructions?: string
+    }>
+    defaultMethod: "TRANSFER" | "PAY_AT_PICKUP"
+    depositEnabled: boolean
+    depositPercentage: number
+  }
   legal?: BookingLegalRequirements
 }

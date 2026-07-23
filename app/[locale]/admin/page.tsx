@@ -83,9 +83,10 @@ export default async function AdminPage({
         include: {
           pricingSnapshot: true,
           insuranceSnapshot: true,
+          paymentPolicySnapshot: true,
           payments: {
-            where: { status: "PAID" },
-            select: { amount: true, receivedAt: true },
+            where: { status: { in: ["PAID", "REFUNDED"] } },
+            select: { amount: true, receivedAt: true, kind: true, status: true },
           },
           notifications: {
             where: { recipient: "CUSTOMER" },
@@ -272,11 +273,23 @@ export default async function AdminPage({
         bookingNumber: booking.bookingNumber,
         transferCode: booking.transferCode,
         depositAmount: booking.depositAmount,
+        advancePaymentAmount: booking.advancePaymentAmount,
         status: booking.status,
         paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod,
         paymentDueAt: booking.paymentDueAt?.toISOString() ?? null,
-        amountReceived: booking.payments.reduce((sum, payment) => sum + payment.amount, 0),
+        amountReceived: booking.payments.reduce(
+          (sum, payment) => sum + (payment.kind === "RECEIPT" ? payment.amount : -payment.amount),
+          0,
+        ),
+        refundReviewStatus: booking.refundReviewStatus,
+        paymentPolicy: booking.paymentPolicySnapshot
+          ? {
+              depositEnabled: booking.paymentPolicySnapshot.depositType !== "NONE",
+              depositRateBps: booking.paymentPolicySnapshot.depositRateBps,
+              remainingBalanceRule: booking.paymentPolicySnapshot.remainingBalanceRule,
+            }
+          : null,
         emailDelivery: booking.notifications[0]
           ? {
               ...booking.notifications[0],

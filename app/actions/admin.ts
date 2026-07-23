@@ -57,12 +57,16 @@ export async function getAdminStats() {
     await requireAdmin()
     await runBookingLifecycleMaintenance()
 
-    const [totalBookings, totalCars, totalUsers, totalRevenue, recentBookings] = await Promise.all([
+    const [totalBookings, totalCars, totalUsers, receivedRevenue, refundedRevenue, recentBookings] = await Promise.all([
       prisma.booking.count(),
       prisma.car.count({ where: { isDeleted: false } }),
       prisma.user.count(),
       prisma.payment.aggregate({
-        where: { status: "PAID" },
+        where: { status: "PAID", kind: "RECEIPT" },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { status: "REFUNDED", kind: "REFUND" },
         _sum: { amount: true },
       }),
       prisma.booking.findMany({
@@ -85,7 +89,7 @@ export async function getAdminStats() {
         totalBookings,
         totalCars,
         totalUsers,
-        totalRevenue: totalRevenue._sum.amount || 0,
+        totalRevenue: (receivedRevenue._sum.amount || 0) - (refundedRevenue._sum.amount || 0),
       },
       bookingsByStatus,
       recentBookings,

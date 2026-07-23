@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
-import { BOOKING_MAINTENANCE_JOB, cronExecutionKey } from "@/lib/production/cron-schedule"
+import { BOOKING_MAINTENANCE_JOB, cronTenMinuteExecutionKey } from "@/lib/production/cron-schedule"
 import { hasValidBearerSecret, manualExecutionKey, validIdempotencyKey } from "@/lib/production/request-auth"
 import { executeProtectedWorker } from "@/lib/production/worker-execution"
 
@@ -45,7 +45,7 @@ async function run(request: Request, triggerSource: "vercel-cron" | "manual") {
     deduplicationKey:
       triggerSource === "manual"
         ? manualExecutionKey(BOOKING_MAINTENANCE_JOB, idempotencyKey as string)
-        : cronExecutionKey(PATH, BOOKING_MAINTENANCE_JOB),
+        : cronTenMinuteExecutionKey(PATH, BOOKING_MAINTENANCE_JOB),
     triggerSource,
     run: () => runBookingLifecycleMaintenance(),
     summarize,

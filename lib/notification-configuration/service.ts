@@ -14,7 +14,7 @@ import {
 } from "@/lib/business-configuration/schema"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
 
-const MANUAL_METHODS = ["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"] as const
+const MANUAL_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 export type ManualPaymentMethod = (typeof MANUAL_METHODS)[number]
 
 const paymentInclude = {
@@ -329,18 +329,24 @@ export async function updatePaymentInstructionDraft(input: {
   changeSummary: string
   defaultMethod: ManualPaymentMethod
   enabledMethods: ManualPaymentMethod[]
+  depositEnabled: boolean
+  depositPercentage: number
+  paymentProfile: {
+    bankName: string
+    accountName: string
+    accountNumber: string
+    swiftCode: string
+    iban: string
+    guaranteePercentage: number
+  }
   instructions: Array<{ method: ManualPaymentMethod; locale: string; instructions: string }>
   db?: PrismaClient
 }) {
   const client = input.db ?? prisma
   return client.$transaction(async (tx) => {
     await requireCapability(tx, input.actorId, CAPABILITIES.PAYMENTS_MANAGE)
-    if (input.enabledMethods.includes("BANK_TRANSFER")) {
-      const company = await tx.companySettings.findUnique({
-        where: { id: "company-settings" },
-        select: { accountName: true, iban: true },
-      })
-      if (!company?.accountName.trim() || !company.iban?.trim()) {
+    if (input.enabledMethods.includes("BANK_TRANSFER") || input.depositEnabled) {
+      if (!input.paymentProfile.accountName.trim() || !input.paymentProfile.iban.trim()) {
         throw new ConfigurationWorkflowError(
           "RELEASE_INCOMPLETE",
           "Add a valid account holder and IBAN before enabling bank transfer.",
@@ -348,14 +354,55 @@ export async function updatePaymentInstructionDraft(input: {
         )
       }
     }
+    if (input.enabledMethods.includes("CASH_ON_PICKUP")) {
+      const company = await tx.companySettings.findUnique({
+        where: { id: "company-settings" },
+        select: {
+          companyName: true,
+          companyEmail: true,
+          companyPhone: true,
+          companyAddress: true,
+          companyCity: true,
+          companyZipCode: true,
+          companyCountry: true,
+        },
+      })
+      if (
+        !company?.companyName.trim() ||
+        !company.companyEmail.trim() ||
+        !company.companyPhone?.trim() ||
+        !company.companyAddress?.trim() ||
+        !company.companyCity?.trim() ||
+        !company.companyZipCode?.trim() ||
+        !company.companyCountry?.trim()
+      ) {
+        throw new ConfigurationWorkflowError(
+          "RELEASE_INCOMPLETE",
+          "Complete the company name, address, postal code, city, country, phone, and email before enabling payment at pickup.",
+          "VALIDATION",
+        )
+      }
+    }
     await lockVersion(tx, { id: input.versionId, domain: "PAYMENTS", revision: input.expectedRevision, actorId: input.actorId, summary: input.changeSummary })
-    const existing = await tx.paymentConfigVersion.findUniqueOrThrow({ where: { configurationVersionId: input.versionId } })
+    await tx.companySettings.upsert({
+      where: { id: "company-settings" },
+      update: {
+        ...input.paymentProfile,
+        iban: input.paymentProfile.iban.replace(/\s+/g, "").toUpperCase() || null,
+      },
+      create: {
+        id: "company-settings",
+        ...input.paymentProfile,
+        iban: input.paymentProfile.iban.replace(/\s+/g, "").toUpperCase() || null,
+      },
+    })
+    const depositValue = input.depositEnabled ? input.depositPercentage * 100 : 0
     const configuration: PaymentConfiguration = {
       defaultMethod: input.defaultMethod,
-      confirmationMode: existing.confirmationMode,
-      depositMode: existing.depositType,
-      depositValue: existing.depositValue,
-      remainingBalanceRule: existing.remainingBalanceRule,
+      confirmationMode: "REQUIRES_REVIEW",
+      depositMode: input.depositEnabled ? "PERCENTAGE_BPS" : "NONE",
+      depositValue,
+      remainingBalanceRule: input.depositEnabled && depositValue < 10_000 ? "ON_PICKUP" : "NOT_APPLICABLE",
       methods: PAYMENT_METHODS.map((method) => ({ method, enabled: MANUAL_METHODS.includes(method as ManualPaymentMethod) && input.enabledMethods.includes(method as ManualPaymentMethod) })),
       instructions: input.instructions,
     }
@@ -366,6 +413,10 @@ export async function updatePaymentInstructionDraft(input: {
       where: { configurationVersionId: input.versionId },
       data: {
         defaultMethod: input.defaultMethod,
+        confirmationMode: "REQUIRES_REVIEW",
+        depositType: configuration.depositMode,
+        depositValue: configuration.depositValue,
+        remainingBalanceRule: configuration.remainingBalanceRule,
         methods: { create: configuration.methods },
         instructions: { create: input.instructions },
       },

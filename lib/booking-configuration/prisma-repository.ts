@@ -4,6 +4,7 @@ import type {
   CustomerDriverRequirementsConfiguration,
   InsuranceConfiguration,
   LegalAcceptanceConfiguration,
+  PaymentConfiguration,
 } from "@/lib/business-configuration/domains"
 
 export interface ActiveLegalDocumentRecord {
@@ -43,6 +44,10 @@ export interface ActivePhase6Record {
   workflowVersionStatus: string
   workflowValidationStatus: string
   workflow: BookingWorkflowConfiguration
+  paymentVersionId: string
+  paymentVersionStatus: string
+  paymentValidationStatus: string
+  payment: PaymentConfiguration
   legalVersionId: string
   legalVersionStatus: string
   legalValidationStatus: string
@@ -73,6 +78,7 @@ export class PrismaBookingConfigurationRepository {
         },
         customerDriverConfig: { include: { version: true, fieldRules: true } },
         bookingWorkflowConfig: { include: { version: true, stepRules: true } },
+        paymentConfig: { include: { version: true, methods: true, instructions: true } },
         legalAcceptanceConfig: {
           include: {
             version: true,
@@ -133,6 +139,18 @@ export class PrismaBookingConfigurationRepository {
           requirement: mode,
           displayOrder,
         })),
+      },
+      paymentVersionId: release.paymentConfigVersionId,
+      paymentVersionStatus: release.paymentConfig.version.status,
+      paymentValidationStatus: release.paymentConfig.version.validationStatus,
+      payment: {
+        defaultMethod: release.paymentConfig.defaultMethod,
+        confirmationMode: release.paymentConfig.confirmationMode,
+        depositMode: release.paymentConfig.depositType,
+        depositValue: release.paymentConfig.depositValue,
+        remainingBalanceRule: release.paymentConfig.remainingBalanceRule,
+        methods: release.paymentConfig.methods,
+        instructions: release.paymentConfig.instructions,
       },
       legalVersionId: release.legalAcceptanceConfigVersionId,
       legalVersionStatus: release.legalAcceptanceConfig.version.status,

@@ -6,7 +6,6 @@ import { requireAuth, requireAdmin } from "@/lib/auth"
 import { updateBookingStatusSchema } from "@/lib/validations"
 import { config } from "@/lib/config"
 import { sendBookingStatusEmail, sendBookingCompletionReviewEmail } from "@/lib/email"
-import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { z } from "zod"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
@@ -14,8 +13,11 @@ import { publicPricingErrorMessage, PricingError } from "@/lib/pricing/errors"
 import { logger } from "@/lib/logger"
 import {
   BookingPaymentTransitionError,
-  confirmTransferDeposit as confirmTransferDepositTransition,
-  recordPickupPayment as recordPickupPaymentTransition,
+  cancelBookingWithReason,
+  closeRefundReviewWithoutRefund as closeRefundReviewTransition,
+  recordAdvancePayment as recordAdvancePaymentTransition,
+  recordBookingRefund as recordBookingRefundTransition,
+  recordRemainingBalance as recordRemainingBalanceTransition,
 } from "@/lib/booking-payment-lifecycle"
 import {
   dispatchBookingNotification,
@@ -100,6 +102,21 @@ export async function getBookingQuote(data: unknown) {
   try {
     await requireAuth()
     const validated = bookingQuoteSchema.parse(data)
+    const requiredMode = validated.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
+    const release = await prisma.businessConfigurationRelease.findFirst({
+      where: { status: "ACTIVE" },
+      select: {
+        paymentConfig: {
+          select: {
+            depositType: true,
+            depositValue: true,
+            methods: { where: { method: requiredMode }, select: { enabled: true } },
+          },
+        },
+      },
+    })
+    if (!release?.paymentConfig.methods.some((method) => method.enabled))
+      return { error: "This payment method is not available.", code: "PAYMENT_METHOD_UNAVAILABLE" }
     const configured = await quoteConfiguredVehicleRental({
       db: prisma,
       pricingRepository: new PrismaPricingContextRepository(prisma),
@@ -112,7 +129,12 @@ export async function getBookingQuote(data: unknown) {
         paymentMethod: validated.paymentMethod,
       },
     })
-    return { quote: publicQuote(configured) }
+    const quote = publicQuote(configured)
+    if (release.paymentConfig.depositType === "FIXED_AMOUNT") {
+      quote.depositAmount = Math.min(release.paymentConfig.depositValue, quote.grandTotal)
+      quote.depositRateBps = quote.grandTotal > 0 ? Math.round((quote.depositAmount / quote.grandTotal) * 10_000) : 0
+    }
+    return { quote }
   } catch (error) {
     logger.error("[GET_BOOKING_QUOTE_ERROR]", error)
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid quote request" }
@@ -150,6 +172,19 @@ export async function updateBookingStatus(data: unknown) {
     if (["CANCELLED", "REJECTED"].includes(validated.status) && !validated.reason?.trim()) {
       return { error: "A reason is required when cancelling or rejecting a booking." }
     }
+    if (validated.status === "CANCELLED") {
+      await cancelBookingWithReason({ bookingId: booking.id, adminId: admin.id, reason: validated.reason!.trim() })
+      await dispatchPendingBookingNotificationsForBooking(booking.id)
+      revalidatePath("/admin")
+      revalidatePath("/bookings")
+      return { success: true }
+    }
+    if (validated.status === "IN_PROGRESS" && (booking.status !== "CONFIRMED" || booking.paymentStatus !== "PAID"))
+      return { error: "Collect the full outstanding balance before starting the rental." }
+    if (validated.status === "COMPLETED" && booking.status !== "IN_PROGRESS")
+      return { error: "Only an in-progress rental can be completed." }
+    if (validated.status === "REJECTED" && booking.status !== "PENDING")
+      return { error: "Only a pending booking can be rejected." }
 
     // Update booking in transaction with audit log
     await prisma.$transaction(async (tx) => {
@@ -291,11 +326,11 @@ export async function updateBookingStatus(data: unknown) {
 
 const bookingPaymentActionSchema = z.object({ bookingId: z.string().min(1) })
 
-export async function confirmTransferDeposit(data: unknown) {
+export async function recordAdvancePayment(data: unknown) {
   try {
     const admin = await requireAdmin()
     const { bookingId } = bookingPaymentActionSchema.parse(data)
-    const result = await confirmTransferDepositTransition({ bookingId, adminId: admin.id })
+    const result = await recordAdvancePaymentTransition({ bookingId, adminId: admin.id })
     const deliveries = await dispatchPendingBookingNotificationsForBooking(bookingId)
     revalidatePath("/admin")
     revalidatePath("/bookings")
@@ -305,30 +340,91 @@ export async function confirmTransferDeposit(data: unknown) {
       confirmationEmailSent: deliveries.some((delivery) => "sent" in delivery),
     }
   } catch (error) {
-    logger.error("booking.transfer_payment_confirmation_failed", {
+    logger.error("booking.advance_payment_confirmation_failed", {
       error: error instanceof Error ? error.name : "UnknownError",
     })
     if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
-    return { error: "The transfer payment could not be confirmed." }
+    return { error: "The advance payment could not be recorded." }
   }
 }
 
-export async function recordPickupPayment(data: unknown) {
+export async function recordRemainingBalance(data: unknown) {
   try {
     const admin = await requireAdmin()
     const { bookingId } = bookingPaymentActionSchema.parse(data)
-    const result = await recordPickupPaymentTransition({ bookingId, adminId: admin.id })
+    const result = await recordRemainingBalanceTransition({ bookingId, adminId: admin.id })
+    const deliveries = await dispatchPendingBookingNotificationsForBooking(bookingId)
     revalidatePath("/admin")
     revalidatePath("/bookings")
-    return { success: true, ...result }
+    return { success: true, ...result, receiptEmailSent: deliveries.some((delivery) => "sent" in delivery) }
   } catch (error) {
     logger.error("booking.pickup_payment_record_failed", {
       error: error instanceof Error ? error.name : "UnknownError",
     })
     if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
-    return { error: "The pickup payment could not be recorded." }
+    return { error: "The remaining balance could not be recorded." }
+  }
+}
+
+export async function confirmTransferDeposit(data: unknown) {
+  return recordAdvancePayment(data)
+}
+
+export async function recordPickupPayment(data: unknown) {
+  return recordRemainingBalance(data)
+}
+
+const cancelBookingSchema = z.object({ bookingId: z.string().min(1), reason: z.string().trim().min(3).max(1_000) })
+const refundBookingSchema = z.object({ bookingId: z.string().min(1), amount: z.number().int().positive(), reason: z.string().trim().min(3).max(1_000) })
+
+export async function cancelBooking(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const values = cancelBookingSchema.parse(data)
+    const result = await cancelBookingWithReason({ ...values, adminId: admin.id })
+    const deliveries = await dispatchPendingBookingNotificationsForBooking(values.bookingId)
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    return { success: true, ...result, cancellationEmailSent: deliveries.some((delivery) => "sent" in delivery) }
+  } catch (error) {
+    if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
+    logger.error("booking.cancellation_failed", error)
+    return { error: "The booking could not be cancelled." }
+  }
+}
+
+export async function recordBookingRefund(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const values = refundBookingSchema.parse(data)
+    const result = await recordBookingRefundTransition({ ...values, adminId: admin.id })
+    const deliveries = await dispatchPendingBookingNotificationsForBooking(values.bookingId)
+    revalidatePath("/admin")
+    revalidatePath("/bookings")
+    return { success: true, ...result, refundEmailSent: deliveries.some((delivery) => "sent" in delivery) }
+  } catch (error) {
+    if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
+    logger.error("booking.refund_record_failed", error)
+    return { error: "The refund could not be recorded." }
+  }
+}
+
+export async function closeRefundReviewWithoutRefund(data: unknown) {
+  try {
+    const admin = await requireAdmin()
+    const values = cancelBookingSchema.parse(data)
+    const result = await closeRefundReviewTransition({ ...values, adminId: admin.id })
+    revalidatePath("/admin")
+    return { success: true, ...result }
+  } catch (error) {
+    if (error instanceof BookingPaymentTransitionError) return { error: error.message, code: error.code }
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message || "Invalid request" }
+    logger.error("booking.refund_review_close_failed", error)
+    return { error: "The refund review could not be closed." }
   }
 }
 
@@ -392,11 +488,9 @@ export async function resendBookingConfirmationAsAdmin(data: unknown) {
     const notification = await enqueueBookingNotification(prisma, {
       bookingId,
       bookingNumber: booking.bookingNumber,
-      event: booking.paymentMethod === "TRANSFER" ? "CUSTOMER_TRANSFER_CONFIRMED" : "CUSTOMER_CASH_CONFIRMATION",
-    })
-    await prisma.bookingNotification.update({
-      where: { id: notification.id },
-      data: { status: "PENDING", nextAttemptAt: new Date(), sentAt: null, lastErrorCode: null },
+      event: "CUSTOMER_BOOKING_CONFIRMED",
+      eventKeySuffix: `resend-${Date.now()}`,
+      payload: { requestedByAdmin: true },
     })
     const result = await dispatchBookingNotification(notification.id)
     if (!("sent" in result)) return { error: "Email delivery failed and will be retried automatically." }
@@ -415,8 +509,6 @@ export async function resendBookingConfirmationAsAdmin(data: unknown) {
 export async function getUserBookings() {
   try {
     const user = await requireAuth()
-    await runBookingLifecycleMaintenance()
-
     const bookings = await prisma.booking.findMany({
       where: { userId: user.id },
       include: {

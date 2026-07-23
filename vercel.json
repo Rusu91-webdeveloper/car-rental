@@ -4,7 +4,11 @@
   "crons": [
     {
       "path": "/api/cron/cancel-expired-bookings",
-      "schedule": "15 2 * * *"
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/booking-notifications",
+      "schedule": "5-59/10 * * * *"
     },
     {
       "path": "/api/cron/phase8fb-maintenance",

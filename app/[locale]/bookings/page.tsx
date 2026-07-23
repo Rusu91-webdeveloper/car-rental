@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { formatCents } from "@/lib/money"
-import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getTranslations } from "next-intl/server"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { BookingReviewSection } from "./booking-review-section"
@@ -25,7 +24,6 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   // TypeScript doesn't know redirect throws, use non-null assertion
   const currentUser = user!
 
-  await runBookingLifecycleMaintenance()
   const [userBookings, userApplications] = await Promise.all([
     prisma.booking.findMany({
       where: { userId: currentUser.id },
@@ -33,6 +31,11 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
         car: true,
         pricingSnapshot: true,
         insuranceSnapshot: true,
+        paymentPolicySnapshot: true,
+        payments: {
+          where: { status: { in: ["PAID", "REFUNDED"] } },
+          select: { amount: true, kind: true },
+        },
         legalAcceptances: {
           include: {
             legalDocumentTranslation: { include: { legalDocumentVersion: true } },
@@ -250,7 +253,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
               href="/"
               className="inline-flex px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
             >
-              Browse Cars
+              {locale === "de" ? "Fahrzeuge ansehen" : "Browse cars"}
             </Link>
           </div>
         ) : (
@@ -263,12 +266,17 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
               const showCancellationDeadline =
                 booking.status === "PENDING" &&
                 booking.paymentStatus === "PENDING" &&
-                booking.paymentMethod === "TRANSFER"
+                Boolean(booking.paymentDueAt)
               const canLeaveReview =
                 booking.status === "COMPLETED" &&
                 booking.paymentStatus === "PAID"
               const displayedTotal = booking.pricingSnapshot?.grandTotal ?? booking.totalPrice
               const displayedCurrency = booking.pricingSnapshot?.currency ?? "EUR"
+              const amountReceived = booking.payments.reduce(
+                (sum, payment) => sum + (payment.kind === "RECEIPT" ? payment.amount : -payment.amount),
+                0,
+              )
+              const outstanding = Math.max(displayedTotal - amountReceived, 0)
 
               return (
                 <div key={booking.id} className="bg-background rounded-xl p-4 border border-border">
@@ -305,15 +313,35 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Payment Method</span>
+                          <span className="text-muted-foreground">{locale === "de" ? "Zahlungsmethode" : "Payment method"}</span>
                           <span>{getPaymentMethodLabel(booking.paymentMethod)}</span>
+                        </div>
+                        {booking.advancePaymentAmount > 0 ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">{locale === "de" ? "Erforderliche Vorauszahlung" : "Required advance"}</span>
+                            <span>{formatCents(booking.advancePaymentAmount, displayedCurrency)}</span>
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{locale === "de" ? "Erhalten" : "Received"}</span>
+                          <span>{formatCents(amountReceived, displayedCurrency)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{locale === "de" ? "Offener Restbetrag" : "Outstanding balance"}</span>
+                          <span>{formatCents(outstanding, displayedCurrency)}</span>
                         </div>
                         {booking.guaranteeAmount > 0 && (
                           <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Refundable Guarantee Hold</span>
-                            <span>{formatCents(booking.guaranteeAmount)}</span>
+                            <span className="text-muted-foreground">{locale === "de" ? "Erstattbare Kaution" : "Refundable guarantee hold"}</span>
+                            <span>{formatCents(booking.guaranteeAmount, displayedCurrency)}</span>
                           </div>
                         )}
+                        {booking.refundReviewStatus !== "NOT_REQUIRED" ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">{locale === "de" ? "Erstattungsprüfung" : "Refund review"}</span>
+                            <span>{booking.refundReviewStatus === "PENDING" ? (locale === "de" ? "Ausstehend" : "Pending") : (locale === "de" ? "Abgeschlossen" : "Resolved")}</span>
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">{t("bookings.bookedAt")}</span>
                           <span>{formatDateTime(booking.createdAt, locale)}</span>
@@ -347,7 +375,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                     {booking.insuranceSnapshot?.showInConfirmation && booking.insuranceSnapshot.selected && (
                       <div className="bg-muted/50 rounded-lg p-3 flex items-center justify-between">
                         <div>
-                          <p className="font-semibold">Insurance</p>
+                          <p className="font-semibold">{locale === "de" ? "Versicherung" : "Insurance"}</p>
                           <p className="text-xs text-muted-foreground">
                             {booking.insuranceSnapshot.customerFacingName}
                           </p>

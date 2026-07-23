@@ -97,11 +97,13 @@ export async function initializeBusinessConfiguration(
 
       const settings = await tx.companySettings.findUnique({
         where: { id: "company-settings" },
-        select: { currency: true, taxRate: true, taxIncluded: true, depositPercentage: true },
+        select: { currency: true, taxRate: true, taxIncluded: true, depositPercentage: true, accountName: true, iban: true },
       })
       const currency = settings?.currency?.toUpperCase() || "EUR"
       const taxRateBps = Math.round((settings?.taxRate ?? 0) * 10_000)
-      const depositBps = Math.round((settings?.depositPercentage ?? 0) * 10_000)
+      const depositBps = settings?.accountName.trim() && settings.iban?.trim()
+        ? Math.round((settings.depositPercentage ?? 0) * 10_000)
+        : 0
 
       const general =
         (await latestDraftVersion(tx, "GENERAL_RENTAL")) ??

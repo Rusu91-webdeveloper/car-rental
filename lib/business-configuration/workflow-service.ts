@@ -21,7 +21,7 @@ import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 
-const IMPLEMENTED_PAYMENT_METHODS = ["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"] as const
+const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 
 export interface FleetCoverageSummary {
   totalVehicles: number

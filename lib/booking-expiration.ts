@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { config } from "@/lib/config"
 import { sendBookingCompletionReviewEmail } from "@/lib/email"
-import { enqueueBookingNotification, processBookingNotificationOutbox } from "@/lib/booking-notifications"
+import { enqueueBookingNotification } from "@/lib/booking-notifications"
 
 type DbClient = PrismaClient
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
@@ -21,7 +21,6 @@ export async function cancelExpiredBookings(db: DbClient = prisma, now = new Dat
     where: {
       status: "PENDING",
       paymentStatus: "PENDING",
-      paymentMethod: "TRANSFER",
       paymentDueAt: { lte: now },
     },
     select: { id: true, bookingNumber: true },
@@ -37,7 +36,6 @@ export async function cancelExpiredBookings(db: DbClient = prisma, now = new Dat
           id: candidate.id,
           status: "PENDING",
           paymentStatus: "PENDING",
-          paymentMethod: "TRANSFER",
           paymentDueAt: { lte: now },
         },
         data: { status: "CANCELLED", cancelledAt: now },
@@ -46,7 +44,7 @@ export async function cancelExpiredBookings(db: DbClient = prisma, now = new Dat
       await enqueueBookingNotification(tx, {
         bookingId: candidate.id,
         bookingNumber: candidate.bookingNumber,
-        event: "CUSTOMER_TRANSFER_EXPIRED",
+        event: "CUSTOMER_PAYMENT_EXPIRED",
       })
       return true
     })
@@ -58,7 +56,7 @@ export async function cancelExpiredBookings(db: DbClient = prisma, now = new Dat
 export async function completeFinishedBookings(now = new Date()) {
   const bookingsToComplete = await prisma.booking.findMany({
     where: {
-      status: { in: ["CONFIRMED", "IN_PROGRESS"] },
+      status: "IN_PROGRESS",
       dropoffDate: { lte: now },
     },
     include: {
@@ -87,7 +85,7 @@ export async function completeFinishedBookings(now = new Date()) {
     const updated = await prisma.booking.updateMany({
       where: {
         id: booking.id,
-        status: { in: ["CONFIRMED", "IN_PROGRESS"] },
+        status: "IN_PROGRESS",
       },
       data: {
         status: "COMPLETED",
@@ -137,11 +135,9 @@ export async function completeFinishedBookings(now = new Date()) {
 export async function runBookingLifecycleMaintenance(now = new Date()) {
   const cancelled = await cancelExpiredBookings(prisma, now)
   const completionResult = await completeFinishedBookings(now)
-  const notifications = await processBookingNotificationOutbox()
-
   return {
     cancelled,
     ...completionResult,
-    notifications,
+    notifications: { examined: 0, sent: 0, failed: 0 },
   }
 }

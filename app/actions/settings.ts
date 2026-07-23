@@ -5,20 +5,11 @@ import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+import { validIban } from "@/lib/iban"
 
 const optionalText = (max: number) => z.string().trim().max(max).transform((value) => value || null)
 const requiredText = (max: number, label: string) =>
   z.string().trim().min(1, `${label} is required`).max(max)
-
-function validIban(value: string) {
-  const iban = value.replace(/\s+/g, "").toUpperCase()
-  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)) return false
-  const rearranged = `${iban.slice(4)}${iban.slice(0, 4)}`
-  const numeric = rearranged.replace(/[A-Z]/g, (letter) => String(letter.charCodeAt(0) - 55))
-  let remainder = 0
-  for (const digit of numeric) remainder = (remainder * 10 + Number(digit)) % 97
-  return remainder === 1
-}
 
 const businessProfileSchema = z.object({
   companyName: z.literal("Qujo Autovermietung GmbH", { errorMap: () => ({ message: "The registered business name must remain Qujo Autovermietung GmbH" }) }),
@@ -44,7 +35,6 @@ const paymentDetailsSchema = z.object({
   accountNumber: z.string().trim().min(1, "Account number is required").max(80),
   swiftCode: z.string().trim().min(1, "SWIFT/BIC is required").max(30),
   iban: z.string().trim().min(1, "IBAN is required").max(50).refine(validIban, "Enter a valid IBAN").transform((value) => value.replace(/\s+/g, "").toUpperCase()),
-  depositPercentage: z.number().min(0).max(1),
   guaranteePercentage: z.number().min(0).max(1),
 })
 
@@ -115,34 +105,6 @@ export async function updatePaymentDetails(data: unknown) {
       update: validated,
       create: { id: "company-settings", ...validated },
     })
-    const paymentDraft = await prisma.configurationVersion.findFirst({
-      where: { domain: "PAYMENTS", status: { in: ["DRAFT", "VALIDATED"] } },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
-    })
-    if (paymentDraft) {
-      const depositValue = Math.round(validated.depositPercentage * 10_000)
-      await prisma.$transaction([
-        prisma.paymentConfigVersion.update({
-          where: { configurationVersionId: paymentDraft.id },
-          data: {
-            depositType: depositValue > 0 ? "PERCENTAGE_BPS" : "NONE",
-            depositValue,
-            remainingBalanceRule: depositValue > 0 ? "ON_PICKUP" : "NOT_APPLICABLE",
-          },
-        }),
-        prisma.configurationVersion.update({
-          where: { id: paymentDraft.id },
-          data: {
-            revision: { increment: 1 },
-            status: "DRAFT",
-            validationStatus: "NOT_VALIDATED",
-            validationSnapshot: Prisma.JsonNull,
-            updatedById: admin.id,
-          },
-        }),
-      ])
-    }
     await recordSettingsAudit(admin.id, existing, validated, "payment_details_updated")
     revalidateOwnerSettings()
     return { success: true as const, settings }

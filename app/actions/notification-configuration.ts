@@ -14,8 +14,9 @@ import {
   updateConfirmationContentDraft,
   updatePaymentInstructionDraft,
 } from "@/lib/notification-configuration/service"
+import { validIban } from "@/lib/iban"
 
-const manualMethod = z.enum(["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"])
+const manualMethod = z.enum(["BANK_TRANSFER", "CASH_ON_PICKUP"])
 const base = z.object({
   versionId: z.string().min(1),
   expectedRevision: z.number().int().positive(),
@@ -59,6 +60,16 @@ export async function updatePaymentInstructionDraftAction(input: unknown) {
     const values = base.extend({
       defaultMethod: manualMethod,
       enabledMethods: z.array(manualMethod).min(1),
+      depositEnabled: z.boolean(),
+      depositPercentage: z.number().int().min(1).max(100),
+      paymentProfile: z.object({
+        bankName: z.string().trim().max(160),
+        accountName: z.string().trim().max(160),
+        accountNumber: z.string().trim().max(80),
+        swiftCode: z.string().trim().max(30),
+        iban: z.string().trim().max(50).refine((value) => !value || validIban(value), "Enter a valid IBAN"),
+        guaranteePercentage: z.number().min(0).max(1),
+      }),
       instructions: z.array(z.object({
         method: manualMethod,
         locale: z.string().trim().min(2).max(10),
@@ -71,6 +82,10 @@ export async function updatePaymentInstructionDraftAction(input: unknown) {
   } catch (error) {
     return failure(error)
   }
+}
+
+export async function updateOwnerPaymentDraft(input: unknown) {
+  return updatePaymentInstructionDraftAction(input)
 }
 
 export async function updateConfirmationContentDraftAction(input: unknown) {

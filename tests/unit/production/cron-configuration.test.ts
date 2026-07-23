@@ -5,13 +5,13 @@ import { PRODUCTION_CRON_SCHEDULES } from "@/lib/production/cron-schedule"
 import { AUTOMATED_PRODUCTION_WORKER_JOBS } from "@/lib/production/operations-environment"
 
 describe("Vercel Cron configuration", () => {
-  it("uses only the two fixed daily production routes and contains no secrets or query parameters", async () => {
+  it("uses the bounded production routes and contains no secrets or query parameters", async () => {
     const config = JSON.parse(await readFile(resolve(process.cwd(), "vercel.json"), "utf8"))
     expect(config.crons).toEqual(PRODUCTION_CRON_SCHEDULES.map(({ path, schedule }) => ({ path, schedule })))
-    expect(config.crons).toHaveLength(2)
+    expect(config.crons).toHaveLength(3)
     for (const cron of config.crons) {
       expect(cron.path).not.toContain("?")
-      expect(cron.schedule).toMatch(/^\d+ \d+ \* \* \*$/)
+      expect(cron.schedule).toMatch(/^[\d*/-]+ [\d*/-]+ \* \* \*$/)
     }
     expect(JSON.stringify(config)).not.toMatch(/secret|token|authorization/i)
   })

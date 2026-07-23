@@ -10,6 +10,7 @@ import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { enqueueInitialBookingNotifications } from "@/lib/booking-notifications"
+import { calculateConfiguredDeposit, resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
 import type {
   ApplicationMutationInput,
@@ -205,7 +206,7 @@ async function touch(
 
 function configuredPaymentMethod(method: "TRANSFER" | "PAY_AT_PICKUP") {
   return method === "TRANSFER"
-    ? (["BANK_TRANSFER", "BOOKING_REQUEST"] as const)
+    ? (["BANK_TRANSFER"] as const)
     : (["CASH_ON_PICKUP"] as const)
 }
 
@@ -300,12 +301,7 @@ async function refreshPaymentDeposit(
 ) {
   if (!row.paymentSelection) return
   const selection = row.paymentSelection
-  const amount =
-    selection.depositType === "NONE"
-      ? 0
-      : selection.depositType === "FIXED_AMOUNT"
-        ? selection.depositValue
-        : Math.round((quote.grandTotal * selection.depositValue) / 10_000)
+  const amount = calculateConfiguredDeposit(quote.grandTotal, selection.depositType, selection.depositValue)
   await db.bookingApplicationPaymentSelection.update({
     where: { bookingApplicationId: row.id },
     data: {
@@ -345,13 +341,16 @@ export class PrismaBookingApplicationRepository
         }
         const release = await tx.businessConfigurationRelease.findFirst({
           where: { status: "ACTIVE" },
-          include: { generalRentalConfig: true },
+          include: { generalRentalConfig: true, paymentConfig: { include: { methods: true } } },
         })
         if (!release)
           applicationError(
             "APPLICATION_CONFIGURATION_UNAVAILABLE",
             "No active booking configuration is available.",
           )
+        const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
+        if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))
+          applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
         const expiresAt = new Date(
           Date.now() + Math.min(7 * DAY, Math.max(HOUR, input.expiresInMs ?? 2 * DAY)),
         )
@@ -586,12 +585,7 @@ export class PrismaBookingApplicationRepository
       if (!config || !method)
         applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
       const total = row.pricingQuotes[0]?.grandTotal ?? 0
-      const deposit =
-        config.depositType === "NONE"
-          ? 0
-          : config.depositType === "FIXED_AMOUNT"
-            ? config.depositValue
-            : Math.round((total * config.depositValue) / 10_000)
+      const deposit = calculateConfiguredDeposit(total, config.depositType, config.depositValue)
       const methodInstructions = config.instructions.filter(
         (value) => value.method === method.method,
       )
@@ -613,6 +607,9 @@ export class PrismaBookingApplicationRepository
           quotedDepositAmount: deposit,
           quotedDepositRateBps:
             config.depositType === "PERCENTAGE_BPS" ? config.depositValue : null,
+          remainingBalanceRule: config.remainingBalanceRule,
+          instructionLocale: instruction?.locale,
+          instructionText: instruction?.instructions,
           currency: row.pricingQuotes[0]?.currency ?? "EUR",
           selectedAt: new Date(),
         },
@@ -624,6 +621,9 @@ export class PrismaBookingApplicationRepository
           quotedDepositAmount: deposit,
           quotedDepositRateBps:
             config.depositType === "PERCENTAGE_BPS" ? config.depositValue : null,
+          remainingBalanceRule: config.remainingBalanceRule,
+          instructionLocale: instruction?.locale,
+          instructionText: instruction?.instructions,
           currency: row.pricingQuotes[0]?.currency ?? "EUR",
           selectedAt: new Date(),
           revision: revision + 1,
@@ -951,6 +951,31 @@ export class PrismaBookingApplicationRepository
           const payment = row.paymentSelection
           if (!customer?.firstName || !customer.lastName || !customer.email || !insurance || !payment)
             applicationError("APPLICATION_NOT_READY", "Application evidence is incomplete.")
+          const policy = resolveBookingPaymentPolicy({
+            total: calculated.quote.grandTotal,
+            paymentMethod: row.paymentMethod,
+            depositType: payment.depositType,
+            depositValue: payment.depositValue,
+          })
+          const { depositAmount, advancePaymentAmount, requiresAdvance, remainingBalanceRule } = policy
+          const company = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
+          if (requiresAdvance && (!company?.accountName.trim() || !company.iban?.trim()))
+            applicationError(
+              "APPLICATION_PAYMENT_INVALID",
+              "The owner must configure an account holder and IBAN before advance payments can be accepted.",
+            )
+          if (
+            !company?.companyName.trim() ||
+            !company.companyEmail.trim() ||
+            !company.companyPhone?.trim() ||
+            !company.companyAddress?.trim() ||
+            !company.companyZipCode?.trim() ||
+            !company.companyCity?.trim() ||
+            !company.companyCountry?.trim()
+          ) applicationError(
+            "APPLICATION_PAYMENT_INVALID",
+            "The owner must complete the company contact and pickup address before bookings can be confirmed.",
+          )
           const booking = await tx.booking.create({
             data: {
               userId: row.customerUserId,
@@ -962,18 +987,43 @@ export class PrismaBookingApplicationRepository
               pricePerDay: calculated.quote.sourceDailyRate,
               totalDays: calculated.quote.chargeableDuration.chargeableDays,
               totalPrice: calculated.quote.grandTotal,
-              depositAmount: payment.quotedDepositAmount,
+              depositAmount,
+              advancePaymentAmount,
               guaranteeAmount: calculated.quote.payment.guaranteeAmount,
               transferCode: randomBytes(4).toString("hex").toUpperCase(),
               bookingNumber: `BK${Date.now().toString().slice(-8)}${randomBytes(2).toString("hex").toUpperCase()}`,
-              status: row.paymentMethod === "TRANSFER" ? "PENDING" : "CONFIRMED",
+              status: requiresAdvance ? "PENDING" : "CONFIRMED",
               paymentStatus: "PENDING",
               paymentMethod: row.paymentMethod,
-              confirmedAt: row.paymentMethod === "PAY_AT_PICKUP" ? new Date() : null,
-              paymentDueAt:
-                row.paymentMethod === "TRANSFER"
-                  ? new Date(Date.now() + BOOKING_PAYMENT_WINDOW_MS)
-                  : null,
+              confirmedAt: requiresAdvance ? null : new Date(),
+              paymentDueAt: requiresAdvance ? new Date(Date.now() + BOOKING_PAYMENT_WINDOW_MS) : null,
+            },
+          })
+          await tx.bookingPaymentPolicySnapshot.create({
+            data: {
+              bookingId: booking.id,
+              paymentConfigVersionId: payment.paymentConfigVersionId,
+              configuredPaymentMode: payment.configuredPaymentMode,
+              bookingPaymentMethod: payment.bookingPaymentMethod,
+              depositType: payment.depositType,
+              depositValue: payment.depositValue,
+              depositRateBps: payment.quotedDepositRateBps,
+              depositAmount,
+              advancePaymentAmount,
+              remainingBalanceRule,
+              instructionLocale: payment.instructionLocale ?? row.locale,
+              instructionText: payment.instructionText,
+              accountName: company?.accountName,
+              iban: company?.iban,
+              bic: company?.swiftCode,
+              bankName: company?.bankName,
+              companyName: company?.companyName,
+              companyEmail: company?.companyEmail,
+              companyPhone: company?.companyPhone,
+              companyAddress: company?.companyAddress,
+              companyPostalCode: company?.companyZipCode,
+              companyCity: company?.companyCity,
+              companyCountry: company?.companyCountry,
             },
           })
           await enqueueInitialBookingNotifications(
@@ -981,6 +1031,7 @@ export class PrismaBookingApplicationRepository
             booking.id,
             booking.bookingNumber,
             booking.paymentMethod,
+            requiresAdvance,
           )
           await tx.bookingPricingSnapshot.create({
             data: {

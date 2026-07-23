@@ -3,7 +3,6 @@ import { DocumentPolicyEditor } from "@/app/[locale]/admin/business-configuratio
 import { BusinessProfileForm } from "@/components/admin/business-profile-form"
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied"
 import { NotificationContactsForm } from "@/components/admin/notification-contacts-form"
-import { PaymentDetailsForm } from "@/components/admin/payment-details-form"
 import { BillingRuleForm } from "@/components/business-configuration/billing-rule-form"
 import { BookingFlowStepList } from "@/components/business-configuration/booking-flow-step-list"
 import { ConfirmationContentForm } from "@/components/business-configuration/confirmation-content-form"
@@ -166,10 +165,10 @@ export async function OwnerSettingsStepContent({
     const settings = requireCompanySettings(settingsResult, "Payment settings are unavailable.")
     return (
       <>
-        <PaymentDetailsForm value={settings} />
         <PaymentInstructionForm
           key={`${data.draftPayment?.id ?? "live"}-${data.draftPayment?.revision ?? 0}`}
           data={data}
+          paymentProfile={settings}
           canEdit={caps.canManagePayments}
           nextHref={nextHref}
         />

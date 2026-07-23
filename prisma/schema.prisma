@@ -197,16 +197,18 @@ model Booking {
   location    String
 
   // Pricing
-  pricePerDay     Int // in cents, locked at booking time
-  totalDays       Int
-  totalPrice      Int // in cents
-  depositAmount   Int // in cents
-  guaranteeAmount Int @default(0) // in cents, refundable security hold
+  pricePerDay          Int // in cents, locked at booking time
+  totalDays            Int
+  totalPrice           Int // in cents
+  depositAmount        Int // in cents
+  advancePaymentAmount Int @default(0) // exact amount required before confirmation
+  guaranteeAmount      Int @default(0) // in cents, refundable security hold
 
   // Status
-  status        BookingStatus        @default(PENDING)
-  paymentStatus PaymentStatus        @default(PENDING)
-  paymentMethod BookingPaymentMethod @default(TRANSFER)
+  status             BookingStatus        @default(PENDING)
+  paymentStatus      PaymentStatus        @default(PENDING)
+  paymentMethod      BookingPaymentMethod @default(TRANSFER)
+  refundReviewStatus RefundReviewStatus   @default(NOT_REQUIRED)
 
   // Stripe
   stripeSessionId       String? @unique
@@ -232,12 +234,15 @@ model Booking {
   documentUploadSession  DocumentUploadSession?
   sourceApplication      BookingApplication?
   notifications          BookingNotification[]
+  paymentPolicySnapshot  BookingPaymentPolicySnapshot?
 
   @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
   @@index([userId])
   @@index([carId])
   @@index([status])
   @@index([paymentMethod])
+  @@index([status, paymentStatus, paymentDueAt])
+  @@index([refundReviewStatus])
   @@index([pickupDate, dropoffDate])
   @@index([transferCode])
 }
@@ -271,11 +276,28 @@ enum PaymentPurpose {
   FULL
 }
 
+enum PaymentKind {
+  RECEIPT
+  REFUND
+}
+
+enum RefundReviewStatus {
+  NOT_REQUIRED
+  PENDING
+  RESOLVED
+}
+
 enum BookingNotificationEvent {
   CUSTOMER_TRANSFER_INSTRUCTIONS
   CUSTOMER_CASH_CONFIRMATION
   CUSTOMER_TRANSFER_CONFIRMED
   CUSTOMER_TRANSFER_EXPIRED
+  CUSTOMER_ADVANCE_INSTRUCTIONS
+  CUSTOMER_BOOKING_CONFIRMED
+  CUSTOMER_BALANCE_RECEIPT
+  CUSTOMER_BOOKING_CANCELLED
+  CUSTOMER_REFUND_CONFIRMED
+  CUSTOMER_PAYMENT_EXPIRED
   ADMIN_BOOKING_CREATED
 }
 
@@ -342,6 +364,7 @@ model Payment {
   amount       Int // in cents
   currency     String                @default("usd")
   status       PaymentStatus
+  kind         PaymentKind           @default(RECEIPT)
   purpose      PaymentPurpose?
   method       BookingPaymentMethod?
   receivedAt   DateTime?
@@ -352,6 +375,11 @@ model Payment {
   stripeChargeId        String?
 
   metadata Json?
+  reason   String? @db.Text
+
+  relatedPaymentId String?
+  relatedPayment   Payment?  @relation("PaymentRefunds", fields: [relatedPaymentId], references: [id], onDelete: SetNull)
+  refunds          Payment[] @relation("PaymentRefunds")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -359,6 +387,8 @@ model Payment {
   @@index([bookingId])
   @@index([stripePaymentIntentId])
   @@index([recordedById, receivedAt])
+  @@index([bookingId, kind, status])
+  @@index([relatedPaymentId])
 }
 
 model BookingNotification {
@@ -375,11 +405,44 @@ model BookingNotification {
   sentAt            DateTime?
   providerMessageId String?                      @db.VarChar(255)
   lastErrorCode     String?                      @db.VarChar(64)
+  payloadSnapshot   Json?
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
 
   @@index([status, nextAttemptAt])
   @@index([bookingId, createdAt])
+}
+
+model BookingPaymentPolicySnapshot {
+  id                     String                @id @default(cuid())
+  bookingId              String                @unique
+  booking                Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  paymentConfigVersionId String?
+  configuredPaymentMode  ConfiguredPaymentMode
+  bookingPaymentMethod   BookingPaymentMethod
+  depositType            DepositType
+  depositValue           Int
+  depositRateBps         Int?
+  depositAmount          Int
+  advancePaymentAmount   Int
+  remainingBalanceRule   RemainingBalanceRule
+  instructionLocale      String                @db.VarChar(10)
+  instructionText        String?               @db.Text
+  accountName            String?
+  iban                   String?
+  bic                    String?
+  bankName               String?
+  companyName            String?
+  companyEmail           String?
+  companyPhone           String?
+  companyAddress         String?
+  companyPostalCode      String?
+  companyCity            String?
+  companyCountry         String?
+  capturedAt             DateTime              @default(now())
+
+  @@index([paymentConfigVersionId])
+  @@index([configuredPaymentMode])
 }
 
 // Blocked dates for maintenance or other reasons
@@ -446,6 +509,8 @@ enum AdminAction {
   BOOKING_CANCELLED
   BOOKING_REJECTED
   PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+  REFUND_REVIEW_RESOLVED
   NOTIFICATION_RETRIED
   CAR_CREATED
   CAR_UPDATED
@@ -1720,6 +1785,9 @@ model BookingApplicationPaymentSelection {
   depositValue                    Int
   quotedDepositAmount             Int
   quotedDepositRateBps            Int?
+  remainingBalanceRule            RemainingBalanceRule  @default(NOT_APPLICABLE)
+  instructionLocale               String?               @db.VarChar(10)
+  instructionText                 String?               @db.Text
   currency                        String                @db.VarChar(3)
   selectedAt                      DateTime
   revision                        Int                   @default(1)
