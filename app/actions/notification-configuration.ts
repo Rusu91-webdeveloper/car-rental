@@ -61,7 +61,7 @@ export async function updatePaymentInstructionDraftAction(input: unknown) {
       defaultMethod: manualMethod,
       enabledMethods: z.array(manualMethod).min(1),
       depositEnabled: z.boolean(),
-      depositPercentage: z.number().int().min(1).max(100),
+      depositPercentage: z.number().int().min(0).max(100),
       paymentProfile: z.object({
         bankName: z.string().trim().max(160),
         accountName: z.string().trim().max(160),

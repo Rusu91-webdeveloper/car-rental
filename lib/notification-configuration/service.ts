@@ -13,6 +13,7 @@ import {
   paymentConfigurationSchema,
 } from "@/lib/business-configuration/schema"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
+import { resolveOwnerDepositPolicy } from "@/lib/booking-payment-policy"
 
 const MANUAL_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 export type ManualPaymentMethod = (typeof MANUAL_METHODS)[number]
@@ -345,7 +346,8 @@ export async function updatePaymentInstructionDraft(input: {
   const client = input.db ?? prisma
   return client.$transaction(async (tx) => {
     await requireCapability(tx, input.actorId, CAPABILITIES.PAYMENTS_MANAGE)
-    if (input.enabledMethods.includes("BANK_TRANSFER") || input.depositEnabled) {
+    const depositPolicy = resolveOwnerDepositPolicy(input)
+    if (input.enabledMethods.includes("BANK_TRANSFER") || depositPolicy.depositEnabled) {
       if (!input.paymentProfile.accountName.trim() || !input.paymentProfile.iban.trim()) {
         throw new ConfigurationWorkflowError(
           "RELEASE_INCOMPLETE",
@@ -396,13 +398,13 @@ export async function updatePaymentInstructionDraft(input: {
         iban: input.paymentProfile.iban.replace(/\s+/g, "").toUpperCase() || null,
       },
     })
-    const depositValue = input.depositEnabled ? input.depositPercentage * 100 : 0
+    const depositValue = depositPolicy.depositValue
     const configuration: PaymentConfiguration = {
       defaultMethod: input.defaultMethod,
       confirmationMode: "REQUIRES_REVIEW",
-      depositMode: input.depositEnabled ? "PERCENTAGE_BPS" : "NONE",
+      depositMode: depositPolicy.depositEnabled ? "PERCENTAGE_BPS" : "NONE",
       depositValue,
-      remainingBalanceRule: input.depositEnabled && depositValue < 10_000 ? "ON_PICKUP" : "NOT_APPLICABLE",
+      remainingBalanceRule: depositPolicy.depositEnabled && depositValue < 10_000 ? "ON_PICKUP" : "NOT_APPLICABLE",
       methods: PAYMENT_METHODS.map((method) => ({ method, enabled: MANUAL_METHODS.includes(method as ManualPaymentMethod) && input.enabledMethods.includes(method as ManualPaymentMethod) })),
       instructions: input.instructions,
     }

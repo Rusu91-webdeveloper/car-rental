@@ -44,6 +44,15 @@ describe("booking confirmation and offline payment instructions", () => {
     expect(form).not.toContain("CARD_ON_PICKUP")
   })
 
+  it("allows zero percent to disable the booking deposit", () => {
+    const action = read("app/actions/notification-configuration.ts")
+    const form = read("components/business-configuration/notification-configuration-form.tsx")
+    const service = read("lib/notification-configuration/service.ts")
+    expect(action).toContain("depositPercentage: z.number().int().min(0).max(100)")
+    expect(form).toContain("Set this to 0% to disable the booking deposit.")
+    expect(service).toContain("resolveOwnerDepositPolicy(input)")
+  })
+
   it("requires method-specific instructions for every enabled method", () => {
     const parsed = paymentConfigurationSchema.safeParse({
       defaultMethod: "BANK_TRANSFER",

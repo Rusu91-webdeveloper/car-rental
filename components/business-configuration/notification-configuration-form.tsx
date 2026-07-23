@@ -106,7 +106,11 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
           <Checkbox
             checked={depositEnabled}
             disabled={!draft || !canEdit}
-            onCheckedChange={(value) => setDepositEnabled(value === true)}
+            onCheckedChange={(value) => {
+              const nextEnabled = value === true
+              setDepositEnabled(nextEnabled)
+              if (nextEnabled && depositPercentage === 0) setDepositPercentage(20)
+            }}
           />
           <span>
             <span className="font-medium">Require an advance booking deposit</span>
@@ -122,14 +126,20 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
               <input
                 className="w-full rounded-md border bg-background px-3 py-2 pr-10"
                 type="number"
-                min={1}
+                min={0}
                 max={100}
                 step={1}
                 value={depositPercentage}
                 disabled={!draft || !canEdit}
                 onChange={(event) => setDepositPercentage(Number(event.target.value))}
+                onBlur={() => {
+                  if (depositPercentage === 0) setDepositEnabled(false)
+                }}
               />
               <span className="absolute right-3 top-2 text-muted-foreground">%</span>
+            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Set this to 0% to disable the booking deposit.
             </span>
           </label>
         ) : null}
@@ -209,7 +219,7 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
               changeSummary: summary,
               defaultMethod,
               enabledMethods: enabled,
-              depositEnabled,
+              depositEnabled: depositEnabled && depositPercentage > 0,
               depositPercentage,
               paymentProfile: {
                 bankName: profile.bankName,

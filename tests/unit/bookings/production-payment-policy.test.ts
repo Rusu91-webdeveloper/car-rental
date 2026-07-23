@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest"
-import { resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
+import { resolveBookingPaymentPolicy, resolveOwnerDepositPolicy } from "@/lib/booking-payment-policy"
 
 describe("production booking payment policy", () => {
+  it("treats a zero-percent owner setting as no booking deposit", () => {
+    expect(resolveOwnerDepositPolicy({ depositEnabled: true, depositPercentage: 0 })).toEqual({
+      depositEnabled: false,
+      depositValue: 0,
+    })
+    expect(resolveOwnerDepositPolicy({ depositEnabled: true, depositPercentage: 20 })).toEqual({
+      depositEnabled: true,
+      depositValue: 2_000,
+    })
+  })
+
   it.each([
     ["TRANSFER", "PERCENTAGE_BPS", 2_000, 20_000, 4_000, true, "ON_PICKUP"],
     ["TRANSFER", "NONE", 0, 20_000, 20_000, true, "NOT_APPLICABLE"],

@@ -1,5 +1,16 @@
 import type { BookingPaymentMethod, DepositType, RemainingBalanceRule } from "@prisma/client"
 
+export function resolveOwnerDepositPolicy(input: {
+  depositEnabled: boolean
+  depositPercentage: number
+}) {
+  const depositEnabled = input.depositEnabled && input.depositPercentage > 0
+  return {
+    depositEnabled,
+    depositValue: depositEnabled ? Math.round(input.depositPercentage * 100) : 0,
+  }
+}
+
 export function calculateConfiguredDeposit(total: number, depositType: DepositType, depositValue: number) {
   if (depositType === "NONE") return 0
   const amount = depositType === "FIXED_AMOUNT"
