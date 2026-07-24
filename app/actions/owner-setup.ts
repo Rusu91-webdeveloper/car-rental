@@ -167,15 +167,21 @@ export async function completeOwnerSetupStepAction(input: unknown) {
   try {
     const admin = await requireAdmin()
     const stepId = ownerSetupStepSchema.parse(input)
-    const existing = await prisma.auditEvent.findFirst({
-      where: {
-        category: "CONFIGURATION",
-        action: "owner_setup.step_completed",
-        targetType: "OwnerSetupStep",
-        targetId: stepId,
-      },
-      select: { id: true },
-    })
+    const [existing, activeRelease] = await Promise.all([
+      prisma.auditEvent.findFirst({
+        where: {
+          category: "CONFIGURATION",
+          action: "owner_setup.step_completed",
+          targetType: "OwnerSetupStep",
+          targetId: stepId,
+        },
+        select: { id: true },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      }),
+    ])
     if (!existing) {
       await prisma.auditEvent.create({
         data: {
@@ -188,7 +194,7 @@ export async function completeOwnerSetupStepAction(input: unknown) {
       })
     }
     const completedSteps = await completedOwnerSetupSteps()
-    const activation = completedSteps.length === ownerSetupStepIds.length
+    const activation = activeRelease || completedSteps.length === ownerSetupStepIds.length
       ? await tryActivateCompletedSetup(admin.id)
       : {
           activated: false as const,
@@ -203,6 +209,7 @@ export async function completeOwnerSetupStepAction(input: unknown) {
       }
     }
     refreshOwnerSetup()
+    if (activation.activated) revalidatePath("/")
     return { success: true as const, activated: activation.activated }
   } catch (error) {
     console.error("[OWNER_SETUP_STEP_COMPLETE_ERROR]", error)

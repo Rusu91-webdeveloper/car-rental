@@ -8,7 +8,7 @@ interface SetupRouter {
 }
 
 export function ownerSetupSaveLabel(nextHref: string | undefined, continueLabel = "Save and continue") {
-  if (nextHref === "/admin/settings") return "Save changes"
+  if (nextHref === "/admin/settings") return "Save and publish"
   return nextHref ? continueLabel : "Save changes"
 }
 

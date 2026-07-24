@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button"
 import { useLocale } from "next-intl"
 
 export default function SettingsError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  const de = useLocale() === "de"
+  const locale = useLocale()
+  const de = locale === "de"
 
   function returnToSettings() {
-    window.location.assign(window.location.pathname)
+    window.location.assign(`/${locale}/admin/settings`)
   }
 
   return (

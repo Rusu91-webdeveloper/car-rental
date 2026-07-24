@@ -75,8 +75,10 @@ describe("owner-facing admin information architecture", () => {
     expect(action).toContain('action: "owner_setup.step_completed"')
     expect(action).toContain("validateDraftRelease")
     expect(action).toContain("activateDraftRelease")
+    expect(action).toContain("activeRelease || completedSteps.length === ownerSetupStepIds.length")
     expect(helper).toContain("completeOwnerSetupStepAction(stepId)")
     expect(helper).toContain("router.push(nextHref)")
+    expect(helper).toContain('return "Save and publish"')
   })
 
   it("keeps technical operations outside the owner navigation", () => {
@@ -90,15 +92,26 @@ describe("owner-facing admin information architecture", () => {
     expect(navigation).toContain('href="/admin/advanced/configuration"')
   })
 
-  it("lets owners review and publish saved changes instead of hiding a completed draft", () => {
+  it("publishes owner edits automatically instead of requiring a second review step", () => {
     const settings = source("app/[locale]/admin/settings/page.tsx")
     const publicationPage = source("app/[locale]/admin/advanced/configuration/page.tsx")
 
-    expect(settings).toContain("Saved changes are not live yet")
-    expect(settings).toContain("Review and publish")
-    expect(settings).toContain('href="/admin/advanced/configuration"')
+    expect(settings).not.toContain("Saved changes are not live yet")
+    expect(settings).not.toContain("Review and publish")
+    expect(settings).not.toContain('href="/admin/advanced/configuration"')
     expect(publicationPage).not.toContain('user?.role === "ADMIN"')
     expect(publicationPage).not.toContain('redirect({ href: "/admin/settings"')
+  })
+
+  it("recovers owner edit pages from duplicate requests and missing draft releases", () => {
+    const edit = source("lib/admin/owner-settings-edit.ts")
+    const error = source("app/[locale]/admin/settings/error.tsx")
+    expect(edit).toContain("prepareWithConflictRetry")
+    expect(edit).toContain('"P2002", "P2034"')
+    expect(edit).toContain("await repository.findActiveRelease()")
+    expect(edit).toContain("requestedEdit || activeRelease")
+    expect(error).toContain('window.location.assign(`/${locale}/admin/settings`)')
+    expect(error).not.toContain("window.location.pathname")
   })
 
   it("preserves role checks and restricted-document navigation", () => {
