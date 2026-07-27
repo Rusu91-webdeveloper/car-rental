@@ -765,6 +765,118 @@ export class PrismaBookingApplicationRepository
     })
   }
 
+  async reconcileConfirmedQuoteAfterReview(applicationId: string) {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "BookingApplication" WHERE id = ${applicationId} FOR UPDATE`
+      const row = await load(tx, applicationId)
+      if (!row)
+        applicationError("APPLICATION_NOT_FOUND", "Application not found.")
+      if (row.status !== "AWAITING_DOCUMENT_REVIEW")
+        return "NOT_APPLICABLE" as const
+
+      const current = row.pricingQuotes[0]
+      const now = new Date()
+      if (row.expiresAt <= now)
+        return "NOT_APPLICABLE" as const
+      if (current?.expiresAt && current.expiresAt > now)
+        return "VALID" as const
+      if (
+        !current?.confirmedAt ||
+        current.confirmedByUserId !== row.customerUserId
+      )
+        return "NOT_APPLICABLE" as const
+
+      const activeRelease = await tx.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      })
+      if (activeRelease?.id !== row.configurationReleaseId) {
+        await tx.bookingApplication.update({
+          where: { id: row.id },
+          data: {
+            status: "CUSTOMER_ACTION_REQUIRED",
+            actionRequiredReason: "CONFIGURATION_CHANGED",
+            actionRequiredAt: now,
+            revision: { increment: 1 },
+          },
+        })
+        await tx.auditEvent.create({
+          data: {
+            category: "BOOKING",
+            action: "booking_application.review_quote_configuration_changed",
+            targetType: "BookingApplication",
+            targetId: row.id,
+            configurationReleaseId: row.configurationReleaseId,
+          },
+        })
+        return "CUSTOMER_ACTION_REQUIRED" as const
+      }
+
+      const configured = await authoritativeQuote(tx, row)
+      const priceUnchanged =
+        current.grandTotal === configured.quote.grandTotal &&
+        current.configurationReleaseId ===
+          configured.quote.source.configurationReleaseId
+
+      await tx.bookingApplicationPricingQuote.update({
+        where: { id: current.id },
+        data: { isCurrent: false },
+      })
+      const renewed = await tx.bookingApplicationPricingQuote.create({
+        data: quoteData(
+          row,
+          configured.quote,
+          current.quoteVersion + 1,
+          current.id,
+          priceUnchanged,
+        ),
+      })
+      await refreshPaymentDeposit(tx, row, configured.quote)
+
+      if (!priceUnchanged) {
+        await tx.bookingApplication.update({
+          where: { id: row.id },
+          data: {
+            status: "CUSTOMER_ACTION_REQUIRED",
+            actionRequiredReason: "PRICE_CHANGED",
+            actionRequiredAt: now,
+            revision: { increment: 1 },
+          },
+        })
+        await tx.auditEvent.create({
+          data: {
+            category: "BOOKING",
+            action: "booking_application.review_quote_price_changed",
+            targetType: "BookingApplication",
+            targetId: row.id,
+            configurationReleaseId: row.configurationReleaseId,
+            metadata: {
+              previousQuoteVersion: current.quoteVersion,
+              renewedQuoteVersion: renewed.quoteVersion,
+            },
+          },
+        })
+        return "CUSTOMER_ACTION_REQUIRED" as const
+      }
+
+      await tx.auditEvent.create({
+        data: {
+          category: "BOOKING",
+          action: "booking_application.confirmed_quote_renewed_after_review",
+          targetType: "BookingApplication",
+          targetId: row.id,
+          configurationReleaseId: row.configurationReleaseId,
+          metadata: {
+            previousQuoteVersion: current.quoteVersion,
+            renewedQuoteVersion: renewed.quoteVersion,
+            grandTotalUnchanged: true,
+          },
+        },
+      })
+      return "RENEWED" as const
+    })
+  }
+
   async evaluateReadiness(applicationId: string): Promise<ApplicationReadiness> {
     const row = await load(this.db, applicationId)
     if (!row)

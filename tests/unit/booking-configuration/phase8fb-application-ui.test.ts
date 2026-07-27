@@ -163,10 +163,17 @@ describe("Phase 8F-B application and UI integration", () => {
     const adminDashboard = read("app/[locale]/admin/admin-client.tsx")
     const applicationActions = read("app/actions/booking-applications.ts")
 
+    expect(reviewRoute).toContain("reconcileConfirmedQuoteAfterReview")
+    expect(reviewRoute.indexOf("reconcileConfirmedQuoteAfterReview")).toBeLessThan(
+      reviewRoute.lastIndexOf("evaluateReadiness"),
+    )
+    expect(reviewRoute).toContain('readiness.blockers[0]?.code === "QUOTE_EXPIRED"')
     expect(reviewRoute).toContain('body.decision === "APPROVED" && readiness.ready')
     expect(reviewRoute).toContain("repository.finalize")
     expect(reviewRoute).toContain("dispatchPendingBookingNotificationsForBooking")
     expect(adapter).toContain('status: requiresAdvance ? "PENDING" : "CONFIRMED"')
+    expect(adapter).toContain("confirmed_quote_renewed_after_review")
+    expect(adapter).toContain('actionRequiredReason: "PRICE_CHANGED"')
     expect(adapter).toContain("bookingPaymentPolicySnapshot.create")
     expect(adapter).toContain("enqueueInitialBookingNotifications")
     expect(delivery).toContain("sendBookingConfirmationEmail")

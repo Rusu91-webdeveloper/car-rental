@@ -57,6 +57,7 @@ class MemoryRepository implements BookingApplicationRepository {
   async submitForReview(input: ApplicationMutationInput) {
     return this.mutate(input, { status: "AWAITING_DOCUMENT_REVIEW" })
   }
+  async reconcileConfirmedQuoteAfterReview() { return "VALID" as const }
   async evaluateReadiness() { return { ready: false, blockers: [{ code: "DOCUMENT_APPROVAL_REQUIRED", message: "Document approval required." }] } }
   async markCustomerActionRequired(input: ApplicationMutationInput) {
     return this.mutate(input, { status: "CUSTOMER_ACTION_REQUIRED", actionRequiredReason: "PRICE_CHANGED" })

@@ -97,7 +97,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ doc
           reason: "DOCUMENT_REPLACEMENT_REQUIRED",
         })
       }
-      const readiness = await repository.evaluateReadiness(binding.bookingApplicationId)
+      let readiness = await repository.evaluateReadiness(binding.bookingApplicationId)
+      if (
+        body.decision === "APPROVED" &&
+        !readiness.ready &&
+        readiness.blockers.length === 1 &&
+        readiness.blockers[0]?.code === "QUOTE_EXPIRED"
+      ) {
+        await repository.reconcileConfirmedQuoteAfterReview(binding.bookingApplicationId)
+        readiness = await repository.evaluateReadiness(binding.bookingApplicationId)
+      }
       if (body.decision === "APPROVED" && readiness.ready) {
         const readyApplication = await repository.load(binding.bookingApplicationId)
         if (readyApplication?.status === "READY_TO_FINALIZE") {
