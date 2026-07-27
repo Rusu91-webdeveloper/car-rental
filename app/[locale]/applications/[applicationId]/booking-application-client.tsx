@@ -24,6 +24,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { formatCents } from "@/lib/money"
+import { CheckCircle2, CircleX, LoaderCircle } from "lucide-react"
 
 const TERMINAL = new Set(["FINALIZED", "EXPIRED", "CANCELLED", "REJECTED"])
 
@@ -61,10 +62,25 @@ function uploadWithProgress(input: {
     request.onload = () =>
       request.status >= 200 && request.status < 300
         ? resolve()
-        : reject(new Error("The file could not be transferred."))
+        : reject(new Error(`The file transfer failed (${request.status}).`))
     request.onerror = () => reject(new Error("The file transfer was interrupted."))
     request.send(input.file)
   })
+}
+
+type UploadFeedback = {
+  status: "uploading" | "success" | "error"
+  message?: string
+}
+
+function customerUploadError(code: string | undefined) {
+  if (code === "RATE_LIMITED") return "Too many upload attempts. Wait a moment, then try again."
+  if (["DOCUMENT_UPLOAD_INCOMPLETE", "DOCUMENT_UPLOAD_NOT_FOUND"].includes(code ?? ""))
+    return "The file transfer did not finish. Please try again."
+  if (code === "DOCUMENT_UPLOAD_METADATA_MISMATCH")
+    return "The transferred file could not be verified. Choose the file again and retry."
+  if (code?.includes("PROVIDER")) return "The upload service is temporarily unavailable. Please try again."
+  return "The document failed to upload. Please try again."
 }
 
 export function BookingApplicationClient({
@@ -80,6 +96,7 @@ export function BookingApplicationClient({
   const [application, setApplication] = useState(initialApplication)
   const [readiness, setReadiness] = useState(initialReadiness)
   const [progress, setProgress] = useState<Record<string, number>>({})
+  const [uploadFeedback, setUploadFeedback] = useState<Record<string, UploadFeedback>>({})
   const [message, setMessage] = useState<string>()
   const [terms, setTerms] = useState(false)
   const [privacy, setPrivacy] = useState(false)
@@ -100,15 +117,20 @@ export function BookingApplicationClient({
     const key = `${requirement.documentTypeId}:${slotNumber}:${side}`
     setMessage(undefined)
     if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
-      setMessage("Use a PDF, JPEG, or PNG file.")
+      const errorMessage = "Use a PDF, JPEG, or PNG file."
+      setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
+      setMessage(errorMessage)
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      setMessage("The maximum file size is 10 MiB.")
+      const errorMessage = "The maximum file size is 10 MiB."
+      setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
+      setMessage(errorMessage)
       return
     }
     try {
       setProgress((current) => ({ ...current, [key]: 1 }))
+      setUploadFeedback((current) => ({ ...current, [key]: { status: "uploading" } }))
       const checksum = await sha256(file)
       const uploadIdempotencyKey = [
         "document-upload",
@@ -116,7 +138,7 @@ export function BookingApplicationClient({
         requirement.documentTypeId,
         side,
         slotNumber,
-        checksum.slice(0, 16),
+        crypto.randomUUID().replaceAll("-", "").slice(0, 16),
         replacesDocumentId?.slice(-12) ?? "initial",
       ].join(":")
       const response = await fetch(`/api/booking-applications/${application.id}/upload-intents`, {
@@ -150,27 +172,41 @@ export function BookingApplicationClient({
             : "An upload intent could not be created.",
         )
       const delivery = created.uploadTarget.delivery
-      await uploadWithProgress({
-        url:
-          delivery.kind === "DIRECT_PUT"
-            ? delivery.accessValue
-            : `/api/booking-applications/${application.id}/upload-intents/${created.intent.id}/content`,
-        method: "PUT",
-        file,
-        headers: delivery.kind === "DIRECT_PUT" ? delivery.requiredHeaders : { "Content-Type": file.type },
-        onProgress: (value) => setProgress((current) => ({ ...current, [key]: value })),
-      })
+      let transferError: unknown
+      try {
+        await uploadWithProgress({
+          url:
+            delivery.kind === "DIRECT_PUT"
+              ? delivery.accessValue
+              : `/api/booking-applications/${application.id}/upload-intents/${created.intent.id}/content`,
+          method: "PUT",
+          file,
+          headers: delivery.kind === "DIRECT_PUT" ? delivery.requiredHeaders : { "Content-Type": file.type },
+          onProgress: (value) => setProgress((current) => ({ ...current, [key]: value })),
+        })
+      } catch (error) {
+        // A browser can lose the storage response after the bytes arrived. The
+        // completion check safely recovers that ambiguous success.
+        transferError = error
+      }
       const completed = await fetch(
         `/api/booking-applications/${application.id}/upload-intents/${created.intent.id}/complete`,
         { method: "POST" },
       )
       const result = (await completed.json()) as { code?: string }
-      if (!completed.ok) throw new Error(result.code ?? "Server verification failed.")
+      if (!completed.ok) {
+        const errorMessage = customerUploadError(result.code)
+        throw new Error(transferError instanceof Error ? `${errorMessage} ${transferError.message}` : errorMessage)
+      }
+      setProgress((current) => ({ ...current, [key]: 100 }))
+      setUploadFeedback((current) => ({ ...current, [key]: { status: "success" } }))
       setMessage("File verified and queued for manual review.")
       reload()
     } catch (error) {
       setProgress((current) => ({ ...current, [key]: 0 }))
-      setMessage(error instanceof Error ? error.message : "Upload failed.")
+      const errorMessage = error instanceof Error ? error.message : "The document failed to upload. Please try again."
+      setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
+      setMessage(errorMessage)
     }
   }
 
@@ -252,31 +288,58 @@ export function BookingApplicationClient({
                 const current = application.documents.find((document) => document.documentTypeId === requirement.documentTypeId && document.slotNumber === slot && document.side === side)
                 const key = `${requirement.documentTypeId}:${slot}:${side}`
                 const mustReplace = current && ["REJECTED", "REPLACEMENT_REQUIRED"].includes(current.manualReviewStatus)
+                const feedback = uploadFeedback[key]
+                const uploadFailed = feedback?.status === "error" || current?.uploadStatus === "FAILED" || current?.uploadStatus === "REJECTED"
+                const uploaded = feedback?.status === "success" || current?.manualReviewStatus === "PENDING_REVIEW"
+                const approved = current?.manualReviewStatus === "APPROVED"
                 return (
                   <div key={key} className="rounded-lg border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">{side === "SINGLE" ? `File ${slot}` : `${side.toLowerCase()} · file ${slot}`}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {current ? current.manualReviewStatus.replaceAll("_", " ").toLowerCase() : "Not uploaded"}
-                        </p>
+                        {feedback?.status === "uploading" ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-blue-700" role="status">
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Uploading… {progress[key] ?? 0}%
+                          </p>
+                        ) : uploadFailed ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-700" role="alert">
+                            <CircleX className="h-4 w-4" aria-hidden="true" /> Upload failed · please try again
+                          </p>
+                        ) : mustReplace ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-700" role="alert">
+                            <CircleX className="h-4 w-4" aria-hidden="true" /> Rejected · upload a replacement
+                          </p>
+                        ) : approved ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Approved
+                          </p>
+                        ) : uploaded ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Uploaded · awaiting approval
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Not uploaded</p>
+                        )}
+                        {feedback?.status === "error" && feedback.message ? (
+                          <p className="mt-1 max-w-md text-xs text-red-700">{feedback.message}</p>
+                        ) : null}
                       </div>
-                      {current?.manualReviewStatus === "APPROVED" ? (
-                        <span className="text-sm font-medium text-emerald-700">Approved</span>
-                      ) : (
+                      {!approved && feedback?.status !== "uploading" && feedback?.status !== "success" && (!uploaded || uploadFailed || mustReplace) ? (
                         <label className="cursor-pointer rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
-                          {mustReplace ? "Upload replacement" : current ? "Re-upload" : "Choose file"}
+                          {uploadFailed ? "Try again" : mustReplace ? "Upload replacement" : "Choose file"}
                           <input
                             className="sr-only"
                             type="file"
                             accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                             onChange={(event) => {
                               const file = event.target.files?.[0]
-                              if (file) void upload(file, requirement, side, slot, mustReplace ? current.id : undefined)
+                              if (file) void upload(file, requirement, side, slot, current?.id)
+                              event.target.value = ""
                             }}
                           />
                         </label>
-                      )}
+                      ) : null}
                     </div>
                     {(progress[key] ?? 0) > 0 && (progress[key] ?? 0) < 100 ? <Progress className="mt-3" value={progress[key]} /> : null}
                   </div>
@@ -331,7 +394,7 @@ export function BookingApplicationClient({
         </section>
       ) : null}
 
-      {application.status === "CUSTOMER_ACTION_REQUIRED" ? (
+      {application.status === "CUSTOMER_ACTION_REQUIRED" && application.actionRequiredReason !== "DOCUMENT_REPLACEMENT_REQUIRED" ? (
         <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
           <h2 className="font-semibold">Review renewed terms</h2>
           <p className="text-sm">The price or legal evidence changed. Confirm the server-authoritative replacement before finalization.</p>
@@ -344,7 +407,8 @@ export function BookingApplicationClient({
       {message ? <p className="rounded-lg border bg-background p-3 text-sm" role="status">{message}</p> : null}
 
       <div className="flex flex-wrap gap-3">
-        {application.status === "AWAITING_DOCUMENT_UPLOAD" ? (
+        {application.status === "AWAITING_DOCUMENT_UPLOAD" ||
+        (application.status === "CUSTOMER_ACTION_REQUIRED" && application.actionRequiredReason === "DOCUMENT_REPLACEMENT_REQUIRED") ? (
           <Button disabled={isPending} onClick={() => mutate(() => submitBookingApplicationForReview({ applicationId: application.id, expectedRevision: application.revision }))}>Submit uploaded files for review</Button>
         ) : null}
         {application.status === "READY_TO_FINALIZE" && readiness.ready ? (

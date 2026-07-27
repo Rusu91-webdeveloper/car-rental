@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
 import { useLocale } from "next-intl"
 import { Link, useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
@@ -61,6 +61,7 @@ import {
   Mail,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { ManualReservationCalendar } from "@/components/admin/manual-reservation-calendar"
 
 interface AdminUser {
   id: string
@@ -1643,6 +1644,7 @@ export default function AdminDashboard({
               <ManualReservationForm
                 cars={carsState}
                 referenceTime={generatedAt}
+                availabilityRefreshToken={manualReservationsState.map(({ id }) => id).join("|")}
                 onSubmit={handleCreateManualReservation}
                 isSubmitting={isPending}
               />
@@ -2392,11 +2394,13 @@ interface UserFormValues {
 function ManualReservationForm({
   cars,
   referenceTime,
+  availabilityRefreshToken,
   onSubmit,
   isSubmitting = false,
 }: {
   cars: AdminCar[]
   referenceTime: string
+  availabilityRefreshToken: string
   onSubmit: (reservation: ManualReservationFormValues) => void
   isSubmitting?: boolean
 }) {
@@ -2453,6 +2457,13 @@ function ManualReservationForm({
     totalPrice: 0,
   })
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [availabilityConflict, setAvailabilityConflict] = useState(false)
+  const handleCalendarRangeSelect = useCallback((pickupDate: string, dropoffDate: string) => {
+    setFormData((previous) => ({ ...previous, pickupDate, dropoffDate }))
+  }, [])
+  const handleAvailabilityConflict = useCallback((hasConflict: boolean) => {
+    setAvailabilityConflict(hasConflict)
+  }, [])
 
   useEffect(() => {
     if (!formData.carId && cars[0]?.id) {
@@ -2483,6 +2494,14 @@ function ManualReservationForm({
       }
       if (dropoffDate <= pickupDate) {
         errors.push(tr("Drop-off date must be after pickup date.", "Das Rückgabedatum muss nach dem Abholdatum liegen."))
+      }
+      if (availabilityConflict) {
+        errors.push(
+          tr(
+            "This car is already booked or blocked during the selected period.",
+            "Dieses Fahrzeug ist im ausgewählten Zeitraum bereits gebucht oder gesperrt.",
+          ),
+        )
       }
     }
 
@@ -2529,7 +2548,10 @@ function ManualReservationForm({
           <Label htmlFor="reservationCarId">{tr("Car", "Fahrzeug")}</Label>
           <Select
             value={formData.carId}
-            onValueChange={(value) => setFormData((prev) => ({ ...prev, carId: value }))}
+            onValueChange={(value) => {
+              setAvailabilityConflict(false)
+              setFormData((prev) => ({ ...prev, carId: value }))
+            }}
             disabled={isSubmitting || cars.length === 0}
           >
             <SelectTrigger id="reservationCarId">
@@ -2630,8 +2652,21 @@ function ManualReservationForm({
         </div>
       </div>
 
-      <Button type="submit" disabled={isSubmitting || cars.length === 0}>
-        {isSubmitting ? tr("Saving...", "Wird gespeichert...") : tr("Reserve Car", "Fahrzeug reservieren")}
+      <ManualReservationCalendar
+        carId={formData.carId}
+        pickupDate={formData.pickupDate}
+        dropoffDate={formData.dropoffDate}
+        refreshToken={availabilityRefreshToken}
+        onRangeSelect={handleCalendarRangeSelect}
+        onConflictChange={handleAvailabilityConflict}
+      />
+
+      <Button type="submit" disabled={isSubmitting || cars.length === 0 || availabilityConflict}>
+        {availabilityConflict
+          ? tr("Choose available dates", "Verfügbare Daten wählen")
+          : isSubmitting
+            ? tr("Saving...", "Wird gespeichert...")
+            : tr("Reserve Car", "Fahrzeug reservieren")}
       </Button>
     </form>
   )

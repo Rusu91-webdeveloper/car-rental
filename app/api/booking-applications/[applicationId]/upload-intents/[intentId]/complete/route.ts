@@ -7,8 +7,12 @@ export const dynamic = "force-dynamic"
 
 export async function POST(_request: Request, { params }: { params: Promise<{ applicationId: string; intentId: string }> }) {
   let rateLimitSubject: string | undefined
+  let applicationIdForLog = "unresolved"
+  let intentIdForLog = "unresolved"
   try {
     const { applicationId, intentId } = await params
+    applicationIdForLog = applicationId
+    intentIdForLog = intentId
     const context = await loadOwnedApplicationDocumentLifecycle(applicationId)
     rateLimitSubject = context.user.id
     await enforceRateLimit("upload:complete", context.user.id, PHASE8FB_RATE_LIMITS.uploadComplete)
@@ -30,6 +34,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ap
     }
     const code = error instanceof PrivateDocumentError ? error.code : error instanceof RateLimitExceededError ? "RATE_LIMITED" : "DOCUMENT_UPLOAD_FAILED"
     const retryAfter = error instanceof RateLimitExceededError ? String(error.retryAfterSeconds) : undefined
+    console.warn("[private-documents] upload completion rejected", {
+      applicationId: applicationIdForLog,
+      intentId: intentIdForLog,
+      code,
+      retryable: error instanceof PrivateDocumentError ? error.retryable : false,
+    })
     return Response.json({ code }, { status: code === "RATE_LIMITED" ? 429 : 409, headers: { "Cache-Control": "private, no-store", ...(retryAfter ? { "Retry-After": retryAfter } : {}) } })
   }
 }

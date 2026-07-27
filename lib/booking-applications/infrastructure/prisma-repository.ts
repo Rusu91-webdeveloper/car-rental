@@ -20,6 +20,7 @@ import type {
 } from "../domain"
 import { applicationError, BookingApplicationError } from "../errors"
 import { mapApplicationLocationToBooking } from "../mapping"
+import { selectLatestDocumentAttempts } from "../document-view"
 import type { BookingApplicationRepository } from "../repository"
 
 type Db = PrismaClient | Prisma.TransactionClient
@@ -49,12 +50,13 @@ const applicationInclude = {
   documentUploadSession: {
     include: {
       customerDocuments: {
-        where: { isCurrent: true },
+        where: { deletionStatus: { not: "DELETED" as const } },
         include: { documentType: true },
         orderBy: [
           { documentTypeId: "asc" as const },
           { slotNumber: "asc" as const },
           { side: "asc" as const },
+          { attemptNumber: "desc" as const },
         ],
       },
     },
@@ -131,7 +133,7 @@ function mapView(row: LoadedApplication): BookingApplicationView {
         }
       : undefined,
     documents:
-      row.documentUploadSession?.customerDocuments.map((document) => ({
+      selectLatestDocumentAttempts(row.documentUploadSession?.customerDocuments ?? []).map((document) => ({
         id: document.id,
         documentTypeId: document.documentTypeId,
         documentTypeKey: document.documentType.key,
@@ -749,8 +751,9 @@ export class PrismaBookingApplicationRepository
         applicationError("APPLICATION_REVISION_CONFLICT", "Application revision is stale.")
       const hasPending = row.documentUploadSession?.customerDocuments.some(
         (document) =>
-          document.isCurrent &&
-          ["PENDING_REVIEW", "APPROVED"].includes(document.manualReviewStatus),
+          document.deletionStatus === "RETAINED" &&
+          (document.manualReviewStatus === "PENDING_REVIEW" ||
+            (document.isCurrent && document.manualReviewStatus === "APPROVED")),
       )
       if (!hasPending)
         applicationError(
@@ -853,7 +856,7 @@ export class PrismaBookingApplicationRepository
   ) {
     const reason = input.reason as Prisma.BookingApplicationUpdateManyMutationInput["actionRequiredReason"]
     await touch(this.db, input, {
-      status: "CUSTOMER_ACTION_REQUIRED",
+      status: input.reason === "DOCUMENT_REPLACEMENT_REQUIRED" ? "AWAITING_DOCUMENT_UPLOAD" : "CUSTOMER_ACTION_REQUIRED",
       actionRequiredReason: reason,
       actionRequiredAt: new Date(),
     })
