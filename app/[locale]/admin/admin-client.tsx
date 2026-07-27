@@ -36,6 +36,7 @@ import {
   deleteManualReservation,
 } from "@/app/actions/admin"
 import type { OwnerSetupProgress } from "@/lib/admin/owner-console"
+import type { AdminCarPublishingStatus } from "@/lib/admin/car-publishing-status"
 import { useToast } from "@/hooks/use-toast"
 import {
   CarIcon,
@@ -81,6 +82,7 @@ interface AdminCar {
   image: string
   images: string[]
   status: "AVAILABLE" | "LOW_STOCK" | "RENTED" | "MAINTENANCE"
+  pricingPublication: AdminCarPublishingStatus
   specs: {
     gearbox: string
     seats: number
@@ -340,9 +342,21 @@ export default function AdminDashboard({
   const activeBookings = bookingsState.filter((b) => b.status === "CONFIRMED").length
   const pendingBookings = bookingsState.filter((b) => b.status === "PENDING").length
   const completedBookings = bookingsState.filter((b) => b.status === "COMPLETED").length
-  const availableCars = carsState.filter((c) => c.status === "AVAILABLE").length
+  const availableCars = carsState.filter(
+    (car) =>
+      (car.status === "AVAILABLE" || car.status === "LOW_STOCK") &&
+      (car.pricingPublication === "PUBLISHED" || car.pricingPublication === "PUBLISHED_WITH_CHANGES"),
+  ).length
   const rentedCars = carsState.filter((c) => c.status === "RENTED").length
-  const unavailableCars = carsState.filter((c) => ["LOW_STOCK", "MAINTENANCE"].includes(c.status)).length
+  const unavailableCars = carsState.filter(
+    (car) =>
+      car.status === "MAINTENANCE" ||
+      car.pricingPublication === "DRAFT" ||
+      car.pricingPublication === "NEEDS_PRICING",
+  ).length
+  const unpublishedPricingCars = carsState.filter(
+    (car) => car.pricingPublication === "DRAFT" || car.pricingPublication === "NEEDS_PRICING",
+  )
   const generatedAtTimestamp = new Date(generatedAt).getTime()
   const upcomingBookings = bookingsState
     .filter(
@@ -570,6 +584,7 @@ export default function AdminDashboard({
     image: string
     images: string[]
     status: AdminCar["status"]
+    pricingPublication?: AdminCarPublishingStatus
     gearbox: string
     seats: number
     fuelType: string
@@ -590,6 +605,7 @@ export default function AdminDashboard({
     image: car.image,
     images: car.images || [],
     status: car.status,
+    pricingPublication: car.pricingPublication ?? "NEEDS_PRICING",
     specs: {
       gearbox: car.gearbox,
       seats: car.seats,
@@ -626,7 +642,13 @@ export default function AdminDashboard({
         })
 
         if (result?.car) {
-          setCarsState((prev) => [mapCar(result.car), ...prev])
+          const pricingPublication: AdminCarPublishingStatus =
+            result.bookingStatus === "ACTIVE"
+              ? "PUBLISHED"
+              : result.bookingStatus === "PENDING_REVIEW" || result.bookingStatus === "SETUP_DRAFT"
+                ? "DRAFT"
+                : "NEEDS_PRICING"
+          setCarsState((prev) => [mapCar({ ...result.car, pricingPublication }), ...prev])
           setIsAddDialogOpen(false)
           const bookingMessage = result.bookingStatus === "ACTIVE"
             ? tr("Car created and published for online booking.", "Das Fahrzeug wurde erstellt und für Online-Buchungen veröffentlicht.")
@@ -699,7 +721,13 @@ export default function AdminDashboard({
         })
 
         if (result?.car) {
-          setCarsState((prev) => prev.map((car) => (car.id === carId ? mapCar(result.car) : car)))
+          setCarsState((prev) =>
+            prev.map((car) =>
+              car.id === carId
+                ? mapCar({ ...result.car, pricingPublication: car.pricingPublication })
+                : car,
+            ),
+          )
           setEditCarId((current) => (current === carId ? null : current))
           toast({
             title: tr("Success", "Erfolg"),
@@ -1292,6 +1320,31 @@ export default function AdminDashboard({
               {tr("Add cars, update availability, and keep their customer details accurate.", "Fügen Sie Fahrzeuge hinzu, aktualisieren Sie die Verfügbarkeit und halten Sie die Kundenangaben korrekt.")}
             </p>
           </header>
+          {unpublishedPricingCars.length > 0 ? (
+            <Alert className="border-amber-300 bg-amber-50 text-amber-950">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>
+                {tr(
+                  `${unpublishedPricingCars.length} ${unpublishedPricingCars.length === 1 ? "car is" : "cars are"} not bookable yet`,
+                  `${unpublishedPricingCars.length} ${unpublishedPricingCars.length === 1 ? "Fahrzeug ist" : "Fahrzeuge sind"} noch nicht buchbar`,
+                )}
+              </AlertTitle>
+              <AlertDescription className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  {tr(
+                    "Their prices are saved as draft changes and must be published before customers can book them.",
+                    "Die Preise sind als Entwurf gespeichert und müssen veröffentlicht werden, bevor Kunden buchen können.",
+                  )}
+                </span>
+                <Button asChild size="sm" className="shrink-0">
+                  <Link href="/admin/advanced/configuration">
+                    {tr("Review and publish", "Prüfen und veröffentlichen")}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {/* Search and Filter */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -1354,19 +1407,39 @@ export default function AdminDashboard({
                           <h3 className="font-bold text-lg">{getCarName(car)}</h3>
                           <p className="text-sm text-muted-foreground">{getCarSubtitle(car)}</p>
                         </div>
-                        <Badge
-                          variant={
-                            car.status === "AVAILABLE"
-                              ? "default"
-                              : car.status === "LOW_STOCK"
-                                ? "secondary"
-                                : "outline"
-                          }
-                        >
-                          {car.status === "LOW_STOCK"
-                            ? tr("LIMITED AVAILABILITY", "BEGRENZT VERFÜGBAR")
-                            : tr(car.status, ({ AVAILABLE: "VERFÜGBAR", RENTED: "VERMIETET", MAINTENANCE: "WARTUNG" } as const)[car.status as "AVAILABLE" | "RENTED" | "MAINTENANCE"] ?? car.status)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                          <Badge
+                            variant={
+                              car.status === "AVAILABLE"
+                                ? "default"
+                                : car.status === "LOW_STOCK"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
+                            {car.status === "LOW_STOCK"
+                              ? tr("LIMITED AVAILABILITY", "BEGRENZT VERFÜGBAR")
+                              : tr(car.status, ({ AVAILABLE: "VERFÜGBAR", RENTED: "VERMIETET", MAINTENANCE: "WARTUNG" } as const)[car.status as "AVAILABLE" | "RENTED" | "MAINTENANCE"] ?? car.status)}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={
+                              car.pricingPublication === "PUBLISHED"
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                : car.pricingPublication === "PUBLISHED_WITH_CHANGES"
+                                  ? "border-blue-300 bg-blue-50 text-blue-800"
+                                  : "border-amber-300 bg-amber-50 text-amber-800"
+                            }
+                          >
+                            {car.pricingPublication === "PUBLISHED"
+                              ? tr("PRICE PUBLISHED", "PREIS VERÖFFENTLICHT")
+                              : car.pricingPublication === "PUBLISHED_WITH_CHANGES"
+                                ? tr("PUBLISHED · CHANGES PENDING", "VERÖFFENTLICHT · ÄNDERUNGEN AUSSTEHEND")
+                                : car.pricingPublication === "DRAFT"
+                                  ? tr("DRAFT · NOT BOOKABLE", "ENTWURF · NICHT BUCHBAR")
+                                  : tr("PRICING REQUIRED", "PREIS ERFORDERLICH")}
+                          </Badge>
+                        </div>
                       </div>
 
                       <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">

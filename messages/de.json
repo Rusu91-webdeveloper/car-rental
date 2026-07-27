@@ -154,7 +154,7 @@
   },
   "cars": {
     "title": "Alle Autos",
-    "subtitle": "{count} {count, plural, one {Auto} other {Autos}} verfügbar",
+    "subtitle": "{count} {count, plural, one {Auto} other {Autos}} buchbar",
     "noCars": "Keine Autos gefunden",
     "adjustFilters": "Versuchen Sie, Ihre Filter oder Suchanfrage anzupassen",
     "clearFilters": "Filter löschen"
@@ -162,6 +162,8 @@
   "car": {
     "category": "Kategorie",
     "pricePerDay": "Pro Tag",
+    "priceComingSoon": "Preis folgt in Kürze",
+    "bookingUnavailable": "Buchung noch nicht möglich",
     "rating": "Bewertung",
     "reviews": "{count} {count, plural, one {Bewertung} other {Bewertungen}}",
     "seats": "{count} {count, plural, one {Sitzplatz} other {Sitzplätze}}",
@@ -280,6 +282,7 @@
   },
   "saved": {
     "title": "Gespeicherte Autos",
+    "subtitle": "{count} gespeicherte {count, plural, one {Auto} other {Autos}}",
     "noSaved": "Keine gespeicherten Autos",
     "explore": "Durchsuchen Sie Autos und speichern Sie Ihre Favoriten",
     "browseCars": "Autos ansehen"
@@ -333,7 +336,8 @@
     "available": "Verfügbar",
     "lowStock": "Niedriger Bestand",
     "rented": "Vermietet",
-    "maintenance": "Wartung"
+    "maintenance": "Wartung",
+    "comingSoon": "Demnächst verfügbar"
   },
   "filters": {
     "year": "Ab Jahr",

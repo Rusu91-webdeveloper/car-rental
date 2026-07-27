@@ -9,11 +9,13 @@ export function BookNowButton({
   signInUrl,
   isSignedIn,
   label,
+  disabled = false,
 }: {
   carId: string
   signInUrl: string
   isSignedIn: boolean
   label: string
+  disabled?: boolean
 }) {
   const locale = useLocale()
   const searchParams = useSearchParams()
@@ -41,6 +43,17 @@ export function BookNowButton({
     ? checkoutUrl 
     : `${signInUrl}?redirect_url=${encodeURIComponent(redirectUrl)}`
 
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className="cursor-not-allowed rounded-xl bg-muted px-8 py-4 font-semibold text-muted-foreground"
+      >
+        {label}
+      </span>
+    )
+  }
+
   return (
     <Link
       href={href}
@@ -50,4 +63,3 @@ export function BookNowButton({
     </Link>
   )
 }
-

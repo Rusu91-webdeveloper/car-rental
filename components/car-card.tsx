@@ -15,7 +15,8 @@ interface Car {
   name: string
   nameDe?: string | null
   category: string
-  price: number
+  price: number | null
+  pricingPublished: boolean
   image: string
   status: string
   specs: {
@@ -47,6 +48,7 @@ export function CarCard({
   const displayName = locale === "de" ? car.nameDe || car.name : car.name
   const categoryKey = car.category.toLowerCase()
   const categoryLabel = t(`categories.${categoryKey}`)
+  const bookingEnabled = car.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK")
 
   // Preserve date query params when linking to car detail page
   const getCarDetailUrl = () => {
@@ -84,6 +86,9 @@ export function CarCard({
   }
 
   const getStatusColor = (status: string) => {
+    if (!car.pricingPublished && (status === "AVAILABLE" || status === "LOW_STOCK")) {
+      return "bg-slate-100 text-slate-700"
+    }
     switch (status) {
       case "AVAILABLE":
         return "bg-[#dff0a5] text-[#20370f]"
@@ -97,6 +102,9 @@ export function CarCard({
   }
 
   const getStatusText = (status: string) => {
+    if (!car.pricingPublished && (status === "AVAILABLE" || status === "LOW_STOCK")) {
+      return t("carStatus.comingSoon")
+    }
     switch (status) {
       case "AVAILABLE":
         return t("carStatus.available")
@@ -157,8 +165,10 @@ export function CarCard({
             </div>
             <div className="shrink-0 text-right">
               <div className="text-lg font-bold text-[#13251d]">
-                {formatCents(car.price)}
-                <span className="text-sm font-normal text-slate-500">/ {t("car.pricePerDay")}</span>
+                {car.pricingPublished && car.price !== null ? formatCents(car.price) : t("car.priceComingSoon")}
+                {car.pricingPublished ? (
+                  <span className="text-sm font-normal text-slate-500">/ {t("car.pricePerDay")}</span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -226,12 +236,18 @@ export function CarCard({
           </div>
 
           {/* Book Button */}
-          <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13251d] px-4 py-3 font-semibold text-white transition-colors hover:bg-[#1e372b]">
-            <span>{t("common.bookNow")}</span>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          <div
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold ${
+              bookingEnabled ? "bg-[#13251d] text-white transition-colors group-hover:bg-[#1e372b]" : "bg-slate-100 text-slate-500"
+            }`}
+          >
+            <span>{bookingEnabled ? t("common.bookNow") : t("car.bookingUnavailable")}</span>
+            {bookingEnabled ? (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            ) : null}
+          </div>
         </div>
       </article>
     </Link>

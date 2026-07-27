@@ -10,6 +10,7 @@ import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
 import type { Car, User } from "@prisma/client"
 import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import { getAdminCarPublishingStatuses } from "@/lib/admin/car-publishing-status"
 
 export const dynamic = "force-dynamic"
 
@@ -197,6 +198,10 @@ export default async function AdminPage({
     })
     .filter((reservation): reservation is NonNullable<typeof reservation> => reservation !== null)
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
+  const carPublishingStatuses = await getAdminCarPublishingStatuses(
+    prisma,
+    cars.map((car) => car.id),
+  )
   const allowedSections = new Set(["overview", "cars", "bookings", "users", "reviews", "analytics"])
   const initialSection = requestedSection && allowedSections.has(requestedSection) ? requestedSection : "overview"
   const settingsGuide = buildOwnerSettingsGuide({
@@ -247,6 +252,7 @@ export default async function AdminPage({
           image: car.image,
           images: car.images,
           status: car.status,
+          pricingPublication: carPublishingStatuses.get(car.id) ?? "NEEDS_PRICING",
           specs: {
             gearbox: car.gearbox,
             seats: car.seats,

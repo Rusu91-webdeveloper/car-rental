@@ -154,7 +154,7 @@
   },
   "cars": {
     "title": "All Cars",
-    "subtitle": "{count} {count, plural, one {car} other {cars}} available",
+    "subtitle": "{count} {count, plural, one {car} other {cars}} available to book",
     "noCars": "No cars found",
     "adjustFilters": "Try adjusting your filters or search query",
     "clearFilters": "Clear Filters"
@@ -162,6 +162,8 @@
   "car": {
     "category": "Category",
     "pricePerDay": "Per Day",
+    "priceComingSoon": "Price coming soon",
+    "bookingUnavailable": "Booking unavailable",
     "rating": "Rating",
     "reviews": "{count} {count, plural, one {review} other {reviews}}",
     "seats": "{count} {count, plural, one {seat} other {seats}}",
@@ -280,6 +282,7 @@
   },
   "saved": {
     "title": "Saved Cars",
+    "subtitle": "{count} saved {count, plural, one {car} other {cars}}",
     "noSaved": "No saved cars",
     "explore": "Explore cars and save your favorites",
     "browseCars": "Browse Cars"
@@ -333,7 +336,8 @@
     "available": "Available",
     "lowStock": "Low Stock",
     "rented": "Rented",
-    "maintenance": "Maintenance"
+    "maintenance": "Maintenance",
+    "comingSoon": "Coming soon"
   },
   "filters": {
     "year": "From Year",

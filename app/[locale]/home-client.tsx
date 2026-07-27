@@ -22,7 +22,8 @@ interface Car {
   name: string
   nameDe?: string | null
   category: string
-  price: number
+  price: number | null
+  pricingPublished: boolean
   image: string
   status: string
   subtitle?: string | null
@@ -134,8 +135,11 @@ export function HomeClient({
   }
 
   const featuredCar = cars[0]
-  const totalCars = cars.length
-  const categoryCount = new Set(cars.map((car) => car.category)).size
+  const bookableCars = cars.filter(
+    (car) => car.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK"),
+  )
+  const totalCars = bookableCars.length
+  const categoryCount = new Set(bookableCars.map((car) => car.category)).size
   const averageRating = cars.length
     ? cars.reduce((sum, car) => sum + car.rating, 0) / cars.length
     : 0
@@ -342,8 +346,12 @@ export function HomeClient({
                       <div>
                         <p className="text-xs uppercase tracking-[0.16em] text-white/70">{featuredCategoryLabel}</p>
                         <p className="text-xl font-semibold">
-                          {featuredCar ? formatCents(featuredCar.price) : ""}
-                          <span className="ml-1 text-sm text-white/80">/ {t("car.pricePerDay")}</span>
+                          {featuredCar?.pricingPublished && featuredCar.price !== null
+                            ? formatCents(featuredCar.price)
+                            : t("car.priceComingSoon")}
+                          {featuredCar?.pricingPublished ? (
+                            <span className="ml-1 text-sm text-white/80">/ {t("car.pricePerDay")}</span>
+                          ) : null}
                         </p>
                       </div>
                       {featuredCar ? (

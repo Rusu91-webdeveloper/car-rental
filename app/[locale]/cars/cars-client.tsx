@@ -17,7 +17,8 @@ interface Car {
   name: string
   nameDe?: string | null
   category: string
-  price: number
+  price: number | null
+  pricingPublished: boolean
   image: string
   status: string
   subtitle?: string | null
@@ -61,6 +62,9 @@ export function CarsClient({
 
   const pickupDateParam = searchParams.get("pickupDate")
   const dropoffDateParam = searchParams.get("dropoffDate")
+  const availableCarCount = filteredCars.filter(
+    (car) => car.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK"),
+  ).length
 
   useEffect(() => {
     const filterCars = async () => {
@@ -104,7 +108,7 @@ export function CarsClient({
               <span className="hidden h-9 w-px bg-black/10 sm:block" />
               <div>
                 <h1 className="text-lg font-bold sm:text-xl">{t("cars.title")}</h1>
-                <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: filteredCars.length })}</p>
+                <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: availableCarCount })}</p>
               </div>
             </div>
             <ClientOnly>

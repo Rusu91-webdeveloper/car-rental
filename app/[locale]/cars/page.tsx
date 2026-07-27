@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CarsClient } from "./cars-client"
+import { getPublicCarPrices } from "@/lib/cars/public-pricing"
 
 export const dynamic = "force-dynamic"
 
@@ -12,6 +13,7 @@ export default async function CarsPage() {
     orderBy: { createdAt: "desc" },
   })
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
+  const publicPrices = await getPublicCarPrices(prisma, cars)
 
   const savedCarIds = user
     ? await prisma.savedCar.findMany({
@@ -24,13 +26,15 @@ export default async function CarsPage() {
     <CarsClient
       cars={cars.map((car) => {
         const stats = getCarReviewStats(reviewStatsByCar, car.id)
+        const publicPrice = publicPrices.get(car.id)!
 
         return {
           id: car.id,
           name: car.name,
           nameDe: car.nameDe,
           category: car.category,
-          price: car.price,
+          price: publicPrice.price,
+          pricingPublished: publicPrice.pricingPublished,
           image: car.image,
           status: car.status,
           subtitle: car.subtitle,
