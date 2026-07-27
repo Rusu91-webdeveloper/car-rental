@@ -24,7 +24,6 @@ import {
   minimumReturnAt,
 } from "@/lib/booking-configuration/minimum-rental"
 import {
-  LATE_RETURN_SAFETY_BUFFER_MINUTES,
   totalOperationalBufferMinutes,
 } from "@/lib/rental-timing"
 
@@ -946,17 +945,12 @@ export function CheckoutClient({
               <section className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
                 <div>
                   <h4 className="font-semibold">
-                    {locale === "de" ? "Verbindliche Rückgabezeit und verspätete Rückgabe" : "Mandatory return time and late return"}
+                    {locale === "de" ? "Rückgabezeit und Gebühren bei verspäteter Rückgabe" : "Return time and late-return charges"}
                   </h4>
                   <p className="mt-2 text-sm">
                     {locale === "de"
-                      ? `Das Fahrzeug muss zur vereinbarten Zeit zurückgegeben werden. Die Kulanzzeit von ${bookingConfiguration.gracePeriodMinutes} Minuten bestimmt nur, wann ein weiterer 24-Stunden-Miettag berechnet wird. Die Berechnung eines weiteren Tages verlängert den Mietvertrag nicht und berechtigt nicht dazu, das Fahrzeug länger zu behalten. Jede Verlängerung muss der Vermieter vorher ausdrücklich genehmigen. Eine nicht genehmigte Weiternutzung kann weitere gesetzlich zulässige Ansprüche auslösen.`
-                      : `The vehicle must be returned at the agreed time. The ${bookingConfiguration.gracePeriodMinutes}-minute grace period determines only when another 24-hour rental day is charged. Charging another day does not extend the rental agreement or authorize keeping the vehicle longer. Any extension requires the rental company's express approval in advance. Unauthorized continued use may lead to further claims permitted by law.`}
-                  </p>
-                  <p className="mt-2 text-xs">
-                    {locale === "de"
-                      ? `Nach der geplanten Rückgabe blockiert das System insgesamt ${operationalBufferMinutes} Minuten: ${LATE_RETURN_SAFETY_BUFFER_MINUTES} Minuten für eine mögliche Verspätung und anschließend ${bookingConfiguration.preparationBufferMinutes} Minuten für Kontrolle, Reinigung und Vorbereitung.`
-                      : `After the scheduled return, the system blocks ${operationalBufferMinutes} minutes in total: ${LATE_RETURN_SAFETY_BUFFER_MINUTES} minutes for possible lateness, followed by ${bookingConfiguration.preparationBufferMinutes} minutes for inspection, cleaning and preparation.`}
+                      ? `Das Fahrzeug muss zu dem in Ihrer Buchung vereinbarten Zeitpunkt zurückgegeben werden. Erfolgt die Rückgabe mehr als ${bookingConfiguration.gracePeriodMinutes} Minuten verspätet, wird ein zusätzlicher Miettag berechnet. Diese Berechnung verlängert Ihre Buchung nicht und berechtigt Sie nicht, das Fahrzeug für den restlichen Tag zu behalten. Eine Verlängerung muss vor der vereinbarten Rückgabezeit beim Vermieter angefragt und von diesem genehmigt werden.`
+                      : `The vehicle must be returned at the time stated in your booking. If it is returned more than ${bookingConfiguration.gracePeriodMinutes} minutes late, you will be charged for an additional rental day. This charge does not extend your booking or allow you to keep the vehicle for the rest of that day. Any extension must be requested and approved by the rental company before the agreed return time.`}
                   </p>
                 </div>
                 <label className="flex items-start gap-3">
@@ -968,8 +962,8 @@ export function CheckoutClient({
                   />
                   <span className="text-sm font-medium">
                     {locale === "de"
-                      ? "Ich verstehe, dass eine zusätzliche Tagesberechnung keine Vertragsverlängerung oder Erlaubnis zur weiteren Nutzung darstellt."
-                      : "I understand that an additional-day charge is not a contract extension or permission to continue using the vehicle."}
+                      ? `Ich verstehe, dass bei einer Verspätung von mehr als ${bookingConfiguration.gracePeriodMinutes} Minuten ein zusätzlicher Miettag berechnet wird und dass sich dadurch meine vereinbarte Rückgabezeit nicht verlängert.`
+                      : `I understand that returning the vehicle more than ${bookingConfiguration.gracePeriodMinutes} minutes late will result in an additional-day charge and does not extend my agreed return time.`}
                   </span>
                 </label>
               </section>

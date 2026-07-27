@@ -8,6 +8,18 @@ import {
 
 type DbClient = PrismaClient | Prisma.TransactionClient
 
+function availabilityBlockingBookingFilter(now: Date): Prisma.BookingWhereInput {
+  return {
+    OR: [
+      { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
+      {
+        status: "PENDING",
+        OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: now } }],
+      },
+    ],
+  }
+}
+
 async function resolvePreparationBufferMinutes(db: DbClient): Promise<number> {
   const activeRelease = await db.businessConfigurationRelease.findFirst({
     where: { status: "ACTIVE" },
@@ -33,17 +45,12 @@ export async function isCarAvailable(
   const preparationBufferMinutes = await resolvePreparationBufferMinutes(db)
   const pickupBeforeBuffer = subtractOperationalBuffer(pickupDate, preparationBufferMinutes)
   const dropoffWithBuffer = addOperationalBuffer(dropoffDate, preparationBufferMinutes)
+  const now = new Date()
   const overlappingBookings = await db.booking.findMany({
     where: {
       carId,
       id: excludeBookingId ? { not: excludeBookingId } : undefined,
-      OR: [
-        { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
-        {
-          status: "PENDING",
-          OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: new Date() } }],
-        },
-      ],
+      ...availabilityBlockingBookingFilter(now),
       AND: [
         {
           pickupDate: {
@@ -85,18 +92,13 @@ export async function getUnavailableDates(
   carId: string,
   db: DbClient = prisma,
 ): Promise<{ start: Date; end: Date }[]> {
+  const now = new Date()
   const [preparationBufferMinutes, bookings, blockedDates] = await Promise.all([
     resolvePreparationBufferMinutes(db),
     db.booking.findMany({
       where: {
         carId,
-        OR: [
-          { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
-          {
-            status: "PENDING",
-            OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: new Date() } }],
-          },
-        ],
+        ...availabilityBlockingBookingFilter(now),
       },
       select: {
         pickupDate: true,
