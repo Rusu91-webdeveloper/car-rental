@@ -17,7 +17,27 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(checkout).toContain("beginBookingApplication")
     expect(checkout).toContain("Pick-up and return location")
     expect(checkout).toContain("Continue to document upload")
+    expect(checkout).toContain("The car must be picked up and returned at the rental company’s location.")
+    expect(checkout).not.toContain('searchParams.get("location")')
+    expect(checkout).not.toContain("SFO International Airport")
+    expect(read("app/actions/booking-applications.ts")).toContain("formatCompanyPickupLocation(companySettings)")
+    expect(read("app/actions/booking-applications.ts")).not.toContain("value.sharedLocation")
     expect(checkout).not.toContain("const result = await createBooking(")
+  })
+
+  it("requires late-return acknowledgement and explains the fixed preparation buffer", () => {
+    const checkout = read("app/[locale]/checkout/[id]/checkout-client.tsx")
+    const actions = read("app/actions/booking-applications.ts")
+    const terms = read("app/[locale]/agb/page.tsx")
+    const availability = read("lib/availability.ts")
+
+    expect(checkout).toContain("Charging another day does not extend the rental agreement")
+    expect(checkout).toContain("legalAcknowledgements.lateReturnPolicy")
+    expect(actions).toContain("lateReturnPolicy: z.literal(true")
+    expect(actions).toContain("booking_application.late_return_policy_acknowledged")
+    expect(terms).toContain("§ 545 BGB wird ausgeschlossen")
+    expect(availability).toContain("addOperationalBuffer(b.dropoffDate, preparationBufferMinutes)")
+    expect(availability).toContain("subtractOperationalBuffer(b.pickupDate, preparationBufferMinutes)")
   })
 
   it("provides opaque resume, upload, review, access, and worker routes", () => {

@@ -67,6 +67,7 @@ export const pricingBillingConfigurationSchema = z.object({
     "PICKUP_TIME_BOUNDARY",
   ]),
   gracePeriodMinutes: z.number().int().min(0).max(720),
+  preparationBufferMinutes: z.number().int().min(0).max(720),
   minimumRentalMinutes: z.number().int().min(1).max(525_600),
   minimumChargeDays: z.number().int().min(1).max(365),
   pricesIncludeTax: z.boolean(),

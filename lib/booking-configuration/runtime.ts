@@ -122,6 +122,8 @@ export async function resolvePublicBookingConfiguration(input: {
       mode: "LEGACY",
       businessTimeZone: "UTC",
       minimumRentalMinutes: 1,
+      gracePeriodMinutes: 0,
+      preparationBufferMinutes: 120,
       fields: [],
       steps: [],
     }
@@ -164,6 +166,8 @@ export async function resolvePublicBookingConfiguration(input: {
     bookingWorkflowConfigVersionId: record.workflowVersionId,
     businessTimeZone: record.businessTimeZone,
     minimumRentalMinutes: record.minimumRentalMinutes,
+    gracePeriodMinutes: record.gracePeriodMinutes,
+    preparationBufferMinutes: record.preparationBufferMinutes,
     fields: resolveEffectiveBookingFields(record.customerDriver),
     steps: resolveEffectiveBookingFlow(record.workflow, record.legal),
     insurance: {

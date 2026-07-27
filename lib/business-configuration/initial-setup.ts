@@ -128,6 +128,7 @@ export async function initializeBusinessConfiguration(
               rentalMonthDefinition: "FIXED_30_DAYS",
               billableDayMethod: "STARTED_24_HOUR_PERIODS",
               gracePeriodMinutes: 0,
+              preparationBufferMinutes: 120,
               minimumRentalMinutes: 1_440,
               minimumChargeDays: 1,
               priceTaxTreatment: settings?.taxIncluded ? "TAX_INCLUDED" : "TAX_EXCLUDED",

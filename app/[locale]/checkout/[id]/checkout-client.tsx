@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCents } from "@/lib/money"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, MapPin } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { BookingCustomerDriverInput, PublicBookingConfiguration } from "@/lib/booking-configuration/types"
 import { LegalContent } from "@/components/legal/legal-content"
@@ -23,6 +23,10 @@ import {
   minimumRentalPeriodMessage,
   minimumReturnAt,
 } from "@/lib/booking-configuration/minimum-rental"
+import {
+  LATE_RETURN_SAFETY_BUFFER_MINUTES,
+  totalOperationalBufferMinutes,
+} from "@/lib/rental-timing"
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear()
@@ -51,6 +55,7 @@ export function CheckoutClient({
   car,
   signInUrl,
   bookingConfiguration,
+  pickupLocation,
   initialCustomer,
 }: {
   locale: string
@@ -71,6 +76,7 @@ export function CheckoutClient({
     iban?: string | null
   }
   bookingConfiguration: PublicBookingConfiguration
+  pickupLocation: string | null
   initialCustomer: BookingCustomerDriverInput
 }) {
   const router = useRouter()
@@ -107,13 +113,6 @@ export function CheckoutClient({
   const [pickupDate, setPickupDate] = useState(initialDates.pickup)
   const [dropoffDate, setDropoffDate] = useState(initialDates.dropoff)
 
-  // Get location from URL params or use default
-  const getInitialLocation = () => {
-    const locationParam = searchParams.get("location")
-    return locationParam || "SFO International Airport"
-  }
-
-  const [location, setLocation] = useState(getInitialLocation())
   const [isAvailabilityLoading, setIsAvailabilityLoading] = useState(true)
   const [unavailableRanges, setUnavailableRanges] = useState<{ start: Date; end: Date }[]>([])
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
@@ -143,39 +142,20 @@ export function CheckoutClient({
     return dateCopy < today
   }
 
-  const isUnavailableDate = (date: Date) => unavailableDateSet.has(formatDateKey(date))
+  const hasUnavailableTime = (date: Date) => unavailableDateSet.has(formatDateKey(date))
+  const isTimeUnavailable = (date: Date) =>
+    unavailableRanges.some((range) => date >= range.start && date < range.end)
+  const rangeOverlapsUnavailableTime = (start: Date, end: Date) =>
+    unavailableRanges.some((range) => start < range.end && end > range.start)
 
-  const rangeHasUnavailableDays = (start: Date, end: Date) => {
-    const from = new Date(start)
-    const to = new Date(end)
-    from.setHours(0, 0, 0, 0)
-    to.setHours(0, 0, 0, 0)
-
-    const current = new Date(from)
-    while (current <= to) {
-      if (isUnavailableDate(current)) {
-        return true
-      }
-      current.setDate(current.getDate() + 1)
-    }
-
-    return false
-  }
-
-  // Update dates and location when URL params change
+  // Update dates when URL params change.
   /* eslint-disable react-hooks/set-state-in-effect -- URL parameters intentionally synchronize controlled form state. */
   useEffect(() => {
     const pickupDateParam = searchParams.get("pickupDate")
     const dropoffDateParam = searchParams.get("dropoffDate")
-    const locationParam = searchParams.get("location")
-
     if (pickupDateParam && dropoffDateParam) {
       setPickupDate(convertDateStringToDatetimeLocal(pickupDateParam, 10))
       setDropoffDate(convertDateStringToDatetimeLocal(dropoffDateParam, 10))
-    }
-
-    if (locationParam) {
-      setLocation(locationParam)
     }
   }, [searchParams])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -237,6 +217,7 @@ export function CheckoutClient({
   const [legalAcknowledgements, setLegalAcknowledgements] = useState({
     rentalTerms: false,
     privacyNotice: false,
+    lateReturnPolicy: false,
   })
   const [isPending, startTransition] = useTransition()
   const [quote, setQuote] = useState<
@@ -251,6 +232,7 @@ export function CheckoutClient({
   const [isQuoteLoading, setIsQuoteLoading] = useState(true)
   const configuredMinimumDays = minimumRentalDays(bookingConfiguration.minimumRentalMinutes)
   const minimumDurationMessage = minimumRentalPeriodMessage(locale, bookingConfiguration.minimumRentalMinutes)
+  const operationalBufferMinutes = totalOperationalBufferMinutes(bookingConfiguration.preparationBufferMinutes)
 
   const updateQueryParams = (updates: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -350,7 +332,7 @@ export function CheckoutClient({
   }
 
   const isDropoffDateDisabled = (date: Date) => {
-    if (isDateInPast(date) || isUnavailableDate(date)) {
+    if (isDateInPast(date)) {
       return true
     }
 
@@ -379,7 +361,7 @@ export function CheckoutClient({
     }
 
     for (let i = 0; i < 370; i += 1) {
-      if (candidate >= earliestDropoff && !isUnavailableDate(candidate) && !rangeHasUnavailableDays(pickup, candidate)) {
+      if (candidate >= earliestDropoff && !rangeOverlapsUnavailableTime(pickup, candidate)) {
         return candidate
       }
       candidate.setDate(candidate.getDate() + 1)
@@ -394,8 +376,8 @@ export function CheckoutClient({
       return false
     }
 
-    if (isUnavailableDate(nextPickup)) {
-      setError("This pickup date is already booked. Please choose another date.")
+    if (isTimeUnavailable(nextPickup)) {
+      setError("This pickup time is booked or reserved for vehicle preparation. Please choose another time.")
       return false
     }
 
@@ -427,14 +409,9 @@ export function CheckoutClient({
       return false
     }
 
-    if (isUnavailableDate(parsedDropoff)) {
-      setError("This drop-off date is already booked. Please choose another date.")
-      return false
-    }
-
     const currentPickup = new Date(pickupDate)
     if (!Number.isNaN(currentPickup.getTime())) {
-      let nextDropoff = new Date(parsedDropoff)
+      const nextDropoff = new Date(parsedDropoff)
 
       if (
         nextDropoff <= currentPickup ||
@@ -444,13 +421,9 @@ export function CheckoutClient({
         return false
       }
 
-      if (rangeHasUnavailableDays(currentPickup, nextDropoff)) {
-        const nextAvailableDropoff = findNextValidDropoff(currentPickup, nextDropoff)
-        if (!nextAvailableDropoff) {
-          setError("No available drop-off dates were found after this pick-up date.")
-          return false
-        }
-        nextDropoff = nextAvailableDropoff
+      if (rangeOverlapsUnavailableTime(currentPickup, nextDropoff)) {
+        setError("The selected times overlap a booking, block, or vehicle preparation period.")
+        return false
       }
 
       setDropoffDate(formatDatetimeLocal(nextDropoff))
@@ -596,8 +569,12 @@ export function CheckoutClient({
       return
     }
 
-    if (rangeHasUnavailableDays(pickup, dropoff)) {
-      setError("Your selected range includes booked dates. Please choose different dates.")
+    if (rangeOverlapsUnavailableTime(pickup, dropoff)) {
+      setError("Your selected times overlap a booking, block, or vehicle preparation period.")
+      return
+    }
+    if (!pickupLocation) {
+      setError("The rental company pickup address is not configured. Please contact support.")
       return
     }
     const missingLegalAcknowledgement = bookingConfiguration.legal?.documents.find(
@@ -609,6 +586,10 @@ export function CheckoutClient({
     )
     if (missingLegalAcknowledgement) {
       setError(`Please acknowledge ${missingLegalAcknowledgement.title} before booking.`)
+      return
+    }
+    if (!legalAcknowledgements.lateReturnPolicy) {
+      setError(locale === "de" ? "Bitte bestätigen Sie die Rückgabe- und Verspätungsregeln." : "Please acknowledge the return-time and late-use rules.")
       return
     }
 
@@ -627,7 +608,6 @@ export function CheckoutClient({
         carId: car.id,
         pickupAt: pickupISO,
         returnAt: dropoffISO,
-        sharedLocation: location,
         paymentMethod,
         locale: locale === "de" ? "de" : "en",
         insuranceSelected,
@@ -708,13 +688,13 @@ export function CheckoutClient({
                       mode="single"
                       selected={pickupDateValue}
                       onSelect={handlePickupDateSelect}
-                      disabled={(date) => isDateInPast(date) || isUnavailableDate(date)}
+                      disabled={(date) => isDateInPast(date)}
                       modifiers={{
-                        unavailable: (date) => isUnavailableDate(date),
+                        unavailable: (date) => hasUnavailableTime(date),
                       }}
                       modifiersClassNames={{
                         unavailable:
-                          "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
+                          "!bg-red-100 !text-red-700 !opacity-100 hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
                       }}
                       initialFocus
                     />
@@ -750,11 +730,11 @@ export function CheckoutClient({
                       onSelect={handleDropoffDateSelect}
                       disabled={isDropoffDateDisabled}
                       modifiers={{
-                        unavailable: (date) => isUnavailableDate(date),
+                        unavailable: (date) => hasUnavailableTime(date),
                       }}
                       modifiersClassNames={{
                         unavailable:
-                          "!bg-red-100 !text-red-700 !opacity-100 line-through hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
+                          "!bg-red-100 !text-red-700 !opacity-100 hover:!bg-red-100 dark:!bg-red-900/30 dark:!text-red-300",
                       }}
                       initialFocus
                     />
@@ -776,7 +756,9 @@ export function CheckoutClient({
             <p className="text-xs text-muted-foreground">
               {isAvailabilityLoading
                 ? "Loading unavailable dates..."
-                : "Booked dates are red in the date picker and cannot be selected."}
+                : locale === "de"
+                  ? `Rote Tage enthalten belegte Zeiten. Freie Uhrzeiten am selben Tag können gewählt werden. Nach jeder Rückgabe sind insgesamt ${operationalBufferMinutes} Minuten gesperrt: 60 Minuten Verspätungspuffer und ${bookingConfiguration.preparationBufferMinutes} Minuten Vorbereitung.`
+                  : `Red days contain unavailable times. Free times on the same day remain selectable. Every return is followed by a ${operationalBufferMinutes}-minute block: 60 minutes for possible lateness and ${bookingConfiguration.preparationBufferMinutes} minutes for preparation.`}
             </p>
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground" role="status">
               <span className="font-medium">
@@ -798,15 +780,23 @@ export function CheckoutClient({
             {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
 
             <div className="space-y-2">
-              <Label htmlFor="location">Pick-up and return location</Label>
-              <Input
-                id="location"
-                value={location}
-                onChange={(e) => {
-                  setLocation(e.target.value)
-                  updateQueryParams({ location: e.target.value })
-                }}
-              />
+              <Label id="owner-pickup-location-label">Pick-up and return location</Label>
+              <div
+                className={`flex gap-3 rounded-lg border px-3 py-3 ${pickupLocation ? "border-primary/20 bg-primary/5" : "border-red-200 bg-red-50"}`}
+                aria-labelledby="owner-pickup-location-label"
+              >
+                <MapPin className={`mt-0.5 h-5 w-5 shrink-0 ${pickupLocation ? "text-primary" : "text-red-600"}`} aria-hidden="true" />
+                <div>
+                  <p className={`text-sm font-medium ${pickupLocation ? "text-foreground" : "text-red-700"}`}>
+                    {pickupLocation ?? "Pickup address unavailable"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {locale === "de"
+                      ? "Abholung und Rückgabe erfolgen am Standort des Vermieters. Diese Adresse wird vom Vermieter festgelegt."
+                      : "The car must be picked up and returned at the rental company’s location. This address is set by the owner."}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -953,6 +943,36 @@ export function CheckoutClient({
                   Review the exact published versions that apply to this booking. Required acknowledgements start unchecked.
                 </p>
               </div>
+              <section className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                <div>
+                  <h4 className="font-semibold">
+                    {locale === "de" ? "Verbindliche Rückgabezeit und verspätete Rückgabe" : "Mandatory return time and late return"}
+                  </h4>
+                  <p className="mt-2 text-sm">
+                    {locale === "de"
+                      ? `Das Fahrzeug muss zur vereinbarten Zeit zurückgegeben werden. Die Kulanzzeit von ${bookingConfiguration.gracePeriodMinutes} Minuten bestimmt nur, wann ein weiterer 24-Stunden-Miettag berechnet wird. Die Berechnung eines weiteren Tages verlängert den Mietvertrag nicht und berechtigt nicht dazu, das Fahrzeug länger zu behalten. Jede Verlängerung muss der Vermieter vorher ausdrücklich genehmigen. Eine nicht genehmigte Weiternutzung kann weitere gesetzlich zulässige Ansprüche auslösen.`
+                      : `The vehicle must be returned at the agreed time. The ${bookingConfiguration.gracePeriodMinutes}-minute grace period determines only when another 24-hour rental day is charged. Charging another day does not extend the rental agreement or authorize keeping the vehicle longer. Any extension requires the rental company's express approval in advance. Unauthorized continued use may lead to further claims permitted by law.`}
+                  </p>
+                  <p className="mt-2 text-xs">
+                    {locale === "de"
+                      ? `Nach der geplanten Rückgabe blockiert das System insgesamt ${operationalBufferMinutes} Minuten: ${LATE_RETURN_SAFETY_BUFFER_MINUTES} Minuten für eine mögliche Verspätung und anschließend ${bookingConfiguration.preparationBufferMinutes} Minuten für Kontrolle, Reinigung und Vorbereitung.`
+                      : `After the scheduled return, the system blocks ${operationalBufferMinutes} minutes in total: ${LATE_RETURN_SAFETY_BUFFER_MINUTES} minutes for possible lateness, followed by ${bookingConfiguration.preparationBufferMinutes} minutes for inspection, cleaning and preparation.`}
+                  </p>
+                </div>
+                <label className="flex items-start gap-3">
+                  <Checkbox
+                    checked={legalAcknowledgements.lateReturnPolicy}
+                    onCheckedChange={(value) =>
+                      setLegalAcknowledgements((current) => ({ ...current, lateReturnPolicy: value === true }))
+                    }
+                  />
+                  <span className="text-sm font-medium">
+                    {locale === "de"
+                      ? "Ich verstehe, dass eine zusätzliche Tagesberechnung keine Vertragsverlängerung oder Erlaubnis zur weiteren Nutzung darstellt."
+                      : "I understand that an additional-day charge is not a contract extension or permission to continue using the vehicle."}
+                  </span>
+                </label>
+              </section>
               {bookingConfiguration.legal.documents.map((document) => {
                 const key = document.type === "RENTAL_TERMS" ? "rentalTerms" : "privacyNotice"
                 const exactVersionUrl = `/${locale}/legal/${document.legalDocumentTranslationId}`
@@ -1113,7 +1133,7 @@ export function CheckoutClient({
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
           <Button
             onClick={handleConfirmBooking}
-            disabled={isPending || isQuoteLoading || !quote || bookingSetupUnavailable}
+            disabled={isPending || isQuoteLoading || !quote || bookingSetupUnavailable || !pickupLocation}
             className="w-full h-12 text-base font-semibold"
           >
             {isPending ? "Saving application..." : "Continue to document upload"}

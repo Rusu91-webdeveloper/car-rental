@@ -45,6 +45,7 @@ function mapPricingDraft(
       rentalMonthDefinition: row.pricingBilling.rentalMonthDefinition,
       billableDayRule: row.pricingBilling.billableDayMethod,
       gracePeriodMinutes: row.pricingBilling.gracePeriodMinutes,
+      preparationBufferMinutes: row.pricingBilling.preparationBufferMinutes,
       minimumRentalMinutes: row.pricingBilling.minimumRentalMinutes,
       minimumChargeDays: row.pricingBilling.minimumChargeDays,
       pricesIncludeTax: row.pricingBilling.priceTaxTreatment === "TAX_INCLUDED",
@@ -86,6 +87,7 @@ function pricingData(configuration: PricingBillingConfiguration) {
     rentalMonthDefinition: configuration.rentalMonthDefinition,
     billableDayMethod: configuration.billableDayRule,
     gracePeriodMinutes: configuration.gracePeriodMinutes,
+    preparationBufferMinutes: configuration.preparationBufferMinutes,
     minimumRentalMinutes: configuration.minimumRentalMinutes,
     minimumChargeDays: configuration.minimumChargeDays,
     priceTaxTreatment: configuration.pricesIncludeTax ? "TAX_INCLUDED" as const : "TAX_EXCLUDED" as const,
@@ -194,6 +196,7 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
         rentalMonthDefinition: "FIXED_30_DAYS",
         billableDayRule: "STARTED_24_HOUR_PERIODS",
         gracePeriodMinutes: 0,
+        preparationBufferMinutes: 120,
         minimumRentalMinutes: 1,
         minimumChargeDays: 1,
         pricesIncludeTax: false,
@@ -460,7 +463,7 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
       })
       await audit(tx, {
         actorId: input.actorId,
-        action: changedFields.some((field) => ["billableDayMethod", "gracePeriodMinutes", "minimumRentalMinutes", "minimumChargeDays"].includes(field)) ? "pricing.billing_rules_changed" : "pricing.strategy_changed",
+        action: changedFields.some((field) => ["billableDayMethod", "gracePeriodMinutes", "preparationBufferMinutes", "minimumRentalMinutes", "minimumChargeDays"].includes(field)) ? "pricing.billing_rules_changed" : "pricing.strategy_changed",
         targetType: "ConfigurationVersion",
         targetId: input.pricingVersionId,
         before: { revision: input.expectedRevision, strategy: current.pricingBilling.mixedDurationStrategy },

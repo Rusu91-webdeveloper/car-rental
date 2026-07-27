@@ -45,6 +45,19 @@ describe("configuration validation contracts", () => {
     });
   });
 
+  it("rejects a preparation buffer longer than twelve hours", () => {
+    const pricing = validBusinessConfigurationDomains()["pricing-billing"];
+    const result = validateConfigurationDomain("pricing-billing", {
+      ...pricing,
+      preparationBufferMinutes: 721,
+    });
+    expect(result.issues[0]).toMatchObject({
+      code: "validation.invalid_range",
+      field: "preparationBufferMinutes",
+      severity: "BLOCKER",
+    });
+  });
+
   it("reports incompatible fields", () => {
     const insurance = validBusinessConfigurationDomains().insurance;
     const result = validateConfigurationDomain("insurance", {

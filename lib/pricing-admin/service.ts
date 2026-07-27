@@ -67,6 +67,7 @@ const ruleLabels: Record<keyof PricingBillingConfiguration, string> = {
   rentalMonthDefinition: "Month length",
   billableDayRule: "Billable duration",
   gracePeriodMinutes: "Grace period",
+  preparationBufferMinutes: "Preparation buffer",
   minimumRentalMinutes: "Minimum rental duration",
   minimumChargeDays: "Minimum charge",
   pricesIncludeTax: "Tax treatment",

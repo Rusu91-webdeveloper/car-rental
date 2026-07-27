@@ -128,8 +128,8 @@ export function ManualReservationCalendar({
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
           {tr(
-            "Booked or blocked days are red. You cannot select them for another reservation.",
-            "Gebuchte oder gesperrte Tage sind rot. Sie können nicht erneut reserviert werden.",
+            "Days containing booked, blocked or preparation time are red. They remain selectable when another time on that day is free.",
+            "Tage mit Buchungs-, Sperr- oder Vorbereitungszeiten sind rot. Sie bleiben auswählbar, wenn eine andere Uhrzeit an diesem Tag frei ist.",
           )}
         </p>
       </div>
@@ -167,11 +167,11 @@ export function ManualReservationCalendar({
                 today.setHours(0, 0, 0, 0)
                 const candidate = new Date(day)
                 candidate.setHours(0, 0, 0, 0)
-                return candidate < today || isUnavailableDay(candidate)
+                return candidate < today
               }}
               modifiers={{ unavailable: isUnavailableDay }}
               modifiersClassNames={{
-                unavailable: "!bg-red-100 !text-red-800 line-through dark:!bg-red-950/40 dark:!text-red-300",
+                unavailable: "!bg-red-100 !text-red-800 dark:!bg-red-950/40 dark:!text-red-300",
               }}
             />
           </div>
@@ -180,7 +180,7 @@ export function ManualReservationCalendar({
             <div className="flex flex-wrap gap-4 text-xs">
               <span className="flex items-center gap-2 text-muted-foreground">
                 <span className="h-3 w-3 rounded border border-red-300 bg-red-100" />
-                {tr("Booked / blocked", "Gebucht / gesperrt")}
+                {tr("Booked / blocked / preparation", "Gebucht / gesperrt / Vorbereitung")}
               </span>
               <span className="flex items-center gap-2 text-muted-foreground">
                 <span className="h-3 w-3 rounded bg-primary" />
@@ -189,7 +189,7 @@ export function ManualReservationCalendar({
             </div>
 
             <div>
-              <p className="text-sm font-medium">{tr("Booked and blocked periods", "Gebuchte und gesperrte Zeiträume")}</p>
+              <p className="text-sm font-medium">{tr("Unavailable periods (including preparation)", "Nicht verfügbare Zeiträume (einschließlich Vorbereitung)")}</p>
               {unavailableRanges.length === 0 ? (
                 <p className="mt-1 text-sm text-emerald-700">
                   {tr("No future bookings or blocks for this car.", "Keine zukünftigen Buchungen oder Sperren für dieses Fahrzeug.")}

@@ -24,6 +24,13 @@ import { dispatchPendingBookingNotificationsForBooking } from "@/lib/booking-not
 import { sendAdminBookingApplicationNotification, sendBookingApplicationCancelledEmail, sendBookingApplicationSubmittedEmail } from "@/lib/email"
 import { config } from "@/lib/config"
 import { logger } from "@/lib/logger"
+import { formatCompanyPickupLocation } from "@/lib/company-pickup-location"
+import {
+  DEFAULT_VEHICLE_PREPARATION_BUFFER_MINUTES,
+  LATE_RETURN_POLICY_VERSION,
+  LATE_RETURN_SAFETY_BUFFER_MINUTES,
+  totalOperationalBufferMinutes,
+} from "@/lib/rental-timing"
 
 const normalizeLocale = (locale: string): "de" | "en" => (locale === "de" ? "de" : "en")
 
@@ -163,7 +170,6 @@ const beginSchema = z
     carId: z.string().min(1),
     pickupAt: z.string().datetime(),
     returnAt: z.string().datetime(),
-    sharedLocation: z.string().trim().min(1).max(200),
     locale: z.enum(["de", "en"]),
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]),
     insuranceSelected: z.boolean(),
@@ -171,6 +177,9 @@ const beginSchema = z
     legalAcknowledgements: z.object({
       rentalTerms: z.boolean(),
       privacyNotice: z.boolean(),
+      lateReturnPolicy: z.literal(true, {
+        message: "The return-time and late-use rules must be acknowledged.",
+      }),
     }),
     idempotencyKey: z.string().min(16).max(128),
   })
@@ -208,6 +217,30 @@ export async function beginBookingApplication(input: unknown) {
     const user = await requireAuth()
     await enforceRateLimit("application:create", user.id, PHASE8FB_RATE_LIMITS.applicationCreate)
     const value = beginSchema.parse(input)
+    const [companySettings, activeRelease] = await Promise.all([
+      prisma.companySettings.findUnique({
+        where: { id: "company-settings" },
+        select: {
+          companyAddress: true,
+          companyCity: true,
+          companyState: true,
+          companyZipCode: true,
+          companyCountry: true,
+        },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { pricingBillingConfig: { select: { preparationBufferMinutes: true } } },
+      }),
+    ])
+    const preparationBufferMinutes =
+      activeRelease?.pricingBillingConfig.preparationBufferMinutes ?? DEFAULT_VEHICLE_PREPARATION_BUFFER_MINUTES
+    const pickupLocation = formatCompanyPickupLocation(companySettings)
+    if (!pickupLocation)
+      throw new BookingApplicationError(
+        "APPLICATION_CONFIGURATION_UNAVAILABLE",
+        "The rental company pickup address is not configured.",
+      )
     const repository = new PrismaBookingApplicationRepository(prisma)
     let application = await createBookingApplication(repository, {
       customerUserId: user.id,
@@ -215,8 +248,8 @@ export async function beginBookingApplication(input: unknown) {
       locale: value.locale,
       pickupAt: new Date(value.pickupAt),
       returnAt: new Date(value.returnAt),
-      pickupLocation: value.sharedLocation,
-      returnLocation: value.sharedLocation,
+      pickupLocation,
+      returnLocation: pickupLocation,
       paymentMethod: value.paymentMethod,
       idempotencyKey: value.idempotencyKey,
     })
@@ -255,6 +288,22 @@ export async function beginBookingApplication(input: unknown) {
       customerUserId: user.id,
       expectedRevision: application.revision,
       ...value.legalAcknowledgements,
+    })
+    await prisma.auditEvent.create({
+      data: {
+        category: "BOOKING",
+        action: "booking_application.late_return_policy_acknowledged",
+        actorUserId: user.id,
+        targetType: "BookingApplication",
+        targetId: application.id,
+        metadata: {
+          policyVersion: LATE_RETURN_POLICY_VERSION,
+          lateReturnSafetyBufferMinutes: LATE_RETURN_SAFETY_BUFFER_MINUTES,
+          preparationBufferMinutes,
+          totalOperationalBufferMinutes: totalOperationalBufferMinutes(preparationBufferMinutes),
+          locale: value.locale,
+        },
+      },
     })
     return { applicationId: application.id, revision: application.revision }
   } catch (error) {

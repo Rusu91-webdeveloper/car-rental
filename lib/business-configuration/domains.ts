@@ -97,6 +97,7 @@ export interface PricingBillingConfiguration {
     | "CALENDAR_DAYS"
     | "PICKUP_TIME_BOUNDARY";
   gracePeriodMinutes: number;
+  preparationBufferMinutes: number;
   minimumRentalMinutes: number;
   minimumChargeDays: number;
   pricesIncludeTax: boolean;

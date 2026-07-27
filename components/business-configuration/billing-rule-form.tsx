@@ -98,8 +98,17 @@ export function BillingRuleForm({ data, canManage, nextHref }: { data: PricingAd
                 <option value="PICKUP_TIME_BOUNDARY">Each time the pickup hour passes</option>
               </select>
             </Field>
-            <Field label="Late-return grace period" explanation="Minutes allowed before charging another day." example="30 minutes." live={display(data.livePricing?.configuration.gracePeriodMinutes)}>
+            <Field label="Late-return grace period" explanation="Minutes before another day is charged. This never extends the agreed return time or authorizes continued use." example="30 minutes." live={display(data.livePricing?.configuration.gracePeriodMinutes)}>
               <Input type="number" min={0} max={720} value={configuration.gracePeriodMinutes} onChange={(event) => set("gracePeriodMinutes", Number(event.target.value))} disabled={!canManage || pending} />
+            </Field>
+            <Field label="Preparation buffer" explanation="Minutes reserved after the mandatory 1-hour late-return safety margin for inspection, cleaning and preparation." example="120 minutes gives a 3-hour total block." live={display(data.livePricing?.configuration.preparationBufferMinutes)}>
+              <div className="relative">
+                <Input type="number" min={0} max={720} value={configuration.preparationBufferMinutes} onChange={(event) => set("preparationBufferMinutes", Number(event.target.value))} disabled={!canManage || pending} />
+                <span className="pointer-events-none absolute right-3 top-2 text-sm text-muted-foreground">minutes</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Total scheduling block: {60 + configuration.preparationBufferMinutes} minutes.
+              </p>
             </Field>
             <Field label="Days in a monthly price" explanation="Choose whether a monthly price covers 28 or 30 days." example="30 days." live={display(data.livePricing?.configuration.rentalMonthDefinition)}>
               <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={configuration.rentalMonthDefinition} onChange={(event) => set("rentalMonthDefinition", event.target.value as "FIXED_28_DAYS" | "FIXED_30_DAYS")} disabled={!canManage || pending}>

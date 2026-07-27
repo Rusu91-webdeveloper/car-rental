@@ -32,6 +32,8 @@ export interface ActivePhase6Record {
   businessTimeZone: string
   currency: string
   minimumRentalMinutes: number
+  gracePeriodMinutes: number
+  preparationBufferMinutes: number
   insuranceVersionId: string
   insuranceVersionStatus: string
   insuranceValidationStatus: string
@@ -101,6 +103,8 @@ export class PrismaBookingConfigurationRepository {
       businessTimeZone: release.generalRentalConfig.businessTimeZone,
       currency: release.generalRentalConfig.currency,
       minimumRentalMinutes: release.pricingBillingConfig.minimumRentalMinutes,
+      gracePeriodMinutes: release.pricingBillingConfig.gracePeriodMinutes,
+      preparationBufferMinutes: release.pricingBillingConfig.preparationBufferMinutes,
       insuranceVersionId: release.insuranceConfigVersionId,
       insuranceVersionStatus: release.insuranceConfig.version.status,
       insuranceValidationStatus: release.insuranceConfig.version.validationStatus,

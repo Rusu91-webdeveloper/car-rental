@@ -1088,17 +1088,18 @@ model GeneralRentalConfigVersion {
 }
 
 model PricingBillingConfigVersion {
-  configurationVersionId String                       @id
-  weeklyPricingEnabled   Boolean                      @default(false)
-  monthlyPricingEnabled  Boolean                      @default(false)
-  mixedDurationStrategy  MixedDurationPricingStrategy @default(DAILY_ONLY)
-  rentalMonthDefinition  RentalMonthDefinition        @default(FIXED_30_DAYS)
-  billableDayMethod      BillableDayMethod            @default(STARTED_24_HOUR_PERIODS)
-  gracePeriodMinutes     Int                          @default(0)
-  minimumRentalMinutes   Int                          @default(1)
-  minimumChargeDays      Int                          @default(1)
-  priceTaxTreatment      PriceTaxTreatment            @default(TAX_EXCLUDED)
-  taxRateBps             Int                          @default(0)
+  configurationVersionId   String                       @id
+  weeklyPricingEnabled     Boolean                      @default(false)
+  monthlyPricingEnabled    Boolean                      @default(false)
+  mixedDurationStrategy    MixedDurationPricingStrategy @default(DAILY_ONLY)
+  rentalMonthDefinition    RentalMonthDefinition        @default(FIXED_30_DAYS)
+  billableDayMethod        BillableDayMethod            @default(STARTED_24_HOUR_PERIODS)
+  gracePeriodMinutes       Int                          @default(0)
+  preparationBufferMinutes Int                          @default(120)
+  minimumRentalMinutes     Int                          @default(1)
+  minimumChargeDays        Int                          @default(1)
+  priceTaxTreatment        PriceTaxTreatment            @default(TAX_EXCLUDED)
+  taxRateBps               Int                          @default(0)
 
   version             ConfigurationVersion             @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
   releases            BusinessConfigurationRelease[]
