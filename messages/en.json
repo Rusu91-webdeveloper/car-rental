@@ -32,6 +32,8 @@
   },
   "demoBanner": {
     "title": "Demo mode active",
+    "compactDescription": "Sample data is shown.",
+    "compactHelpLink": "Setup help",
     "descriptionBefore": "You are using demo mode with sample data. For complete setup instructions, visit the",
     "helpLink": "help page",
     "descriptionAfter": ".",

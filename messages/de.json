@@ -32,6 +32,8 @@
   },
   "demoBanner": {
     "title": "Demo-Modus aktiv",
+    "compactDescription": "Beispieldaten sind aktiv.",
+    "compactHelpLink": "Einrichtungshilfe",
     "descriptionBefore": "Sie verwenden den Demo-Modus mit Beispieldaten. Vollständige Einrichtungshinweise finden Sie auf der",
     "helpLink": "Hilfeseite",
     "descriptionAfter": ".",

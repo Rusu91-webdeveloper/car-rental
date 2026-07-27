@@ -119,7 +119,7 @@ function NavigationLinks({ items }: { items: NavigationItem[] }) {
         onClick={(event) => {
           if (section) openDashboardSection(event, pathname, section);
         }}
-        className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
       >
         <NavigationLinkContent item={item} />
       </Link>
@@ -219,7 +219,7 @@ export function AdminNavigation({
             <Link
               href="/"
               aria-label={de ? "Zurück zur Website" : "Back to website"}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               <House className="h-3.5 w-3.5" aria-hidden="true" />
               Website
@@ -228,7 +228,7 @@ export function AdminNavigation({
         </div>
         <nav
           aria-label={de ? "Admin-Navigation" : "Admin navigation"}
-          className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]"
+          className="flex snap-x gap-1 overflow-x-auto overscroll-x-contain px-2 pb-2 pr-8 [scrollbar-width:none] [&>a]:snap-start"
         >
           <NavigationLinks items={items} />
           {showAdvancedConfiguration ? (

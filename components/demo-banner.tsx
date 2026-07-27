@@ -1,7 +1,6 @@
 "use client"
 
 import { AlertCircle, X } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { useTranslations } from "next-intl"
@@ -16,21 +15,35 @@ export function DemoBanner() {
   if (!isDemoMode || dismissed) return null
 
   return (
-    <Alert className="rounded-none border-x-0 border-t-0 bg-amber-50 dark:bg-amber-950/20">
-      <AlertCircle className="h-4 w-4" />
-      <AlertTitle className="flex items-center justify-between">
-        {t("title")}
-        <Button aria-label={t("close")} variant="ghost" size="sm" onClick={() => setDismissed(true)} className="h-6 w-6 p-0">
+    <aside className="border-b border-amber-900/10 bg-amber-50 text-amber-950" aria-label={t("title")}>
+      <div className="qujo-container flex min-h-14 items-center gap-3 py-2">
+        <AlertCircle className="h-4 w-4 shrink-0 text-amber-800" aria-hidden="true" />
+        <div className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-2">
+          <p className="shrink-0 text-sm font-semibold leading-5">{t("title")}</p>
+          <p className="text-xs leading-5 text-amber-950/70 sm:hidden">
+            {t("compactDescription")}{" "}
+            <Link href="/help" className="font-semibold text-amber-950 underline underline-offset-2">
+              {t("compactHelpLink")}
+            </Link>
+          </p>
+          <p className="hidden text-sm leading-5 text-amber-950/65 sm:block">
+            {t("descriptionBefore")}{" "}
+            <Link href="/help" className="font-medium text-amber-950 underline underline-offset-2">
+              {t("helpLink")}
+            </Link>
+            {t("descriptionAfter")}
+          </p>
+        </div>
+        <Button
+          aria-label={t("close")}
+          variant="ghost"
+          size="icon-lg"
+          onClick={() => setDismissed(true)}
+          className="-mr-2 size-11 rounded-full text-amber-950/70 hover:bg-amber-900/10 hover:text-amber-950"
+        >
           <X className="h-4 w-4" />
         </Button>
-      </AlertTitle>
-      <AlertDescription>
-        {t("descriptionBefore")}{" "}
-        <Link href="/help" className="underline">
-          {t("helpLink")}
-        </Link>
-        {t("descriptionAfter")}
-      </AlertDescription>
-    </Alert>
+      </div>
+    </aside>
   )
 }

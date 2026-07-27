@@ -54,24 +54,24 @@ export function Footer({ businessInfo }: FooterProps = {}) {
           {/* Quick Links */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">{t("quickLinks")}</h3>
-            <ul className="space-y-2">
+            <ul>
               <li>
-                <Link href="/about" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/about" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.about")}
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/contact" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.contact")}
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/help" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.help")}
                 </Link>
               </li>
               <li>
-                <Link href="/cars" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/cars" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.cars")}
                 </Link>
               </li>
@@ -81,29 +81,29 @@ export function Footer({ businessInfo }: FooterProps = {}) {
           {/* Legal Links */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">{t("legal")}</h3>
-            <ul className="space-y-2">
+            <ul>
               <li>
-                <Link href="/impressum" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/impressum" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.impressum")}
                 </Link>
               </li>
               <li>
                 <Link
                   href="/datenschutz"
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                  className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary"
                 >
                   {t("links.datenschutz")}
                 </Link>
               </li>
               <li>
-                <Link href="/agb" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/agb" className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary">
                   {t("links.agb")}
                 </Link>
               </li>
               <li>
                 <Link
                   href="/widerruf"
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                  className="inline-flex min-h-10 items-center text-sm text-muted-foreground transition-colors hover:text-primary"
                 >
                   {t("links.widerruf")}
                 </Link>
@@ -115,7 +115,7 @@ export function Footer({ businessInfo }: FooterProps = {}) {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">{t("contact")}</h3>
             <ul className="space-y-3 text-sm text-muted-foreground">
-              {businessInfo?.companyEmail ? <li className="flex items-start gap-3">
+              {businessInfo?.companyEmail ? <li className="flex min-h-10 items-center gap-3">
                 <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -132,7 +132,7 @@ export function Footer({ businessInfo }: FooterProps = {}) {
                 </a>
               </li> : null}
               {businessInfo?.companyPhone && (
-                <li className="flex items-start gap-3">
+                <li className="flex min-h-10 items-center gap-3">
                   <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -186,7 +186,7 @@ export function Footer({ businessInfo }: FooterProps = {}) {
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} {businessInfo?.companyName || t("companyName")}. {t("copyright")}
           </p>
-          <Link href="/contact" className="text-sm font-medium text-white/60 transition-colors">
+          <Link href="/contact" className="inline-flex min-h-10 items-center text-sm font-medium text-white/60 transition-colors">
             {t("links.contact")} →
           </Link>
         </div>

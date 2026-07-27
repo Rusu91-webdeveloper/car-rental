@@ -14,7 +14,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
         <div className="mx-auto mb-12 max-w-3xl text-center">
           <p className="qujo-kicker mb-5">Qujo Autovermietung GmbH</p>
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#13251d] text-[#cbe85d]">
-            <svg className="w-10 h-10 text-primary" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="h-10 w-10 text-[#cbe85d]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
             </svg>
           </div>
