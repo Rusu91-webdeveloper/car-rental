@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
+    "build": "tsx scripts/production-build.ts",
     "postinstall": "tsx scripts/with-db-url.ts prisma generate",
     "db:deploy": "tsx scripts/with-db-url.ts prisma migrate deploy",
     "db:migrate": "tsx scripts/with-db-url.ts prisma migrate dev",
