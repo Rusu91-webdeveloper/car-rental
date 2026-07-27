@@ -3,6 +3,7 @@ import { loadNotificationConfigurationPage } from "@/lib/notification-configurat
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PaymentInstructionForm } from "@/components/business-configuration/notification-configuration-form";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 import { getCurrentUser, requireAdmin } from "@/lib/auth";
 import {
   ownerSettingsPageMode,
@@ -33,6 +34,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         eyebrow={editing ? "Edit settings" : "Business setup"}
         title="How can customers pay?"
         description="Set the bank details and instructions customers receive after booking."
+        action={<ConfigurationReturnLink />}
       />
       <PaymentInstructionForm
         key={`${data.draftPayment?.id ?? "live"}-${data.draftPayment?.revision ?? 0}`}

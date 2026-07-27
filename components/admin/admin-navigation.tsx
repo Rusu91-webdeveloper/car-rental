@@ -7,6 +7,7 @@ import {
   Car,
   CircleGauge,
   FileCheck2,
+  House,
   LayoutDashboard,
   LoaderCircle,
   Settings2,
@@ -195,9 +196,10 @@ export function AdminNavigation({
             </div>
             <Link
               href="/"
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 text-sm font-semibold text-primary shadow-sm transition-colors hover:border-primary/35 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              {de ? "Kundenseite anzeigen" : "View customer site"}
+              <House className="h-4 w-4" aria-hidden="true" />
+              {de ? "Zurück zur Website" : "Back to website"}
             </Link>
           </div>
         </div>
@@ -214,8 +216,13 @@ export function AdminNavigation({
           </Link>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            <Link href="/" className="text-xs text-muted-foreground">
-              {de ? "Kundenseite" : "Customer site"}
+            <Link
+              href="/"
+              aria-label={de ? "Zurück zur Website" : "Back to website"}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold text-primary shadow-sm transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <House className="h-3.5 w-3.5" aria-hidden="true" />
+              Website
             </Link>
           </div>
         </div>

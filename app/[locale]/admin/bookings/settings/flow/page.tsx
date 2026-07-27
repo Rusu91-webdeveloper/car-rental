@@ -3,6 +3,7 @@ import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { BookingFlowStepList } from "@/components/business-configuration/booking-flow-step-list";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 import { requireAdmin } from "@/lib/auth";
 import {
   ownerSettingsPageMode,
@@ -25,6 +26,7 @@ export default async function BookingFlowSettingsPage({ searchParams }: { search
         eyebrow={editing ? "Edit settings" : "Business setup"}
         title="What steps do customers complete?"
         description="Choose what customers see before they send a booking request."
+        action={<ConfigurationReturnLink />}
       />
       <BookingFlowStepList
         key={`${data.draftWorkflow?.id}-${data.draftWorkflow?.revision}-${dependencyKey}`}

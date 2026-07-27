@@ -2,6 +2,7 @@ import { getCompanySettings } from "@/app/actions/settings";
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server";
 import { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 import { NotificationContactsForm } from "@/components/admin/notification-contacts-form";
 import { ConfirmationContentForm } from "@/components/business-configuration/confirmation-content-form";
 import { requireAdmin } from "@/lib/auth";
@@ -29,6 +30,7 @@ export default async function NotificationSettingsPage({ searchParams }: { searc
         eyebrow={editing ? "Edit settings" : "Business setup"}
         title="What should booking messages say?"
         description="Choose where replies go and what customers read in their confirmation."
+        action={<ConfigurationReturnLink />}
       />
       <NotificationContactsForm
         supportEmail={settingsResult.settings.supportEmail}

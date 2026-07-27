@@ -5,6 +5,7 @@ import { LegalDocumentList } from "@/components/legal/legal-document-list"
 import { LegalAcceptanceConfigurationForm } from "@/components/legal/legal-acceptance-configuration-form"
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list"
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied"
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link"
 import { requireAdmin } from "@/lib/auth"
 import { ownerSettingsPageMode, prepareOwnerLegalEdit, type OwnerSettingsPageSearchParams } from "@/lib/admin/owner-settings-edit"
 import { getLocale } from "next-intl/server"
@@ -26,6 +27,7 @@ export default async function LegalSettingsPage({ searchParams }: { searchParams
             ? "Halten Sie Mietbedingungen und Datenschutzhinweise für jede Buchung aktuell."
             : "Keep your rental terms and privacy notice up to date for every booking."
         }
+        action={<ConfigurationReturnLink />}
       />
       <LegalDocumentList data={data} canEdit={caps.canEditLegal} canPublish={caps.canPublishLegal} canValidate={caps.canValidate} />
       <LegalAcceptanceConfigurationForm

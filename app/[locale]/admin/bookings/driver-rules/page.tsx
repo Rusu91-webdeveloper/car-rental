@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { DriverRequirementsForm } from "@/components/business-configuration/driver-requirements-form";
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 import { requireAdmin } from "@/lib/auth";
 import {
   ownerSettingsPageMode,
@@ -24,6 +25,7 @@ export default async function DriverRulesPage({ searchParams }: { searchParams: 
         eyebrow={editing ? "Edit settings" : "Business setup"}
         title="Who is allowed to drive?"
         description="Set the age and licence rules every driver must meet."
+        action={<ConfigurationReturnLink />}
       />
       <DriverRequirementsForm
         key={`${data.draftCustomerDriver?.id}-${data.draftCustomerDriver?.revision}`}

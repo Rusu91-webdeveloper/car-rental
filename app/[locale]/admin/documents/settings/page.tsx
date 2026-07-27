@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { PrismaDocumentConfigurationRepository } from "@/lib/document-configuration/prisma-repository"
 import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link"
 import { DocumentPolicyEditor } from "@/app/[locale]/admin/business-configuration/documents/policy-editor"
 import { requireAdmin } from "@/lib/auth"
 import {
@@ -33,6 +34,7 @@ export default async function DocumentSettingsPage({ searchParams }: { searchPar
         eyebrow={editing ? "Edit settings" : "Business setup"}
         title="Which documents must customers provide?"
         description="Choose what customers upload for each booking."
+        action={<ConfigurationReturnLink />}
       />
       <DocumentPolicyEditor data={data} nextHref={nextHref} />
     </main>
