@@ -34,6 +34,39 @@ const intent: IntentRecord = {
 };
 
 describe("Prisma document lifecycle repository", () => {
+  it("only queues current documents for open applications with active fleet cars", async () => {
+    const findMany = vi.fn(async () => []);
+    const db = {
+      customerDocument: { findMany },
+    } as unknown as PrismaClient;
+    const repository = new PrismaDocumentLifecycleRepository(db);
+
+    await repository.listReviewQueue({
+      statuses: ["PENDING_REVIEW"],
+      limit: 25,
+      now,
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isCurrent: true,
+          uploadSession: {
+            is: {
+              bookingApplication: {
+                is: {
+                  bookingId: null,
+                  status: "AWAITING_DOCUMENT_REVIEW",
+                  car: { isDeleted: false },
+                },
+              },
+            },
+          },
+        }),
+      }),
+    );
+  });
+
   it("persists and hydrates an upload intent's replacement predecessor", async () => {
     const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
       ...data,

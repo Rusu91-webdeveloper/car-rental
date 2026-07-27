@@ -519,6 +519,7 @@ enum AdminAction {
   BLOCKED_DATE_ADDED
   BLOCKED_DATE_REMOVED
   SETTINGS_UPDATED
+  MAINTENANCE_CLEANUP
 }
 
 // Company settings - single record to store all company configuration

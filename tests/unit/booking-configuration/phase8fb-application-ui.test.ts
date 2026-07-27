@@ -132,6 +132,7 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('input.reason === "DOCUMENT_REPLACEMENT_REQUIRED" ? "AWAITING_DOCUMENT_UPLOAD"')
     expect(trips).toContain("prisma.bookingApplication.findMany")
     expect(trips).toContain("Awaiting document review")
+    expect(adminPage).toContain('car: { isDeleted: false }')
     expect(adminPage).toContain("bookingApplications={bookingApplications.map")
     expect(adminDashboard).toContain("Booking applications before confirmation")
     expect(adminDashboard).toContain("Reviewer access is missing")

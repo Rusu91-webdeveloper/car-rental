@@ -632,6 +632,18 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
         manualReviewStatus: { in: input.statuses },
         documentTypeId: input.documentTypeId,
         bookingId: input.bookingId,
+        isCurrent: true,
+        uploadSession: {
+          is: {
+            bookingApplication: {
+              is: {
+                bookingId: null,
+                status: "AWAITING_DOCUMENT_REVIEW",
+                car: { isDeleted: false },
+              },
+            },
+          },
+        },
         createdAt:
           input.uploadedFrom ||
           input.uploadedTo ||

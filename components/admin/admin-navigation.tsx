@@ -13,6 +13,7 @@ import {
   Settings2,
   Users,
   WalletCards,
+  Wrench,
 } from "lucide-react";
 import Link, { usePathname } from "@/navigation";
 import { useLinkStatus } from "next/link";
@@ -131,17 +132,28 @@ export function AdminNavigation({
   canViewDocuments,
   canViewConfiguration,
   isAdmin,
+  isMaintenanceDeveloper,
   userName,
 }: {
   canViewDocuments: boolean;
   canViewConfiguration: boolean;
   isAdmin: boolean;
+  isMaintenanceDeveloper: boolean;
   userName: string;
 }) {
   const de = useLocale() === "de";
   const pathname = usePathname();
   const roleItems = isAdmin
-    ? ownerItems(de)
+    ? [
+        ...ownerItems(de),
+        ...(isMaintenanceDeveloper
+          ? [{
+              label: de ? "Wartung" : "Maintenance",
+              href: "/admin/health",
+              icon: Wrench,
+            }]
+          : []),
+      ]
     : canViewConfiguration
       ? configurationItems(de)
       : [];

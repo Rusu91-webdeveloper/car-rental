@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminNavigationFeedback } from "@/components/admin/admin-navigation-feedback";
+import { isMaintenanceDeveloperEmail } from "@/lib/developer-maintenance/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,9 @@ export default async function AdminLayout({
         canViewDocuments={capabilities.canViewDocuments}
         canViewConfiguration={capabilities.canView}
         isAdmin={user!.role === "ADMIN"}
+        isMaintenanceDeveloper={
+          user!.role === "ADMIN" && isMaintenanceDeveloperEmail(user!.email)
+        }
         userName={user!.name || user!.email}
       />
       <div className="lg:pl-64">{children}</div>

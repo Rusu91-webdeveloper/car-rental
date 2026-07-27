@@ -110,6 +110,7 @@ export default async function AdminPage({
         where: {
           bookingId: null,
           status: { notIn: ["FINALIZING", "FINALIZED", "CANCELLED", "EXPIRED", "REJECTED"] },
+          car: { isDeleted: false },
         },
         select: {
           id: true,
@@ -164,7 +165,11 @@ export default async function AdminPage({
       loadOwnerSettingsOverview(),
       capabilities.canViewDocuments
         ? prisma.bookingApplication.count({
-            where: { status: "AWAITING_DOCUMENT_REVIEW" },
+            where: {
+              bookingId: null,
+              status: "AWAITING_DOCUMENT_REVIEW",
+              car: { isDeleted: false },
+            },
           })
         : Promise.resolve(null),
       prisma.auditEvent.findMany({

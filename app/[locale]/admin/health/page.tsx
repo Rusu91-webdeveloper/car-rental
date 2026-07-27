@@ -3,6 +3,9 @@ import { requireAdmin } from "@/lib/auth"
 import { getProductionHealthReport } from "@/lib/production/health"
 import { getLocale } from "next-intl/server"
 import { ProductionAlertTest } from "@/components/admin/production-alert-test"
+import { DeveloperMaintenanceConsole } from "@/components/admin/developer-maintenance-console"
+import { isMaintenanceDeveloperEmail } from "@/lib/developer-maintenance/authorization"
+import { getDeveloperMaintenancePreview } from "@/lib/developer-maintenance/service"
 
 export const dynamic = "force-dynamic"
 
@@ -61,11 +64,17 @@ const remediationDe: Record<string, string> = {
 }
 
 export default async function ProductionHealthPage() {
-  await requireAdmin()
+  const admin = await requireAdmin()
   const locale = await getLocale()
   const isGerman = locale === "de"
   const languageIndex = isGerman ? 1 : 0
-  const report = await getProductionHealthReport()
+  const developerMaintenance = isMaintenanceDeveloperEmail(admin.email)
+    ? getDeveloperMaintenancePreview()
+    : undefined
+  const [report, maintenancePreview] = await Promise.all([
+    getProductionHealthReport(),
+    developerMaintenance,
+  ])
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
       <AdminPageHeader
@@ -104,6 +113,9 @@ export default async function ProductionHealthPage() {
           </section>
         ))}
       </div>
+      {maintenancePreview ? (
+        <DeveloperMaintenanceConsole initialPreview={maintenancePreview} />
+      ) : null}
     </main>
   )
 }
