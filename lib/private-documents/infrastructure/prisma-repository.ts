@@ -188,6 +188,7 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
       expiresAt: row.expiresAt,
       cleanupEligibleAt: row.cleanupEligibleAt,
       failureCode: row.failureCode ?? undefined,
+      replacesDocumentId: row.replacesDocumentId ?? undefined,
     };
   }
   async createIntent(record: IntentRecord) {
@@ -219,6 +220,7 @@ export class PrismaDocumentLifecycleRepository implements DocumentLifecycleRepos
         revision: record.revision,
         expiresAt: record.expiresAt,
         cleanupEligibleAt: record.cleanupEligibleAt,
+        replacesDocumentId: record.replacesDocumentId,
       },
     });
     return this.mapIntent(row);

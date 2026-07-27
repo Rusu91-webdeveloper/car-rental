@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
+import { selectLatestDocumentAttempts } from "@/lib/booking-applications/document-view"
 
 export const dynamic = "force-dynamic"
 
@@ -87,7 +88,7 @@ export default async function ApplicationReviewWorkspace({
           status: true,
           expiresAt: true,
           customerDocuments: {
-            where: { isCurrent: true, deletionStatus: { not: "DELETED" } },
+            where: { deletionStatus: { not: "DELETED" } },
             select: {
               id: true,
               documentTypeId: true,
@@ -138,7 +139,9 @@ export default async function ApplicationReviewWorkspace({
       })
     : null
 
-  const documents = application.documentUploadSession?.customerDocuments ?? []
+  const documents = selectLatestDocumentAttempts(
+    application.documentUploadSession?.customerDocuments ?? [],
+  )
   const approved = documents.filter((document) => document.manualReviewStatus === "APPROVED").length
   const pending = documents.filter((document) => document.manualReviewStatus === "PENDING_REVIEW").length
   const actionRequired = documents.filter((document) => ["REJECTED", "REPLACEMENT_REQUIRED"].includes(document.manualReviewStatus)).length

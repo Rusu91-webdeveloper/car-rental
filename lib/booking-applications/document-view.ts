@@ -18,3 +18,11 @@ export function selectLatestDocumentAttempts<T extends DocumentAttemptView>(docu
 
   return [...latestBySlot.values()]
 }
+
+export function replacementPredecessorId(
+  document:
+    | { id: string; replacesDocumentId?: string | null }
+    | undefined,
+) {
+  return document?.replacesDocumentId ?? document?.id
+}

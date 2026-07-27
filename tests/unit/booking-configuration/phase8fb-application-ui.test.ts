@@ -54,6 +54,13 @@ describe("Phase 8F-B application and UI integration", () => {
       expect(read(path).length).toBeGreaterThan(20)
   })
 
+  it("shows the newest replacement attempt in the application review workspace", () => {
+    const workspace = read("app/[locale]/admin/documents/applications/[applicationId]/page.tsx")
+
+    expect(workspace).toContain("selectLatestDocumentAttempts(")
+    expect(workspace).toContain('customerDocuments: {\n            where: { deletionStatus: { not: "DELETED" } }')
+  })
+
   it("locks application and car and writes all snapshots in serializable finalization", () => {
     const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
     expect(adapter).toContain('FROM "BookingApplication" WHERE id = ${input.applicationId} FOR UPDATE')

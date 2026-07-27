@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { selectLatestDocumentAttempts } from "@/lib/booking-applications/document-view"
+import {
+  replacementPredecessorId,
+  selectLatestDocumentAttempts,
+} from "@/lib/booking-applications/document-view"
 
 describe("customer document attempt selection", () => {
   it("shows the newest replacement instead of the rejected current predecessor", () => {
@@ -18,5 +21,17 @@ describe("customer document attempt selection", () => {
     ]
 
     expect(selectLatestDocumentAttempts(documents)).toEqual(documents)
+  })
+
+  it("keeps retrying against the current predecessor after a replacement is rejected", () => {
+    expect(
+      replacementPredecessorId({
+        id: "rejected-replacement",
+        replacesDocumentId: "current-predecessor",
+      }),
+    ).toBe("current-predecessor")
+    expect(
+      replacementPredecessorId({ id: "initial-rejected-document" }),
+    ).toBe("initial-rejected-document")
   })
 })

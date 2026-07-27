@@ -8,6 +8,7 @@ import {
   finalizeSavedBookingApplication,
   submitBookingApplicationForReview,
 } from "@/app/actions/booking-applications"
+import { replacementPredecessorId } from "@/lib/booking-applications/document-view"
 import type { ApplicationReadiness, BookingApplicationView } from "@/lib/booking-applications/domain"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -334,7 +335,14 @@ export function BookingApplicationClient({
                             accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                             onChange={(event) => {
                               const file = event.target.files?.[0]
-                              if (file) void upload(file, requirement, side, slot, current?.id)
+                              if (file)
+                                void upload(
+                                  file,
+                                  requirement,
+                                  side,
+                                  slot,
+                                  replacementPredecessorId(current),
+                                )
                               event.target.value = ""
                             }}
                           />

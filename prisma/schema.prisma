@@ -1966,12 +1966,14 @@ model DocumentUploadIntent {
   completedAt                   DateTime?
   abortedAt                     DateTime?
   failureCode                   String?                    @db.VarChar(64)
+  replacesDocumentId            String?
   createdAt                     DateTime                   @default(now())
   updatedAt                     DateTime                   @updatedAt
 
   uploadSession       DocumentUploadSession   @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
   documentRequirement DocumentRequirementRule @relation(fields: [documentPolicyConfigVersionId, documentTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
   customerDocument    CustomerDocument?
+  replacesDocument    CustomerDocument?       @relation("DocumentUploadIntentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
 
   @@unique([uploadSessionId, documentTypeId, side, slotNumber, attemptNumber])
   @@unique([storageProviderId, storageContainerId, storageKey])
@@ -1980,6 +1982,7 @@ model DocumentUploadIntent {
   @@index([status, expiresAt])
   @@index([status, cleanupEligibleAt])
   @@index([documentPolicyConfigVersionId, documentTypeId])
+  @@index([replacesDocumentId])
 }
 
 model CustomerDocument {
@@ -2057,6 +2060,7 @@ model CustomerDocument {
   documentRequirement  DocumentRequirementRule?         @relation(fields: [documentPolicyConfigVersionId, documentRequirementTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
   replacesDocument     CustomerDocument?                @relation("CustomerDocumentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
   replacementDocuments CustomerDocument[]               @relation("CustomerDocumentReplacement")
+  replacementIntents   DocumentUploadIntent[]           @relation("DocumentUploadIntentReplacement")
   reviewedBy           User?                            @relation("CustomerDocumentReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
   reviewDecisions      CustomerDocumentReviewDecision[]
   scanAttempts         DocumentMalwareScanAttempt[]
