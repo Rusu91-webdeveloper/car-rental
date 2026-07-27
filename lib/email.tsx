@@ -53,6 +53,26 @@ type SendEmailInput = {
   idempotencyKey?: string
 }
 
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<div\b[^>]*data-email-preview[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, "")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 /**
  * Validates email configuration and returns status information
  */
@@ -116,6 +136,62 @@ function configuredTextHtml(value: string | undefined) {
   return value ? escapeHtml(value).replace(/\r?\n/g, "<br>") : ""
 }
 
+function professionalEmailHtml(input: {
+  locale: EmailLocale
+  companyName: string
+  supportEmail?: string
+  preview: string
+  heading: string
+  greetingName?: string
+  bodyHtml: string
+  footerNote?: string
+}) {
+  const isGerman = input.locale === "de"
+  const supportLine = input.supportEmail
+    ? `${isGerman ? "Fragen? Schreiben Sie uns an" : "Questions? Email us at"} <a href="mailto:${escapeHtml(input.supportEmail)}" style="color:#315b49">${escapeHtml(input.supportEmail)}</a>.`
+    : isGerman
+      ? "Antworten Sie auf diese E-Mail, wenn Sie Unterstützung benötigen."
+      : "Reply to this email if you need assistance."
+
+  return `<!doctype html>
+    <html lang="${input.locale}">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>${escapeHtml(input.heading)}</title>
+      </head>
+      <body style="margin:0;background:#f3f5f3;color:#17231d;font-family:Arial,Helvetica,sans-serif;line-height:1.6">
+        <div data-email-preview style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(input.preview)}</div>
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px">
+          <div style="background:#123c2d;color:#fff;padding:22px 28px;border-radius:14px 14px 0 0">
+            <p style="margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(input.companyName)}</p>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe5e1;border-top:0;border-radius:0 0 14px 14px;padding:30px 28px">
+            <h1 style="margin:0 0 18px;font-size:26px;line-height:1.25;color:#17231d">${escapeHtml(input.heading)}</h1>
+            ${input.greetingName ? `<p style="margin:0 0 16px">${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(input.greetingName)},</p>` : ""}
+            ${input.bodyHtml}
+          </div>
+          <div style="padding:20px 16px;text-align:center;color:#637068;font-size:13px">
+            <p style="margin:0 0 6px">${supportLine}</p>
+            ${input.footerNote ? `<p style="margin:0 0 6px">${escapeHtml(input.footerNote)}</p>` : ""}
+            <p style="margin:0">&copy; ${new Date().getFullYear()} ${escapeHtml(input.companyName)}</p>
+          </div>
+        </div>
+      </body>
+    </html>`
+}
+
+function emailDetailsHtml(rows: Array<{ label: string; value: string }>) {
+  return `<div style="margin:22px 0;padding:6px 18px;border:1px solid #dfe5e1;border-radius:10px;background:#f8faf8">
+    ${rows
+      .map(
+        ({ label, value }) =>
+          `<div style="padding:11px 0;border-bottom:1px solid #e5e9e6"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`,
+      )
+      .join("")}
+  </div>`
+}
+
 function resolveSupportEmail(
   settings: {
     supportEmail?: string | null
@@ -161,6 +237,7 @@ async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEma
         .trim()
         .slice(0, 255),
       html,
+      text: htmlToPlainText(html),
       ...(replyTo ? { replyTo } : {}),
       ...(messageId ? { messageId } : {}),
     })
@@ -207,7 +284,7 @@ export async function sendContactMessageEmail(input: {
     to: input.to,
     replyTo: input.email,
     idempotencyKey: input.idempotencyKey,
-    subject: `[Kontakt] ${input.subject}`,
+    subject: `[${input.locale === "de" ? "Kontakt" : "Contact"}] ${input.subject}`,
     html: `
       <!doctype html>
       <html lang="${input.locale}">
@@ -244,23 +321,18 @@ export async function sendContactAcknowledgementEmail(input: { to: string; name:
     replyTo: supportEmail || undefined,
     idempotencyKey: input.idempotencyKey,
     subject: isGerman ? `Wir haben Ihre Nachricht erhalten: ${input.subject}` : `We received your message: ${input.subject}`,
-    html: `
-      <!doctype html>
-      <html lang="${input.locale}">
-        <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
-          <div style="max-width:640px;margin:0 auto;padding:32px 20px">
-            <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
-              <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">${escapeHtml(companyName)}</p>
-              <h1 style="margin:0 0 18px;font-size:24px">${isGerman ? "Vielen Dank für Ihre Nachricht" : "Thank you for your message"}</h1>
-              <p>${isGerman ? "Hallo" : "Hello"} ${escapeHtml(input.name)},</p>
-              <p>${isGerman ? "wir haben Ihre Anfrage erhalten und melden uns so schnell wie möglich bei Ihnen." : "we received your enquiry and will reply as soon as possible."}</p>
-              <p><strong>${isGerman ? "Betreff" : "Subject"}:</strong> ${escapeHtml(input.subject)}</p>
-              <p style="margin-top:24px;color:#5f6d65;font-size:14px">${isGerman ? "Bei dringenden Fragen erreichen Sie uns unter" : "For urgent questions, contact us at"} ${escapeHtml(supportEmail)}.</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `,
+    html: professionalEmailHtml({
+      locale: input.locale,
+      companyName,
+      supportEmail,
+      preview: isGerman ? "Wir haben Ihre Anfrage erhalten." : "We have received your enquiry.",
+      heading: isGerman ? "Vielen Dank für Ihre Nachricht" : "Thank you for contacting us",
+      greetingName: input.name,
+      bodyHtml: `
+        <p style="margin:0 0 16px">${isGerman ? "Wir haben Ihre Anfrage erhalten. Unser Team prüft Ihre Nachricht und meldet sich so bald wie möglich bei Ihnen." : "We have received your enquiry. Our team will review your message and respond as soon as possible."}</p>
+        ${emailDetailsHtml([{ label: isGerman ? "Betreff" : "Subject", value: input.subject }])}
+        <p style="margin:0;color:#637068;font-size:14px">${isGerman ? "Bitte bewahren Sie diese E-Mail als Eingangsbestätigung auf." : "Please keep this email as confirmation that your enquiry was received."}</p>`,
+    }),
   })
 }
 
@@ -297,23 +369,22 @@ function applicationEmailHtml(input: {
   actionLabel?: string
 }) {
   const isGerman = input.locale === "de"
-  return `
-    <!doctype html>
-    <html lang="${input.locale}">
-      <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
-        <div style="max-width:640px;margin:0 auto;padding:32px 20px">
-          <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
-            <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">Qujo Autovermietung GmbH</p>
-            <h1 style="margin:0 0 18px;font-size:24px">${input.heading}</h1>
-            <p>${isGerman ? "Hallo" : "Hello"} ${escapeHtml(input.userName)},</p>
-            <p>${input.body}</p>
-            ${input.details}
-            ${input.actionUrl && input.actionLabel ? `<p style="margin:26px 0 4px"><a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background:#123c2d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:9px;font-weight:700">${input.actionLabel}</a></p>` : ""}
-          </div>
-        </div>
-      </body>
-    </html>
-  `
+  return professionalEmailHtml({
+    locale: input.locale,
+    companyName: "Qujo Autovermietung GmbH",
+    preview: input.heading,
+    heading: input.heading,
+    greetingName: input.userName,
+    bodyHtml: `
+      <p style="margin:0 0 16px">${input.body}</p>
+      ${input.details}
+      ${
+        input.actionUrl && input.actionLabel
+          ? `<p style="margin:26px 0 4px"><a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background:#123c2d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:9px;font-weight:700">${escapeHtml(input.actionLabel)}</a></p>
+             <p style="margin:12px 0 0;color:#637068;font-size:13px">${isGerman ? "Falls die Schaltfläche nicht funktioniert, öffnen Sie diesen Link:" : "If the button does not work, open this link:"}<br><a href="${escapeHtml(input.actionUrl)}" style="color:#315b49;word-break:break-all">${escapeHtml(input.actionUrl)}</a></p>`
+          : ""
+      }`,
+  })
 }
 
 export async function sendBookingApplicationSubmittedEmail(data: BookingApplicationEmailData) {
@@ -374,7 +445,7 @@ export async function sendDocumentReviewDecisionEmail(
   return sendEmail({
     to: data.to,
     idempotencyKey: data.idempotencyKey,
-    subject: isGerman ? `Aktion erforderlich: ${data.documentName}` : `Action required: ${data.documentName}`,
+    subject: isGerman ? `Aktion erforderlich – ${data.documentName}` : `Action required – ${data.documentName}`,
     html: applicationEmailHtml({
       locale: data.locale,
       userName: data.userName,
@@ -388,7 +459,13 @@ export async function sendDocumentReviewDecisionEmail(
           : `“${escapeHtml(data.documentName)}” could not be approved. Open your application and follow the steps shown.${reasonHtml}`,
       details: applicationDetailsHtml(data, isGerman),
       actionUrl: `${configAppUrl()}/${data.locale}/applications/${data.applicationId}`,
-      actionLabel: isGerman ? "Dokument ersetzen" : "Replace document",
+      actionLabel: replacement
+        ? isGerman
+          ? "Dokument ersetzen"
+          : "Replace document"
+        : isGerman
+          ? "Antrag ansehen"
+          : "View application",
     }),
   })
 }
@@ -518,7 +595,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 : isGerman
                   ? "Zahlung bei Abholung"
                   : "Pay at Pickup"
-    const confirmationHeading = data.confirmationHeading?.trim() || (isGerman ? "Buchung bestätigt!" : "Booking Confirmed!")
+    const confirmationHeading = data.confirmationHeading?.trim() || (isGerman ? "Buchung bestätigt" : "Booking confirmed")
     const subjectHeading = confirmationHeading.replace(/[\r\n]+/g, " ")
     const configuredContentHtml = configuredTextHtml(data.confirmationContent)
     const paymentInstructionsHtml =
@@ -539,7 +616,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       isTransfer && !paymentMode && data.transferCode
         ? `
                 <div class="transfer-code">
-                  ${isGerman ? "Überweisungscode" : "Transfer Code"}: ${data.transferCode}
+                  ${isGerman ? "Überweisungscode" : "Transfer Code"}: ${escapeHtml(data.transferCode)}
                 </div>
                 <p style="text-align: center; color: #666; font-size: 14px;">${isGerman ? "Bitte diesen Code bei der Fahrzeugabholung vorzeigen." : "Please show this code when picking up your vehicle"}</p>
           `
@@ -564,7 +641,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${subjectHeading} - ${data.carName}`,
+      subject: `${subjectHeading} – ${data.carName}`,
       idempotencyKey: data.idempotencyKey || `booking-confirmation-${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
@@ -589,7 +666,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 <h1>🚗 ${escapeHtml(confirmationHeading)}</h1>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
                 <p>${isGerman ? "Gute Nachrichten! Ihre Buchung wurde bestätigt. Hier sind Ihre Buchungsdetails:" : "Great news! Your booking has been confirmed. Here are your booking details:"}</p>
                 ${configuredContentHtml ? `<p>${configuredContentHtml}</p>` : ""}
                 ${transferCodeHtml}
@@ -597,23 +674,23 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 <div class="details">
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Rückgabe" : "Drop-off"}:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Standort" : "Location"}:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Zahlungsmethode" : "Payment Method"}:</strong></span>
@@ -727,32 +804,30 @@ export async function sendBookingStatusEmail(to: string, userName: string, carNa
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
       select: {
+        companyName: true,
         companyEmail: true,
         supportEmail: true,
       },
     })
+    const companyName = companySettings?.companyName || "Qujo Autovermietung GmbH"
     const supportEmail = resolveSupportEmail(companySettings)
 
     const { id, error } = await sendEmail({
       to,
       subject,
       idempotencyKey: `booking-status-${bookingNumber}-${status.toLowerCase()}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2>${isGerman ? "Buchungsstatus-Update" : "Booking Status Update"}</h2>
-              <p>${isGerman ? "Hallo" : "Hi"} ${userName},</p>
-              <p>${message}</p>
-              <p><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong> ${bookingNumber}</p>
-              <p><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${carName}</p>
-              <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-              <p style="color: #666; font-size: 14px;">${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
-            </div>
-          </body>
-        </html>
-      `,
+      html: professionalEmailHtml({
+        locale: emailLocale,
+        companyName,
+        supportEmail,
+        preview: message,
+        heading: isGerman ? "Aktualisierung Ihrer Buchung" : "Your booking has been updated",
+        greetingName: userName,
+        bodyHtml: `<p style="margin:0 0 16px">${escapeHtml(message)}</p>${emailDetailsHtml([
+          { label: isGerman ? "Buchungsnummer" : "Booking number", value: bookingNumber },
+          { label: isGerman ? "Fahrzeug" : "Vehicle", value: carName },
+        ])}`,
+      }),
     })
 
     if (error) {
@@ -825,7 +900,7 @@ export async function sendBookingCompletionReviewEmail(data: {
     const { id, error } = await sendEmail({
       to: data.to,
       idempotencyKey: `booking-completion-${data.bookingNumber}`,
-      subject: `${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for choosing us"} - ${data.carName}`,
+      subject: `${isGerman ? "Vielen Dank für Ihre Buchung" : "Thank you for choosing us"} – ${data.carName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -847,24 +922,25 @@ export async function sendBookingCompletionReviewEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1 style="margin:0 0 8px 0;">${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for your booking"}</h1>
+                <h1 style="margin:0 0 8px 0;">${isGerman ? "Vielen Dank für Ihre Buchung" : "Thank you for your booking"}</h1>
                 <p style="margin:0; opacity:0.95;">${isGerman ? "Wir hoffen, Sie hatten eine gute Mieterfahrung." : "We hope you enjoyed your rental experience."}</p>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
-                <p>${isGerman ? "Ihre Buchung wurde erfolgreich abgeschlossen. Vielen Dank fur Ihr Vertrauen." : "Your booking has been completed successfully. We appreciate your trust."}</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
+                <p>${isGerman ? "Ihre Buchung wurde erfolgreich abgeschlossen. Vielen Dank für Ihr Vertrauen." : "Your booking has been completed successfully. We appreciate your trust."}</p>
 
                 <div class="card">
-                  <div class="row"><span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}</strong></span><span>${data.bookingNumber}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}</strong></span><span>${data.carName}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Abholung" : "Pick-up"}</strong></span><span>${data.pickupDate}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Rückgabe" : "Drop-off"}</strong></span><span>${data.dropoffDate}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}</strong></span><span>${escapeHtml(data.bookingNumber)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}</strong></span><span>${escapeHtml(data.carName)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Abholung" : "Pick-up"}</strong></span><span>${escapeHtml(data.pickupDate)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Rückgabe" : "Drop-off"}</strong></span><span>${escapeHtml(data.dropoffDate)}</span></div>
                 </div>
 
-                <p>${isGerman ? "Nehmen Sie sich eine Minute Zeit fur eine Bewertung? Ihr Feedback hilft uns, besser zu werden." : "Would you take a minute to rate your experience? Your feedback helps us improve."}</p>
+                <p>${isGerman ? "Möchten Sie sich eine Minute Zeit für eine Bewertung nehmen? Ihr Feedback hilft uns, unseren Service weiter zu verbessern." : "Would you take a minute to rate your experience? Your feedback helps us improve."}</p>
                 <div class="button-wrap">
-                  <a class="button" href="${data.reviewUrl}">${isGerman ? "Bewertung abgeben" : "Leave a Review"}</a>
+                  <a class="button" href="${escapeHtml(data.reviewUrl)}">${isGerman ? "Bewertung abgeben" : "Leave a review"}</a>
                 </div>
+                <p style="color:#6b7280;font-size:13px;word-break:break-all">${isGerman ? "Falls die Schaltfläche nicht funktioniert:" : "If the button does not work:"}<br><a href="${escapeHtml(data.reviewUrl)}">${escapeHtml(data.reviewUrl)}</a></p>
               </div>
               <div class="footer">
                 <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
@@ -975,7 +1051,7 @@ export async function sendManualPaymentEmail(data: {
     const { id, error } = await sendEmail({
       to: data.to,
       idempotencyKey: data.idempotencyKey || `booking-transfer-instructions-${data.bookingNumber}`,
-      subject: `${isGerman ? "Reservierung ausstehend – Zahlung erforderlich" : "Reservation pending – payment required"} - ${data.bookingNumber}`,
+      subject: `${isGerman ? "Reservierung ausstehend – Zahlung erforderlich" : "Reservation pending – payment required"} – ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1061,7 +1137,7 @@ export async function sendManualPaymentEmail(data: {
                     <span class="detail-label">${isGerman ? "Standort:" : "Location:"}</span>
                     <span class="detail-value">${escapeHtml(data.location)}</span>
                   </div>
-                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${escapeHtml(data.insuranceName)} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
                   ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
                 </div>
 
@@ -1266,7 +1342,7 @@ export async function sendPayAtPickupEmail(data: {
     const { id, error } = await sendEmail({
       to: data.to,
       idempotencyKey: data.idempotencyKey || `booking-cash-confirmation-${data.bookingNumber}`,
-      subject: `${isGerman ? "Buchung bestätigt!" : "Booking Confirmed!"} - ${data.bookingNumber}`,
+      subject: `${isGerman ? "Buchung bestätigt" : "Booking confirmed"} – ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1289,27 +1365,27 @@ export async function sendPayAtPickupEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>${isGerman ? "Buchung bestätigt!" : "Booking Confirmed!"}</h1>
+                <h1>${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1>
                 <p>${isGerman ? "Ihre Reservierung wurde erfolgreich erstellt" : "Your reservation has been created successfully"}</p>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
                 <p>${data.advanceReceived ? (isGerman ? "Wir haben Ihre Anzahlung erhalten. Ihre Buchung ist jetzt bestätigt; der Restbetrag ist bei Abholung fällig." : "We received your deposit. Your booking is now confirmed and the remaining balance is due at pickup.") : (isGerman ? "Ihre Buchung wurde mit <strong>Zahlung bei Abholung</strong> als Zahlungsmethode bestätigt." : "Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method.")}</p>
 
                 <div class="box booking-number-box">
                   <div style="font-size: 14px; color: #6b7280;">${isGerman ? "Buchungsnummer" : "Booking Number"}</div>
-                  <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${data.bookingNumber}</div>
+                  <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${escapeHtml(data.bookingNumber)}</div>
                 </div>
 
                 <div class="details">
                   <h3>${isGerman ? "Buchungsdetails" : "Booking Details"}</h3>
-                  <div class="detail-row"><span>${isGerman ? "Fahrzeug:" : "Car:"}</span><strong>${data.carName}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${data.pickupDate}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Rückgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Fahrzeug:" : "Vehicle:"}</span><strong>${escapeHtml(data.carName)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${escapeHtml(data.pickupDate)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Rückgabe:" : "Drop-off:"}</span><strong>${escapeHtml(data.dropoffDate)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${escapeHtml(data.location)}</strong></div>
                   ${companyAddress ? `<div class="detail-row"><span>${isGerman ? "Firmenadresse:" : "Company address:"}</span><strong>${escapeHtml(companyAddress)}</strong></div>` : ""}
                   ${companyContact ? `<div class="detail-row"><span>${isGerman ? "Kontakt:" : "Contact:"}</span><strong>${escapeHtml(companyContact)}</strong></div>` : ""}
-                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${escapeHtml(data.insuranceName)} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
                   ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
                   <div class="detail-row"><span>${data.advanceReceived ? (isGerman ? "Restbetrag bei Abholung:" : "Remaining at pickup:") : (isGerman ? "Gesamtbetrag:" : "Total Amount:")}</span><strong>${formatCents(data.amountDueAtPickup ?? data.totalPrice, data.currency)}</strong></div>
                   ${
@@ -1424,7 +1500,7 @@ export async function sendTransferPaymentConfirmedEmail(data: {
         <div style="max-width:620px;margin:0 auto;padding:28px 16px">
           <div style="background:#123f2b;color:white;padding:28px;border-radius:14px 14px 0 0"><h1 style="margin:0;font-size:26px">${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1></div>
           <div style="background:white;padding:28px;border-radius:0 0 14px 14px">
-            <p>${isGerman ? "Hallo" : "Hi"} ${escapeHtml(data.userName)},</p>
+            <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
             <p>${isGerman ? "wir haben Ihre Anzahlung erhalten. Ihre Buchung ist jetzt bestätigt." : "we have received your deposit. Your booking is now confirmed."}</p>
             <div style="background:#f6f7f3;border:1px solid #dfe4dd;border-radius:10px;padding:18px;line-height:1.8">
               <div><strong>${isGerman ? "Buchungsnummer" : "Booking number"}:</strong> ${escapeHtml(data.bookingNumber)}</div>
@@ -1461,18 +1537,28 @@ export async function sendTransferExpiredEmail(data: {
     where: { id: "company-settings" },
     select: { companyName: true, companyEmail: true, supportEmail: true },
   })
+  const companyName = settings?.companyName || "Qujo Autovermietung GmbH"
   const supportEmail = resolveSupportEmail(settings)
   return sendEmail({
     to: data.to,
     idempotencyKey: data.idempotencyKey || `booking-transfer-expired-${data.bookingNumber}`,
     subject: isGerman ? `Reservierung abgelaufen – ${data.bookingNumber}` : `Reservation expired – ${data.bookingNumber}`,
-    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937"><div style="max-width:600px;margin:0 auto;padding:24px">
-      <h1>${isGerman ? "Reservierung abgelaufen" : "Reservation expired"}</h1>
-      <p>${isGerman ? "Hallo" : "Hi"} ${escapeHtml(data.userName)},</p>
-      <p>${isGerman ? "wir konnten innerhalb von 24 Stunden keinen Zahlungseingang zuordnen. Die Reservierung wurde storniert und das Fahrzeug ist für diesen Zeitraum wieder verfügbar." : "We could not match a payment within 24 hours. The reservation has been cancelled and the vehicle is available for those dates again."}</p>
-      <p><strong>${isGerman ? "Buchungsnummer" : "Booking number"}:</strong> ${escapeHtml(data.bookingNumber)}<br><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${escapeHtml(data.carName)}</p>
-      <p>${isGerman ? "Falls Sie bereits überwiesen haben, kontaktieren Sie uns bitte unter" : "If you already transferred the payment, please contact us at"} ${escapeHtml(supportEmail)}.</p>
-    </div></body></html>`,
+    replyTo: supportEmail || undefined,
+    html: professionalEmailHtml({
+      locale,
+      companyName,
+      supportEmail,
+      preview: isGerman ? `Reservierung ${data.bookingNumber} ist abgelaufen.` : `Reservation ${data.bookingNumber} has expired.`,
+      heading: isGerman ? "Ihre Reservierung ist abgelaufen" : "Your reservation has expired",
+      greetingName: data.userName,
+      bodyHtml: `
+        <p style="margin:0 0 16px">${isGerman ? `Wir konnten innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden keinen Zahlungseingang zuordnen. Deshalb wurde die Reservierung automatisch storniert und das Fahrzeug wieder freigegeben.` : `We could not match a payment within ${BOOKING_PAYMENT_WINDOW_HOURS} hours. The reservation was therefore cancelled automatically and the vehicle has been released.`}</p>
+        ${emailDetailsHtml([
+          { label: isGerman ? "Buchungsnummer" : "Booking number", value: data.bookingNumber },
+          { label: isGerman ? "Fahrzeug" : "Vehicle", value: data.carName },
+        ])}
+        <p style="margin:0"><strong>${isGerman ? "Zahlung bereits gesendet?" : "Already sent the payment?"}</strong><br>${isGerman ? "Antworten Sie bitte auf diese E-Mail und nennen Sie Ihre Buchungsnummer, damit wir die Zahlung prüfen können." : "Reply to this email with your booking number so that we can investigate the payment."}</p>`,
+    }),
   })
 }
 
@@ -1489,6 +1575,12 @@ export async function sendBookingLifecycleEmail(data: {
 }) {
   const locale = normalizeEmailLocale(data.locale)
   const isGerman = locale === "de"
+  const settings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: { companyName: true, companyEmail: true, supportEmail: true },
+  })
+  const companyName = settings?.companyName || "Qujo Autovermietung GmbH"
+  const supportEmail = resolveSupportEmail(settings)
   const content = {
     BALANCE_RECEIPT: {
       subject: isGerman ? `Zahlung erfasst – ${data.bookingNumber}` : `Payment recorded – ${data.bookingNumber}`,
@@ -1514,9 +1606,28 @@ export async function sendBookingLifecycleEmail(data: {
   }[data.event]
   return sendEmail({
     to: data.to,
+    replyTo: supportEmail || undefined,
     idempotencyKey: data.idempotencyKey,
     subject: content.subject,
-    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#142018"><div style="max-width:600px;margin:0 auto;padding:24px"><h1>${content.heading}</h1><p>${isGerman ? "Hallo" : "Hi"} ${escapeHtml(data.userName)},</p><p>${content.body}</p><p><strong>${isGerman ? "Buchungsnummer" : "Booking number"}:</strong> ${escapeHtml(data.bookingNumber)}</p></div></body></html>`,
+    html: professionalEmailHtml({
+      locale,
+      companyName,
+      supportEmail,
+      preview: content.subject,
+      heading: content.heading,
+      greetingName: data.userName,
+      bodyHtml: `<p style="margin:0 0 16px">${content.body}</p>${emailDetailsHtml([
+        { label: isGerman ? "Buchungsnummer" : "Booking number", value: data.bookingNumber },
+      ])}<p style="margin:0;color:#637068;font-size:14px">${
+        data.event === "REFUND_CONFIRMED"
+          ? isGerman
+            ? "Je nach Zahlungsanbieter kann es einige Werktage dauern, bis die Gutschrift auf Ihrem Konto sichtbar ist."
+            : "Depending on your payment provider, it may take several business days for the credit to appear in your account."
+          : isGerman
+            ? "Bitte bewahren Sie diese E-Mail für Ihre Unterlagen auf."
+            : "Please keep this email for your records."
+      }</p>`,
+    }),
   })
 }
 
@@ -1598,7 +1709,7 @@ export async function sendAdminBookingNotification(data: {
       ? `
                   <div style="margin-bottom: 10px;">
                     <strong>Transfer Reference Code:</strong>
-                    <div class="transfer-code">${data.transferCode}</div>
+                    <div class="transfer-code">${escapeHtml(data.transferCode)}</div>
                     <p style="font-size: 14px; color: #666; margin: 5px 0;">Customer should include this code in their bank transfer</p>
                   </div>
                   <div class="detail-row">
@@ -1639,7 +1750,7 @@ export async function sendAdminBookingNotification(data: {
     const nextStepsHtml = isTransfer
       ? `
                     <li>Wait for customer to complete bank transfer</li>
-                    <li>Check bank account for payment with reference: <strong>${data.transferCode}</strong></li>
+                    <li>Check the bank account for a payment using reference <strong>${escapeHtml(data.transferCode)}</strong></li>
                     <li>Once payment is confirmed, go to admin dashboard</li>
                     <li>Update booking status to "CONFIRMED"</li>
       `
@@ -1653,7 +1764,7 @@ export async function sendAdminBookingNotification(data: {
     const { id, error } = await sendEmail({
       to: recipients,
       idempotencyKey: data.idempotencyKey || `booking-created-admin-${data.bookingNumber}`,
-      subject: `🔔 New Booking - ${data.carName} (${data.bookingNumber})`,
+      subject: `New booking – ${data.carName} (${data.bookingNumber})`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1675,7 +1786,7 @@ export async function sendAdminBookingNotification(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>🔔 New Booking Received</h1>
+                <h1>New booking received</h1>
               </div>
               <div class="content">
                 <p><strong>${summaryText}</strong></p>
@@ -1688,7 +1799,7 @@ export async function sendAdminBookingNotification(data: {
                   <h3 style="margin-top: 0;">Booking Information</h3>
                   <div class="detail-row">
                     <span><strong>Booking Number:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Status:</strong></span>
@@ -1700,19 +1811,19 @@ export async function sendAdminBookingNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Vehicle:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Pick-up:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Drop-off:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Location:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                 </div>
 
@@ -1720,11 +1831,11 @@ export async function sendAdminBookingNotification(data: {
                   <h3 style="margin-top: 0;">Customer Information</h3>
                   <div class="detail-row">
                     <span><strong>Name:</strong></span>
-                    <span>${data.userName}</span>
+                    <span>${escapeHtml(data.userName)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Email:</strong></span>
-                    <span>${data.userEmail}</span>
+                    <span><a href="mailto:${escapeHtml(data.userEmail)}">${escapeHtml(data.userEmail)}</a></span>
                   </div>
                 </div>
 
@@ -1880,7 +1991,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
             <style>
               body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
               .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #10B981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+              .header { background: #123c2d; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
               .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
               .success-box { background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 4px; }
               .details { background: white; padding: 20px; border-radius: 4px; margin: 20px 0; }
@@ -1893,7 +2004,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>✅ Booking Confirmed</h1>
+                <h1>${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1>
               </div>
               <div class="content">
                 <p><strong>A booking has been confirmed and is ready for pickup.</strong></p>
@@ -1906,7 +2017,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h3 style="margin-top: 0;">Booking Information</h3>
                   <div class="detail-row">
                     <span><strong>Booking Number:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Status:</strong></span>
@@ -1914,19 +2025,19 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Vehicle:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Pick-up:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Drop-off:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Location:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                 </div>
 
@@ -1934,11 +2045,11 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h3 style="margin-top: 0;">Customer Information</h3>
                   <div class="detail-row">
                     <span><strong>Name:</strong></span>
-                    <span>${data.userName}</span>
+                    <span>${escapeHtml(data.userName)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Email:</strong></span>
-                    <span>${data.userEmail}</span>
+                    <span><a href="mailto:${escapeHtml(data.userEmail)}">${escapeHtml(data.userEmail)}</a></span>
                   </div>
                 </div>
 
@@ -1948,7 +2059,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
                     data.transferCode
                       ? `<div style="margin-bottom: 10px;">
                     <strong>Transfer Reference Code:</strong>
-                    <div class="transfer-code">${data.transferCode}</div>
+                    <div class="transfer-code">${escapeHtml(data.transferCode)}</div>
                   </div>`
                       : ""
                   }
@@ -1970,9 +2081,9 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
                   <ol style="margin: 10px 0; padding-left: 20px;">
                     <li>Prepare the vehicle for pickup</li>
-                    ${data.transferCode ? `<li>Verify customer's transfer code: <strong>${data.transferCode}</strong></li>` : ""}
+                    ${data.transferCode ? `<li>Verify the customer's transfer code: <strong>${escapeHtml(data.transferCode)}</strong></li>` : ""}
                     <li>Ensure all documentation is ready</li>
-                    <li>Customer will arrive on: <strong>${data.pickupDate}</strong></li>
+                    <li>Customer arrival: <strong>${escapeHtml(data.pickupDate)}</strong></li>
                   </ol>
                 </div>
 
