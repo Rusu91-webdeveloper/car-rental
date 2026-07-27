@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { HomeClient } from "./home-client"
 import { getPublicCarPrices } from "@/lib/cars/public-pricing"
+import { formatCompanyPickupLocation } from "@/lib/company-pickup-location"
 
 export const dynamic = "force-dynamic"
 
@@ -14,6 +15,16 @@ export default async function HomePage() {
   })
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
   const publicPrices = await getPublicCarPrices(prisma, cars)
+  const companySettings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: {
+      companyAddress: true,
+      companyCity: true,
+      companyState: true,
+      companyZipCode: true,
+      companyCountry: true,
+    },
+  })
 
   const savedCarIds = user
     ? await prisma.savedCar.findMany({
@@ -63,6 +74,7 @@ export default async function HomePage() {
       }
       savedCarIds={savedCarIds.map((item) => item.carId)}
       signInUrl="/sign-in"
+      pickupLocation={formatCompanyPickupLocation(companySettings)}
     />
   )
 }

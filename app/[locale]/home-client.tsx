@@ -46,11 +46,13 @@ export function HomeClient({
   user,
   savedCarIds,
   signInUrl,
+  pickupLocation,
 }: {
   cars: Car[]
   user: { name: string; email: string; role: string } | null
   savedCarIds: string[]
   signInUrl: string
+  pickupLocation: string | null
 }) {
   const t = useTranslations()
   const locale = useLocale()
@@ -222,12 +224,28 @@ export function HomeClient({
       ? "Wählen Sie Ihr Fahrzeug und senden Sie Ihre Buchungsanfrage in wenigen Schritten."
       : "Choose your vehicle and send your booking request in just a few steps."
   const ctaBannerButton = locale === "de" ? "Fahrzeug auswählen" : "Choose a vehicle"
+  const mobileLocationLabel = locale === "de" ? "Abholort" : "Pick-up location"
+  const mobileLocation =
+    pickupLocation ??
+    (locale === "de" ? "Abholdetails bei der Buchung" : "Pick-up details confirmed during booking")
+  const mobileSearchLabel = locale === "de" ? "Verfügbare Fahrzeuge finden" : "Find available cars"
+  const mobileCategoryOptions = [
+    { value: "ALL", label: t("categories.all") },
+    { value: "SUV", label: t("categories.suv") },
+    { value: "LUXURY", label: t("categories.luxury") },
+    { value: "ELECTRIC", label: t("categories.electric") },
+  ]
+
+  const scrollToInventory = () => {
+    document.getElementById("available-cars")?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
 
   return (
     <div className="qujo-page pb-24">
-      <header className="sticky top-0 z-30 border-b border-black/[0.06] bg-[#f8f7f2]/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#13251d]/95 backdrop-blur-xl md:border-black/[0.06] md:bg-[#f8f7f2]/90">
         <div className="qujo-container flex h-[4.6rem] items-center justify-between">
-          <BrandMark />
+          <BrandMark inverted className="md:hidden" />
+          <BrandMark className="hidden md:inline-flex" />
 
           <nav className="hidden items-center gap-7 text-sm font-semibold md:flex" aria-label="Primary navigation">
             <Link href="/cars" className="text-foreground/65 transition-colors hover:text-foreground">
@@ -262,7 +280,100 @@ export function HomeClient({
       </header>
 
       <main className="relative overflow-hidden">
-        <section className="px-4 pb-8 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <section className="relative overflow-hidden bg-[#13251d] pb-20 text-white md:hidden">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%]" aria-hidden="true">
+            {featuredCar ? (
+              <img
+                src={featuredCar.image || "/placeholder.jpg"}
+                alt=""
+                className="h-full w-full object-cover object-center"
+              />
+            ) : (
+              <div className="h-full w-full bg-[#1a3026]" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#13251d] via-[#13251d]/35 to-black/15" />
+          </div>
+
+          <div className="relative mx-auto min-h-[43rem] max-w-lg px-4 pt-7">
+            <div className="inline-flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[#cbe85d]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#cbe85d]" aria-hidden="true" />
+              {t("home.kicker")}
+            </div>
+            <h1 className="mt-3 max-w-[20rem] text-[2.45rem] font-black leading-[0.98] tracking-[-0.06em]">
+              {t("home.title")}
+            </h1>
+
+            <div className="mt-6 rounded-[1.65rem] border border-white/15 bg-white p-4 text-foreground shadow-[0_28px_70px_-28px_rgba(0,0,0,0.75)]">
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={locale === "de" ? "Fahrzeugklasse" : "Vehicle class"}>
+                {mobileCategoryOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedCategory(option.value)}
+                    aria-pressed={selectedCategory === option.value}
+                    className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors ${
+                      selectedCategory === option.value
+                        ? "bg-[#13251d] text-white"
+                        : "bg-[#f1f2ed] text-foreground/70 hover:bg-[#e7e9e2]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-black/10 bg-white px-4">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef2e8] text-primary" aria-hidden="true">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21s7-5.2 7-12a7 7 0 10-14 0c0 6.8 7 12 7 12z" />
+                    <circle cx="12" cy="9" r="2.25" strokeWidth="2" />
+                  </svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium text-muted-foreground">{mobileLocationLabel}</span>
+                  <span className="mt-0.5 block truncate text-[0.95rem] font-bold">{mobileLocation}</span>
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-[#f7f7f3] p-3">
+                <ClientOnly>
+                  <DateFilter
+                    pickupDate={pickupDateParam}
+                    dropoffDate={dropoffDateParam}
+                    onPickupDateChange={handlePickupDateChange}
+                    onDropoffDateChange={handleDropoffDateChange}
+                    onClear={handleClearDates}
+                    compact
+                  />
+                </ClientOnly>
+              </div>
+
+              <button
+                type="button"
+                onClick={scrollToInventory}
+                className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#cbe85d] px-5 text-sm font-extrabold text-[#13251d] shadow-[0_14px_30px_-18px_rgba(76,104,29,0.8)] transition-transform active:scale-[0.99]"
+              >
+                {mobileSearchLabel}
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M5 12h14m-5-5 5 5-5 5" />
+                </svg>
+              </button>
+
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 px-1 text-xs font-medium text-foreground/65">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-primary text-[0.6rem] text-white">✓</span>
+                  {t("home.highlights.insurance")}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-primary text-[0.6rem] text-white">✓</span>
+                  {t("home.highlights.support")}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="hidden px-4 pb-8 pt-5 sm:px-6 sm:pt-7 md:block lg:px-8">
           <div className="mx-auto max-w-7xl space-y-7">
             <div className="grid gap-8 overflow-hidden rounded-[2rem] bg-[#13251d] p-6 text-white shadow-[0_32px_80px_-42px_rgba(19,37,29,0.8)] sm:p-9 lg:grid-cols-[1.08fr_0.92fr] lg:p-11">
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -412,13 +523,13 @@ export function HomeClient({
           </div>
         </section>
 
-        <section className="px-4 pb-4">
+        <section className="hidden px-4 pb-4 md:block">
           <div className="mx-auto max-w-7xl rounded-2xl border border-black/[0.07] bg-white p-2 shadow-sm">
             <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
           </div>
         </section>
 
-        <section className="px-4 pb-10">
+        <section id="available-cars" className="scroll-mt-24 px-4 pb-10 pt-7 md:pt-0">
           <div className="mx-auto max-w-7xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-bold sm:text-2xl">{t("home.popularCars")}</h2>
