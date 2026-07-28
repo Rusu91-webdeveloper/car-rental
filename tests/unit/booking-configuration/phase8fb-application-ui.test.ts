@@ -31,7 +31,7 @@ describe("Phase 8F-B application and UI integration", () => {
     const terms = read("app/[locale]/agb/page.tsx")
     const availability = read("lib/availability.ts")
 
-    expect(checkout).toContain("Charging another day does not extend the rental agreement")
+    expect(checkout).toContain("This charge does not extend your booking")
     expect(checkout).toContain("legalAcknowledgements.lateReturnPolicy")
     expect(actions).toContain("lateReturnPolicy: z.literal(true")
     expect(actions).toContain("booking_application.late_return_policy_acknowledged")

@@ -94,7 +94,7 @@ export function BillingRuleForm({ data, canManage, nextHref }: { data: PricingAd
             <Field label="What counts as a rental day?" explanation="Choose how partial days are charged." example="Each started 24-hour period." live={display(data.livePricing?.configuration.billableDayRule)}>
               <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={configuration.billableDayRule} onChange={(event) => set("billableDayRule", event.target.value as PricingBillingConfiguration["billableDayRule"])} disabled={!canManage || pending}>
                 <option value="STARTED_24_HOUR_PERIODS">Each started 24-hour period</option>
-                <option value="CALENDAR_DAYS">Each calendar date</option>
+                <option value="CALENDAR_DAYS">Calendar dates with return-time grace</option>
                 <option value="PICKUP_TIME_BOUNDARY">Each time the pickup hour passes</option>
               </select>
             </Field>

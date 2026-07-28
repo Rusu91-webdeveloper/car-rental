@@ -71,8 +71,17 @@ function startedPeriods(elapsedMs: number, gracePeriodMinutes: number): number {
   return Math.ceil(effective / DAY_MILLISECONDS)
 }
 
-function calendarDays(pickup: ZonedParts, returned: ZonedParts): number {
-  return Math.max(1, localDayOrdinal(returned) - localDayOrdinal(pickup))
+function calendarDays(pickup: ZonedParts, returned: ZonedParts, gracePeriodMinutes: number): number {
+  const dayDifference = localDayOrdinal(returned) - localDayOrdinal(pickup)
+  const pickupSecond = pickup.hour * 3600 + pickup.minute * 60 + pickup.second
+  const returnSecond = returned.hour * 3600 + returned.minute * 60 + returned.second
+  const graceSeconds = gracePeriodMinutes * 60
+
+  // A timestamp rental must retain its final partial day. Comparing only the
+  // local dates would undercharge whenever the return time is later than the
+  // pickup time plus the configured grace period. Date-only requests still
+  // preserve exclusive return-date semantics because both times are equal.
+  return Math.max(1, dayDifference + (returnSecond > pickupSecond + graceSeconds ? 1 : 0))
 }
 
 function pickupBoundaries(pickup: ZonedParts, returned: ZonedParts, gracePeriodMinutes: number): number {
@@ -114,7 +123,7 @@ export function calculateChargeableDuration(input: DurationInput): ChargeableDur
       calculatedDays = startedPeriods(elapsedMs, gracePeriodMinutes)
       break
     case "CALENDAR_DAYS":
-      calculatedDays = calendarDays(pickupLocal, returnLocal)
+      calculatedDays = calendarDays(pickupLocal, returnLocal, gracePeriodMinutes)
       break
     case "PICKUP_TIME_BOUNDARY":
       calculatedDays = pickupBoundaries(pickupLocal, returnLocal, gracePeriodMinutes)

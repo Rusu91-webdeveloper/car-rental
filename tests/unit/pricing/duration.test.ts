@@ -27,6 +27,18 @@ describe("chargeable duration", () => {
     expect(duration("2026-01-01T10:00:00Z", "2026-01-02T10:31:00Z", { gracePeriodMinutes: 30 }).chargeableDays).toBe(2)
   })
 
+  it("charges the final partial calendar day after the configured grace period", () => {
+    const calendarRule = {
+      businessTimeZone: "Europe/Bucharest",
+      billableDayMethod: "CALENDAR_DAYS" as const,
+      gracePeriodMinutes: 120,
+    }
+
+    expect(duration("2026-07-29T07:00:00Z", "2026-07-31T09:00:00Z", calendarRule).chargeableDays).toBe(2)
+    expect(duration("2026-07-29T07:00:00Z", "2026-07-31T09:01:00Z", calendarRule).chargeableDays).toBe(3)
+    expect(duration("2026-07-29T07:00:00Z", "2026-07-31T11:00:00Z", calendarRule).chargeableDays).toBe(3)
+  })
+
   it("rejects reversed, invalid, too-short, and invalid-timezone inputs", () => {
     expect(() => duration("2026-01-02T10:00:00Z", "2026-01-01T10:00:00Z")).toThrow(/after pickup/)
     expect(() => duration("invalid", "2026-01-01T10:00:00Z")).toThrow(/valid timestamp/)
