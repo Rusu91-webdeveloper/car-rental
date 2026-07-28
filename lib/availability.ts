@@ -8,6 +8,20 @@ import {
 
 type DbClient = PrismaClient | Prisma.TransactionClient
 
+const AVAILABILITY_BLOCKING_APPLICATION_STATUSES = [
+  "DRAFT",
+  "AWAITING_DOCUMENT_UPLOAD",
+  "AWAITING_DOCUMENT_REVIEW",
+  "CUSTOMER_ACTION_REQUIRED",
+  "READY_TO_FINALIZE",
+] as const
+
+interface AvailabilityOptions {
+  excludeBookingId?: string
+  excludeBookingApplicationId?: string
+  db?: DbClient
+}
+
 function availabilityBlockingBookingFilter(now: Date): Prisma.BookingWhereInput {
   return {
     OR: [
@@ -17,6 +31,13 @@ function availabilityBlockingBookingFilter(now: Date): Prisma.BookingWhereInput 
         OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: now } }],
       },
     ],
+  }
+}
+
+function availabilityBlockingApplicationFilter(now: Date): Prisma.BookingApplicationWhereInput {
+  return {
+    status: { in: [...AVAILABILITY_BLOCKING_APPLICATION_STATUSES] },
+    expiresAt: { gt: now },
   }
 }
 
@@ -36,9 +57,9 @@ export async function isCarAvailable(
   carId: string,
   pickupDate: Date,
   dropoffDate: Date,
-  excludeBookingId?: string,
-  db: DbClient = prisma,
+  options: AvailabilityOptions = {},
 ): Promise<boolean> {
+  const db = options.db ?? prisma
   // Every booking reserves an additional preparation period after return.
   // Expanding both comparison boundaries ensures a full buffer also remains
   // between a new return and the following booking's pickup.
@@ -46,46 +67,52 @@ export async function isCarAvailable(
   const pickupBeforeBuffer = subtractOperationalBuffer(pickupDate, preparationBufferMinutes)
   const dropoffWithBuffer = addOperationalBuffer(dropoffDate, preparationBufferMinutes)
   const now = new Date()
-  const overlappingBookings = await db.booking.findMany({
-    where: {
-      carId,
-      id: excludeBookingId ? { not: excludeBookingId } : undefined,
-      ...availabilityBlockingBookingFilter(now),
-      AND: [
-        {
-          pickupDate: {
-            lt: dropoffWithBuffer,
+  const [overlappingBookings, overlappingApplications, blockedDates] = await Promise.all([
+    db.booking.findMany({
+      where: {
+        carId,
+        id: options.excludeBookingId ? { not: options.excludeBookingId } : undefined,
+        ...availabilityBlockingBookingFilter(now),
+        AND: [
+          {
+            pickupDate: {
+              lt: dropoffWithBuffer,
+            },
           },
-        },
-        {
-          dropoffDate: {
-            gt: pickupBeforeBuffer,
+          {
+            dropoffDate: {
+              gt: pickupBeforeBuffer,
+            },
           },
-        },
-      ],
-    },
-    select: { id: true },
-  })
-
-  if (overlappingBookings.length > 0) {
-    return false
-  }
-
-  // Check for blocked dates
-  const blockedDates = await db.blockedDate.findMany({
-    where: {
-      carId,
-      startDate: {
-        lt: dropoffDate,
+        ],
       },
-      endDate: {
-        gt: pickupDate,
+      select: { id: true },
+    }),
+    db.bookingApplication.findMany({
+      where: {
+        carId,
+        id: options.excludeBookingApplicationId
+          ? { not: options.excludeBookingApplicationId }
+          : undefined,
+        ...availabilityBlockingApplicationFilter(now),
+        AND: [
+          { pickupAt: { lt: dropoffWithBuffer } },
+          { returnAt: { gt: pickupBeforeBuffer } },
+        ],
       },
-    },
-    select: { id: true },
-  })
+      select: { id: true },
+    }),
+    db.blockedDate.findMany({
+      where: {
+        carId,
+        startDate: { lt: dropoffDate },
+        endDate: { gt: pickupDate },
+      },
+      select: { id: true },
+    }),
+  ])
 
-  return blockedDates.length === 0
+  return overlappingBookings.length === 0 && overlappingApplications.length === 0 && blockedDates.length === 0
 }
 
 export async function getUnavailableDates(
@@ -93,7 +120,7 @@ export async function getUnavailableDates(
   db: DbClient = prisma,
 ): Promise<{ start: Date; end: Date }[]> {
   const now = new Date()
-  const [preparationBufferMinutes, bookings, blockedDates] = await Promise.all([
+  const [preparationBufferMinutes, bookings, applications, blockedDates] = await Promise.all([
     resolvePreparationBufferMinutes(db),
     db.booking.findMany({
       where: {
@@ -103,6 +130,16 @@ export async function getUnavailableDates(
       select: {
         pickupDate: true,
         dropoffDate: true,
+      },
+    }),
+    db.bookingApplication.findMany({
+      where: {
+        carId,
+        ...availabilityBlockingApplicationFilter(now),
+      },
+      select: {
+        pickupAt: true,
+        returnAt: true,
       },
     }),
     db.blockedDate.findMany({
@@ -118,6 +155,10 @@ export async function getUnavailableDates(
     ...bookings.map((b) => ({
       start: subtractOperationalBuffer(b.pickupDate, preparationBufferMinutes),
       end: addOperationalBuffer(b.dropoffDate, preparationBufferMinutes),
+    })),
+    ...applications.map((application) => ({
+      start: subtractOperationalBuffer(application.pickupAt, preparationBufferMinutes),
+      end: addOperationalBuffer(application.returnAt, preparationBufferMinutes),
     })),
     ...blockedDates.map((b) => ({ start: b.startDate, end: b.endDate })),
   ]

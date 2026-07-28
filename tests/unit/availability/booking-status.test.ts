@@ -4,10 +4,13 @@ import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
 
 function createDb({
   bookings = [],
+  applications = [],
 }: {
   bookings?: { id?: string; pickupDate?: Date; dropoffDate?: Date }[]
+  applications?: { id?: string; pickupAt?: Date; returnAt?: Date }[]
 } = {}) {
   const bookingFindMany = vi.fn().mockResolvedValue(bookings)
+  const bookingApplicationFindMany = vi.fn().mockResolvedValue(applications)
   const blockedDateFindMany = vi.fn().mockResolvedValue([])
   const db = {
     businessConfigurationRelease: {
@@ -16,10 +19,11 @@ function createDb({
       }),
     },
     booking: { findMany: bookingFindMany },
+    bookingApplication: { findMany: bookingApplicationFindMany },
     blockedDate: { findMany: blockedDateFindMany },
   } as unknown as PrismaClient
 
-  return { db, bookingFindMany }
+  return { db, bookingFindMany, bookingApplicationFindMany }
 }
 
 describe("booking status availability", () => {
@@ -37,8 +41,7 @@ describe("booking status availability", () => {
       "car-1",
       new Date("2026-08-10T10:00:00.000Z"),
       new Date("2026-08-12T10:00:00.000Z"),
-      undefined,
-      db,
+      { db },
     )
 
     expect(available).toBe(false)
@@ -84,5 +87,63 @@ describe("booking status availability", () => {
         end: new Date("2026-08-12T13:00:00.000Z"),
       },
     ])
+  })
+
+  it("blocks active unexpired applications during document review", async () => {
+    const now = new Date("2026-07-28T18:00:00.000Z")
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    const pickupAt = new Date("2026-07-29T06:00:00.000Z")
+    const returnAt = new Date("2026-07-31T12:00:00.000Z")
+    const { db, bookingApplicationFindMany } = createDb({
+      applications: [{ id: "pending-review", pickupAt, returnAt }],
+    })
+
+    await expect(isCarAvailable("car-1", pickupAt, returnAt, { db })).resolves.toBe(false)
+    expect(bookingApplicationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          carId: "car-1",
+          status: {
+            in: [
+              "DRAFT",
+              "AWAITING_DOCUMENT_UPLOAD",
+              "AWAITING_DOCUMENT_REVIEW",
+              "CUSTOMER_ACTION_REQUIRED",
+              "READY_TO_FINALIZE",
+            ],
+          },
+          expiresAt: { gt: now },
+          AND: [
+            { pickupAt: { lt: new Date("2026-07-31T15:00:00.000Z") } },
+            { returnAt: { gt: new Date("2026-07-29T03:00:00.000Z") } },
+          ],
+        }),
+      }),
+    )
+  })
+
+  it("shows application holds in calendar ranges and can exclude the current application", async () => {
+    const pickupAt = new Date("2026-07-29T06:00:00.000Z")
+    const returnAt = new Date("2026-07-31T12:00:00.000Z")
+    const applicationDb = createDb({ applications: [{ pickupAt, returnAt }] })
+
+    await expect(getUnavailableDates("car-1", applicationDb.db)).resolves.toEqual([
+      {
+        start: new Date("2026-07-29T03:00:00.000Z"),
+        end: new Date("2026-07-31T15:00:00.000Z"),
+      },
+    ])
+
+    const finalizeDb = createDb()
+    await isCarAvailable("car-1", pickupAt, returnAt, {
+      excludeBookingApplicationId: "current-application",
+      db: finalizeDb.db,
+    })
+    expect(finalizeDb.bookingApplicationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { not: "current-application" } }),
+      }),
+    )
   })
 })

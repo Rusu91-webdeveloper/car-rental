@@ -350,6 +350,12 @@ export class PrismaBookingApplicationRepository
             "APPLICATION_CONFIGURATION_UNAVAILABLE",
             "No active booking configuration is available.",
           )
+        await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${input.carId} FOR UPDATE`
+        if (!(await isCarAvailable(input.carId, input.pickupAt, input.returnAt, { db: tx })))
+          applicationError(
+            "APPLICATION_VEHICLE_UNAVAILABLE",
+            "The vehicle is no longer available for the selected period.",
+          )
         const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
         if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))
           applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
@@ -1018,7 +1024,10 @@ export class PrismaBookingApplicationRepository
           if (row.revision !== input.expectedRevision || row.status !== "READY_TO_FINALIZE")
             applicationError("APPLICATION_REVISION_CONFLICT", "Application is not at the expected ready revision.")
           await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${row.carId} FOR UPDATE`
-          if (!(await isCarAvailable(row.carId, row.pickupAt, row.returnAt, undefined, tx)))
+          if (!(await isCarAvailable(row.carId, row.pickupAt, row.returnAt, {
+            excludeBookingApplicationId: row.id,
+            db: tx,
+          })))
             applicationError("APPLICATION_VEHICLE_UNAVAILABLE", "The vehicle is no longer available.")
           const activeRelease = await tx.businessConfigurationRelease.findFirst({
             where: { status: "ACTIVE" },

@@ -423,7 +423,7 @@ export async function createManualReservation(data: unknown) {
     const blockedDate = await prisma.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
-        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, undefined, tx)
+        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, { db: tx })
 
         if (!stillAvailable) {
           throw new Error("Car is not available for the selected date range")

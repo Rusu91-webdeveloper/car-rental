@@ -54,7 +54,7 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
         if (car.status === "RENTED" || car.status === "MAINTENANCE") {
           throw new Error("Car is not available for booking")
         }
-        const stillAvailable = await isCarAvailable(input.vehicleId, input.pickupAt, input.returnAt, undefined, tx)
+        const stillAvailable = await isCarAvailable(input.vehicleId, input.pickupAt, input.returnAt, { db: tx })
         if (!stillAvailable) throw new Error("Car is no longer available")
 
         const configured = await quoteConfiguredVehicleRental({
