@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, type ReactNode } from "react"
+import { useTranslations } from "next-intl"
 
 export function CarImageCarousel({
   images,
@@ -11,6 +12,7 @@ export function CarImageCarousel({
   alt: string
   children?: ReactNode
 }) {
+  const t = useTranslations("common")
   const slides = useMemo(() => images.filter(Boolean), [images])
   const safeSlides = slides.length > 0 ? slides : ["/placeholder.svg"]
   const [activeIndex, setActiveIndex] = useState(0)
@@ -43,7 +45,7 @@ export function CarImageCarousel({
               <button
                 type="button"
                 onClick={goPrev}
-                aria-label="Previous image"
+                aria-label={t("previousImage")}
                 className="absolute left-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/90 p-2 text-foreground shadow-lg transition hover:bg-background"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,7 +55,7 @@ export function CarImageCarousel({
               <button
                 type="button"
                 onClick={goNext}
-                aria-label="Next image"
+                aria-label={t("nextImage")}
                 className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-background/90 p-2 text-foreground shadow-lg transition hover:bg-background"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,7 +82,7 @@ export function CarImageCarousel({
                   key={`thumb-${index}`}
                   type="button"
                   onClick={() => setActiveIndex(index)}
-                  aria-label={`Show image ${index + 1}`}
+                  aria-label={t("showImage", { number: index + 1 })}
                   className={`relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border transition sm:h-20 sm:w-32 ${
                     isActive
                       ? "border-primary ring-2 ring-primary/20"

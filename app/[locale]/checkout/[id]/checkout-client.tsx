@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, usePathname } from "@/navigation"
-import { useState, useTransition, useEffect, useMemo } from "react"
+import { useState, useTransition, useEffect, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { getBookingQuote } from "@/app/actions/bookings"
@@ -125,6 +125,7 @@ export function CheckoutClient({
   pickupLocation: string | null
   initialCustomer: BookingCustomerDriverInput
 }) {
+  const copy = useCallback((english: string, german: string) => (locale === "de" ? german : english), [locale])
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -227,7 +228,7 @@ export function CheckoutClient({
         }
 
         if (result?.error) {
-          setAvailabilityError("Unable to load unavailable dates right now.")
+          setAvailabilityError(copy("Unable to load unavailable dates right now.", "Nicht verfügbare Zeiten können derzeit nicht geladen werden."))
           return
         }
 
@@ -241,7 +242,7 @@ export function CheckoutClient({
       } catch (err) {
         if (mounted) {
           console.error("Failed to load car availability:", err)
-          setAvailabilityError("Unable to load unavailable dates right now.")
+          setAvailabilityError(copy("Unable to load unavailable dates right now.", "Nicht verfügbare Zeiten können derzeit nicht geladen werden."))
         }
       } finally {
         if (mounted) {
@@ -254,7 +255,7 @@ export function CheckoutClient({
     return () => {
       mounted = false
     }
-  }, [car.id])
+  }, [car.id, copy])
 
   const [error, setError] = useState<string | null>(null)
   const [pickupCalendarOpen, setPickupCalendarOpen] = useState(false)
@@ -298,7 +299,7 @@ export function CheckoutClient({
     })
   }
 
-  const toFriendlyErrorMessage = (rawError: string) => {
+  const toFriendlyErrorMessage = useCallback((rawError: string) => {
     let normalizedError = rawError
 
     if (rawError.trim().startsWith("[")) {
@@ -313,15 +314,15 @@ export function CheckoutClient({
     }
 
     const messageMap: Record<string, string> = {
-      "Pickup date must be in the future": "Please select a pickup date and time in the future.",
-      "Drop-off date must be after pickup date": "Drop-off must be after pickup.",
-      "Car is not available for the selected dates": "Those dates are unavailable. Please choose different dates.",
+      "Pickup date must be in the future": copy("Please select a pickup date and time in the future.", "Bitte wählen Sie ein Abholdatum und eine Uhrzeit in der Zukunft."),
+      "Drop-off date must be after pickup date": copy("Drop-off must be after pickup.", "Die Rückgabe muss nach der Abholung liegen."),
+      "Car is not available for the selected dates": copy("Those dates are unavailable. Please choose different dates.", "Diese Daten sind nicht verfügbar. Bitte wählen Sie andere Daten."),
       "Car is no longer available":
-        "That car is no longer available for the selected period. Please choose different dates.",
+        copy("That car is no longer available for the selected period. Please choose different dates.", "Dieses Fahrzeug ist im gewählten Zeitraum nicht mehr verfügbar. Bitte wählen Sie andere Daten."),
     }
 
     return messageMap[normalizedError] || normalizedError
-  }
+  }, [copy])
 
   const combineDateWithCurrentTime = (datePart: Date, currentDateTimeValue: string, fallbackHour = 10) => {
     const current = new Date(currentDateTimeValue)
@@ -395,7 +396,7 @@ export function CheckoutClient({
       return fallback
     }
 
-    return value.toLocaleDateString(undefined, {
+    return value.toLocaleDateString(locale === "de" ? "de-DE" : "en-GB", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -500,24 +501,24 @@ export function CheckoutClient({
     }
 
     if (isTimeUnavailable(nextPickupInstant)) {
-      setError("This pickup time is booked or reserved for vehicle preparation. Please choose another time.")
+      setError(copy("This pickup time is booked or reserved for vehicle preparation. Please choose another time.", "Diese Abholzeit ist belegt oder für die Fahrzeugvorbereitung reserviert. Bitte wählen Sie eine andere Zeit."))
       return false
     }
 
     if (!isWithinConfiguredHandoverHours(nextPickup, "PICKUP")) {
-      setError("Pick-up must be during the rental company's opening hours.")
+      setError(copy("Pick-up must be during the rental company's opening hours.", "Die Abholung muss während der Öffnungszeiten des Vermieters erfolgen."))
       return false
     }
 
     if (nextPickupInstant <= new Date()) {
-      setError("Please select a pickup date and time in the future.")
+      setError(copy("Please select a pickup date and time in the future.", "Bitte wählen Sie ein Abholdatum und eine Uhrzeit in der Zukunft."))
       return false
     }
 
     const currentDropoff = new Date(dropoffDate)
     const nextDropoff = findNextValidDropoff(nextPickup, currentDropoff)
     if (!nextDropoff) {
-      setError("No available drop-off dates were found after this pick-up date.")
+      setError(copy("No available drop-off dates were found after this pick-up date.", "Nach diesem Abholdatum wurden keine verfügbaren Rückgabetermine gefunden."))
       return false
     }
 
@@ -539,7 +540,7 @@ export function CheckoutClient({
     }
 
     if (!isWithinConfiguredHandoverHours(parsedDropoff, "RETURN")) {
-      setError("Return must be during the rental company's opening hours.")
+      setError(copy("Return must be during the rental company's opening hours.", "Die Rückgabe muss während der Öffnungszeiten des Vermieters erfolgen."))
       return false
     }
 
@@ -548,7 +549,7 @@ export function CheckoutClient({
       const nextDropoff = new Date(parsedDropoff)
       const currentPickupInstant = parseBookingInstant(pickupDate)
       if (!currentPickupInstant) {
-        setError("Please select a valid pick-up time.")
+        setError(copy("Please select a valid pick-up time.", "Bitte wählen Sie eine gültige Abholzeit."))
         return false
       }
 
@@ -561,7 +562,7 @@ export function CheckoutClient({
       }
 
       if (rangeOverlapsUnavailableTime(currentPickupInstant, parsedDropoffInstant)) {
-        setError("The selected times overlap a booking, block, or vehicle preparation period.")
+        setError(copy("The selected times overlap a booking, block, or vehicle preparation period.", "Die gewählten Zeiten überschneiden sich mit einer Buchung, Sperre oder Fahrzeugvorbereitung."))
         return false
       }
 
@@ -656,7 +657,7 @@ export function CheckoutClient({
     }).then((result) => {
       if (!current) return
       if (result.error || !result.quote) {
-        setQuoteError(result.error ?? "A valid quote could not be calculated.")
+        setQuoteError(result.error ? toFriendlyErrorMessage(result.error) : copy("A valid quote could not be calculated.", "Es konnte kein gültiger Preis berechnet werden."))
       } else {
         setQuote(result.quote)
       }
@@ -674,6 +675,8 @@ export function CheckoutClient({
     minimumDurationMessage,
     paymentMethod,
     pickupDate,
+    copy,
+    toFriendlyErrorMessage,
   ])
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -698,17 +701,17 @@ export function CheckoutClient({
     const dropoff = parseBookingInstant(dropoffDate)
 
     if (!pickup || !dropoff || Number.isNaN(pickupWallTime.getTime()) || Number.isNaN(dropoffWallTime.getTime())) {
-      setError("Please select valid pickup and drop-off dates.")
+      setError(copy("Please select valid pickup and drop-off dates.", "Bitte wählen Sie gültige Abhol- und Rückgabedaten."))
       return
     }
 
     if (pickup <= new Date()) {
-      setError("Please select a pickup date and time in the future.")
+      setError(copy("Please select a pickup date and time in the future.", "Bitte wählen Sie ein Abholdatum und eine Uhrzeit in der Zukunft."))
       return
     }
 
     if (dropoff <= pickup) {
-      setError("Drop-off must be after pickup.")
+      setError(copy("Drop-off must be after pickup.", "Die Rückgabe muss nach der Abholung liegen."))
       return
     }
 
@@ -718,19 +721,19 @@ export function CheckoutClient({
     }
 
     if (rangeOverlapsUnavailableTime(pickup, dropoff)) {
-      setError("Your selected times overlap a booking, block, or vehicle preparation period.")
+      setError(copy("Your selected times overlap a booking, block, or vehicle preparation period.", "Ihre gewählten Zeiten überschneiden sich mit einer Buchung, Sperre oder Fahrzeugvorbereitung."))
       return
     }
     if (!availablePickupTimes.includes(selectedPickupTime) || !availableDropoffTimes.includes(selectedDropoffTime)) {
-      setError("Please select an available pick-up and return time.")
+      setError(copy("Please select an available pick-up and return time.", "Bitte wählen Sie eine verfügbare Abhol- und Rückgabezeit."))
       return
     }
     if (!isWithinConfiguredHandoverHours(pickupWallTime, "PICKUP") || !isWithinConfiguredHandoverHours(dropoffWallTime, "RETURN")) {
-      setError("Pick-up and return must be during the rental company's opening hours.")
+      setError(copy("Pick-up and return must be during the rental company's opening hours.", "Abholung und Rückgabe müssen während der Öffnungszeiten des Vermieters erfolgen."))
       return
     }
     if (!pickupLocation) {
-      setError("The rental company pickup address is not configured. Please contact support.")
+      setError(copy("The rental company pickup address is not configured. Please contact support.", "Die Abholadresse des Vermieters ist nicht eingerichtet. Bitte kontaktieren Sie den Support."))
       return
     }
     const missingLegalAcknowledgement = bookingConfiguration.legal?.documents.find(
@@ -741,7 +744,7 @@ export function CheckoutClient({
           : !legalAcknowledgements.privacyNotice),
     )
     if (missingLegalAcknowledgement) {
-      setError(`Please acknowledge ${missingLegalAcknowledgement.title} before booking.`)
+      setError(copy(`Please acknowledge ${missingLegalAcknowledgement.title} before booking.`, `Bitte bestätigen Sie vor der Buchung: ${missingLegalAcknowledgement.title}.`))
       return
     }
     if (!legalAcknowledgements.lateReturnPolicy) {
@@ -796,7 +799,7 @@ export function CheckoutClient({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-xl font-bold">Checkout</h1>
+            <h1 className="text-xl font-bold">{copy("Checkout", "Buchung")}</h1>
           </div>
         </header>
 
@@ -827,15 +830,15 @@ export function CheckoutClient({
 
           {/* Booking Details */}
           <div className="bg-background rounded-xl p-4 border border-border space-y-4">
-            <h3 className="font-semibold text-lg">Booking Details</h3>
+            <h3 className="font-semibold text-lg">{copy("Booking details", "Buchungsdetails")}</h3>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Pick-up Date</Label>
+                <Label>{copy("Pick-up date", "Abholdatum")}</Label>
                 <Popover open={pickupCalendarOpen} onOpenChange={setPickupCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" className="w-full justify-between font-normal">
-                      <span>{formatDateLabel(pickupDateValue, "Select pick-up date")}</span>
+                      <span>{formatDateLabel(pickupDateValue, copy("Select pick-up date", "Abholdatum auswählen"))}</span>
                       <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
@@ -859,7 +862,7 @@ export function CheckoutClient({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pickup-time">Pick-up Time</Label>
+                <Label htmlFor="pickup-time">{copy("Pick-up time", "Abholzeit")}</Label>
                 <select
                   id="pickup-time"
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -867,7 +870,7 @@ export function CheckoutClient({
                   onChange={(e) => handlePickupTimeChange(e.target.value)}
                   disabled={availablePickupTimes.length === 0}
                 >
-                  <option value="" disabled>{availablePickupTimes.length === 0 ? "No available times" : "Select an available time"}</option>
+                  <option value="" disabled>{availablePickupTimes.length === 0 ? copy("No available times", "Keine Zeiten verfügbar") : copy("Select an available time", "Verfügbare Zeit auswählen")}</option>
                   {availablePickupTimes.map((time) => <option key={time} value={time}>{time}</option>)}
                 </select>
               </div>
@@ -875,11 +878,11 @@ export function CheckoutClient({
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Drop-off Date</Label>
+                <Label>{copy("Drop-off date", "Rückgabedatum")}</Label>
                 <Popover open={dropoffCalendarOpen} onOpenChange={setDropoffCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button type="button" variant="outline" className="w-full justify-between font-normal">
-                      <span>{formatDateLabel(dropoffDateValue, "Select drop-off date")}</span>
+                      <span>{formatDateLabel(dropoffDateValue, copy("Select drop-off date", "Rückgabedatum auswählen"))}</span>
                       <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
@@ -903,7 +906,7 @@ export function CheckoutClient({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dropoff-time">Drop-off Time</Label>
+                <Label htmlFor="dropoff-time">{copy("Drop-off time", "Rückgabezeit")}</Label>
                 <select
                   id="dropoff-time"
                   className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -911,7 +914,7 @@ export function CheckoutClient({
                   onChange={(e) => handleDropoffTimeChange(e.target.value)}
                   disabled={availableDropoffTimes.length === 0}
                 >
-                  <option value="" disabled>{availableDropoffTimes.length === 0 ? "No available times" : "Select an available time"}</option>
+                  <option value="" disabled>{availableDropoffTimes.length === 0 ? copy("No available times", "Keine Zeiten verfügbar") : copy("Select an available time", "Verfügbare Zeit auswählen")}</option>
                   {availableDropoffTimes.map((time) => <option key={time} value={time}>{time}</option>)}
                 </select>
               </div>
@@ -919,7 +922,7 @@ export function CheckoutClient({
 
             <p className="text-xs text-muted-foreground">
               {isAvailabilityLoading
-                ? "Loading unavailable dates..."
+                ? copy("Loading unavailable dates…", "Nicht verfügbare Zeiten werden geladen…")
                 : locale === "de"
                   ? `Rote Tage enthalten belegte Zeiten. Freie Uhrzeiten am selben Tag können gewählt werden. Nach jeder Rückgabe sind insgesamt ${operationalBufferMinutes} Minuten gesperrt: 60 Minuten Verspätungspuffer und ${bookingConfiguration.preparationBufferMinutes} Minuten Vorbereitung.`
                   : `Red days contain unavailable times. Free times on the same day remain selectable. Every return is followed by a ${operationalBufferMinutes}-minute block: 60 minutes for possible lateness and ${bookingConfiguration.preparationBufferMinutes} minutes for preparation.`}
@@ -949,7 +952,7 @@ export function CheckoutClient({
             {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}
 
             <div className="space-y-2">
-              <Label id="owner-pickup-location-label">Pick-up and return location</Label>
+              <Label id="owner-pickup-location-label">{copy("Pick-up and return location", "Abhol- und Rückgabeort")}</Label>
               <div
                 className={`flex gap-3 rounded-lg border px-3 py-3 ${pickupLocation ? "border-primary/20 bg-primary/5" : "border-red-200 bg-red-50"}`}
                 aria-labelledby="owner-pickup-location-label"
@@ -957,7 +960,7 @@ export function CheckoutClient({
                 <MapPin className={`mt-0.5 h-5 w-5 shrink-0 ${pickupLocation ? "text-primary" : "text-red-600"}`} aria-hidden="true" />
                 <div>
                   <p className={`text-sm font-medium ${pickupLocation ? "text-foreground" : "text-red-700"}`}>
-                    {pickupLocation ?? "Pickup address unavailable"}
+                    {pickupLocation ?? copy("Pickup address unavailable", "Abholadresse nicht verfügbar")}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {locale === "de"
@@ -973,7 +976,7 @@ export function CheckoutClient({
             <div className="bg-background rounded-xl p-4 border border-border space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-lg">Customer and driver information</h3>
+                  <h3 className="font-semibold text-lg">{copy("Customer and driver information", "Kunden- und Fahrerdaten")}</h3>
                   {isDemoMode ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {locale === "de"
@@ -1016,7 +1019,7 @@ export function CheckoutClient({
                 return (
                   <div key={section} className="space-y-3">
                     <h4 className="font-medium">
-                      {section === "CUSTOMER" ? "Customer information" : "Driver information"}
+                      {section === "CUSTOMER" ? copy("Customer information", "Kundendaten") : copy("Driver information", "Fahrerdaten")}
                     </h4>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {fields.map((field) => {
@@ -1077,7 +1080,7 @@ export function CheckoutClient({
 
           {bookingConfiguration.insurance?.enabled && bookingConfiguration.insurance.availableForVehicle ? (
             <div className="bg-background rounded-xl p-4 border border-border space-y-3">
-              <h3 className="font-semibold text-lg">Insurance</h3>
+              <h3 className="font-semibold text-lg">{copy("Insurance", "Versicherung")}</h3>
               <label className="flex items-start gap-3 rounded-lg border p-4">
                 <Checkbox
                   checked={insuranceSelected}
@@ -1090,14 +1093,14 @@ export function CheckoutClient({
                 <span>
                   <span className="font-medium">
                     {bookingConfiguration.insurance.customerFacingName}
-                    {bookingConfiguration.insurance.requirementMode === "MANDATORY" ? " — required" : ""}
+                    {bookingConfiguration.insurance.requirementMode === "MANDATORY" ? copy(" — required", " — erforderlich") : ""}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">
                     {bookingConfiguration.insurance.description}
                   </span>
                   <span className="mt-2 block text-sm">
                     {formatCents(bookingConfiguration.insurance.pricePerDay, bookingConfiguration.insurance.currency)}{" "}
-                    per billable rental day
+                    {copy("per billable rental day", "pro berechnetem Miettag")}
                   </span>
                 </span>
               </label>
@@ -1107,9 +1110,9 @@ export function CheckoutClient({
           {bookingConfiguration.legal ? (
             <div className="bg-background rounded-xl p-4 border border-border space-y-4">
               <div>
-                <h3 className="font-semibold text-lg">Terms and privacy</h3>
+                <h3 className="font-semibold text-lg">{copy("Terms and privacy", "Mietbedingungen und Datenschutz")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Review the exact published versions that apply to this booking. Required acknowledgements start unchecked.
+                  {copy("Review the exact published versions that apply to this booking. Required acknowledgements start unchecked.", "Prüfen Sie die veröffentlichten Fassungen, die für diese Buchung gelten. Erforderliche Bestätigungen sind zunächst nicht ausgewählt.")}
                 </p>
               </div>
               <section className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
@@ -1146,7 +1149,7 @@ export function CheckoutClient({
                       <div>
                         <h4 className="font-medium">{document.title}</h4>
                         <p className="text-xs text-muted-foreground">
-                          Version {document.versionLabel || document.versionNumber} · {document.locale}
+                          {copy("Version", "Version")} {document.versionLabel || document.versionNumber} · {document.locale}
                         </p>
                       </div>
                       <a className="text-sm font-medium text-primary underline" href={exactVersionUrl} target="_blank" rel="noreferrer">
@@ -1169,7 +1172,7 @@ export function CheckoutClient({
                         <span className="text-sm">{document.checkboxLabel}</span>
                       </label>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Displayed for your information; no acceptance is recorded.</p>
+                      <p className="text-sm text-muted-foreground">{copy("Displayed for your information; no acceptance is recorded.", "Nur zu Ihrer Information angezeigt; es wird keine Zustimmung erfasst.")}</p>
                     )}
                   </section>
                 )
@@ -1181,8 +1184,8 @@ export function CheckoutClient({
           <div className="bg-background rounded-xl p-4 border border-border space-y-3">
             <h3 className="font-semibold text-lg">{locale === "de" ? "Zahlungsmethode" : "Payment method"}</h3>
             {(bookingConfiguration.payment?.methods ?? [
-              { method: "TRANSFER" as const, configuredMode: "BANK_TRANSFER" as const, label: "Bank transfer", description: "Full payment by bank transfer before confirmation." },
-              { method: "PAY_AT_PICKUP" as const, configuredMode: "CASH_ON_PICKUP" as const, label: "Pay at pickup", description: "Full payment when collecting the vehicle." },
+              { method: "TRANSFER" as const, configuredMode: "BANK_TRANSFER" as const, label: copy("Bank transfer", "Banküberweisung"), description: copy("Full payment by bank transfer before confirmation.", "Gesamtbetrag per Banküberweisung vor der Bestätigung.") },
+              { method: "PAY_AT_PICKUP" as const, configuredMode: "CASH_ON_PICKUP" as const, label: copy("Pay at pickup", "Zahlung bei Abholung"), description: copy("Full payment when collecting the vehicle.", "Gesamtbetrag bei der Fahrzeugabholung.") },
             ]).map((method) => (
               <button
                 key={method.method}
@@ -1207,37 +1210,37 @@ export function CheckoutClient({
 
           {/* Price Summary */}
           <div className="bg-background rounded-xl p-4 border border-border space-y-3">
-            <h3 className="font-semibold text-lg">Price Summary</h3>
+            <h3 className="font-semibold text-lg">{copy("Price summary", "Preisübersicht")}</h3>
 
             {isQuoteLoading ? (
-              <p className="text-sm text-muted-foreground">Calculating authoritative server quote…</p>
+              <p className="text-sm text-muted-foreground">{copy("Calculating price…", "Preis wird berechnet…")}</p>
             ) : quote ? (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Rental ({days} days)</span>
+                  <span className="text-muted-foreground">{copy(`Rental (${days} days)`, `Miete (${days} ${days === 1 ? "Tag" : "Tage"})`)}</span>
                   <span className="font-medium">
                     {formatCents(quote.sourceDailyRate, quoteCurrency)} × {days}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">{copy("Subtotal", "Zwischensumme")}</span>
                   <span className="font-medium">{formatCents(subtotalCents, quoteCurrency)}</span>
                 </div>
                 {quote.taxTreatment === "TAX_INCLUDED" ? (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span className="font-medium">Included</span>
+                    <span className="text-muted-foreground">{copy("Tax", "MwSt.")}</span>
+                    <span className="font-medium">{copy("Included", "Enthalten")}</span>
                   </div>
                 ) : (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax ({Math.round(quote.taxRateBps / 100)}%)</span>
+                    <span className="text-muted-foreground">{copy("Tax", "MwSt.")} ({Math.round(quote.taxRateBps / 100)}%)</span>
                     <span className="font-medium">{formatCents(taxCents, quoteCurrency)}</span>
                   </div>
                 )}
                 {quote.insurance?.selected ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {quote.insurance.customerFacingName} ({quote.insurance.billableDays} days)
+                      {quote.insurance.customerFacingName} ({quote.insurance.billableDays} {copy("days", "Tage")})
                     </span>
                     <span className="font-medium">
                       {formatCents(quote.insurance.subtotal, quote.insurance.currency)}
@@ -1245,7 +1248,7 @@ export function CheckoutClient({
                   </div>
                 ) : null}
                 <div className="border-t border-border pt-2 flex justify-between">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{copy("Total", "Gesamt")}</span>
                   <span className="font-bold text-xl">{formatCents(totalCents, quoteCurrency)}</span>
                 </div>
                 {advanceCents > 0 && (
@@ -1266,18 +1269,17 @@ export function CheckoutClient({
                 ) : null}
                 {guaranteeCents > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Refundable guarantee hold ({guaranteePercent}%)</span>
+                    <span className="text-muted-foreground">{copy("Refundable guarantee hold", "Rückerstattbare Sicherheitsleistung")} ({guaranteePercent}%)</span>
                     <span className="font-medium">{formatCents(guaranteeCents, quoteCurrency)}</span>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-red-600">{quoteError ?? "A valid quote could not be calculated."}</p>
+              <p className="text-sm text-red-600">{quoteError ?? copy("A valid quote could not be calculated.", "Es konnte kein gültiger Preis berechnet werden.")}</p>
             )}
             {guaranteeCents > 0 && (
               <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 p-2">
-                The guarantee is a temporary security hold, not an extra rental charge. It is released after return if
-                there are no damages, fines, or policy violations.
+                {copy("The guarantee is a temporary security hold, not an extra rental charge. It is released after return if there are no damages, fines, or policy violations.", "Die Sicherheitsleistung ist eine vorübergehende Reservierung und keine zusätzliche Mietgebühr. Sie wird nach der Rückgabe freigegeben, sofern keine Schäden, Bußgelder oder Regelverstöße vorliegen.")}
               </p>
             )}
           </div>
@@ -1287,8 +1289,8 @@ export function CheckoutClient({
           )}
           {bookingSetupUnavailable ? (
             <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              <p className="font-medium">Online booking is not available yet.</p>
-              <p className="mt-1">The rental company is still completing its booking settings. Please contact support for help.</p>
+              <p className="font-medium">{copy("Online booking is not available yet.", "Die Online-Buchung ist noch nicht verfügbar.")}</p>
+              <p className="mt-1">{copy("The rental company is still completing its booking settings. Please contact support for help.", "Der Vermieter richtet die Buchungseinstellungen noch ein. Bitte wenden Sie sich an den Support.")}</p>
             </div>
           ) : null}
         </div>
@@ -1300,7 +1302,7 @@ export function CheckoutClient({
             disabled={isPending || isQuoteLoading || !quote || bookingSetupUnavailable || !pickupLocation}
             className="w-full h-12 text-base font-semibold"
           >
-            {isPending ? "Saving application..." : "Continue to document upload"}
+            {isPending ? copy("Saving application…", "Antrag wird gespeichert…") : copy("Continue to document upload", "Weiter zum Dokumentenupload")}
           </Button>
         </div>
       </div>

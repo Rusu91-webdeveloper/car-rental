@@ -9,6 +9,12 @@ const intlMiddleware = createIntlMiddleware({
   locales,
   defaultLocale,
   localePrefix: "always", // Always show locale: /en/... /de/...
+  localeDetection: true,
+  localeCookie: {
+    name: "NEXT_LOCALE",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  },
 });
 
 const isPublicRoute = (pathname: string) => {

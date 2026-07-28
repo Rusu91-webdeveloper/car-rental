@@ -103,7 +103,7 @@ function MobileMenuContent({
           "hover:bg-background hover:shadow-md",
           isOpen && "border-primary/35 bg-primary/5 shadow-primary/20"
         )}
-        aria-label="Open navigation menu"
+        aria-label={t("navigation.openMenu")}
         aria-expanded={isOpen}
         aria-controls="mobile-menu-panel"
       >
@@ -139,7 +139,7 @@ function MobileMenuContent({
             id="mobile-menu-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="Site navigation"
+            aria-label={t("navigation.siteNavigation")}
             className="fixed bottom-3 left-3 top-3 z-50 w-[88vw] max-w-[22rem] animate-in slide-in-from-left rounded-[24px] border border-border/70 bg-background/95 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.75)] backdrop-blur-2xl"
           >
             <div className="flex h-full flex-col">
@@ -156,7 +156,7 @@ function MobileMenuContent({
                   <button
                     onClick={() => setIsOpen(false)}
                     className="rounded-lg border border-border/70 bg-background p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Close navigation menu"
+                    aria-label={t("navigation.closeMenu")}
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -167,7 +167,7 @@ function MobileMenuContent({
 
               <nav
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent px-2 py-3"
-                aria-label="Primary"
+                aria-label={t("navigation.primary")}
                 style={{ scrollbarWidth: "thin", scrollBehavior: "smooth" }}
               >
                 <div className="space-y-1">

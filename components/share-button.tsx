@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 
 export function ShareButton({
   url,
@@ -11,6 +12,7 @@ export function ShareButton({
   title?: string
   className?: string
 }) {
+  const t = useTranslations("common")
   const [isSharing, setIsSharing] = useState(false)
 
   const handleShare = async () => {
@@ -25,14 +27,14 @@ export function ShareButton({
 
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url)
-        alert("Link copied to clipboard.")
+        alert(t("linkCopied"))
         return
       }
 
-      window.prompt("Copy this link:", url)
+      window.prompt(t("copyLink"), url)
     } catch (error) {
       console.error(error)
-      alert("Unable to share this link.")
+      alert(t("shareFailed"))
     } finally {
       setIsSharing(false)
     }
@@ -43,9 +45,9 @@ export function ShareButton({
       type="button"
       onClick={handleShare}
       className={className}
-      aria-label="Share"
+      aria-label={t("share")}
       disabled={isSharing}
-      title="Share"
+      title={t("share")}
     >
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path

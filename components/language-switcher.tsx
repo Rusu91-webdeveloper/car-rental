@@ -1,26 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { usePathname, useRouter } from "@/navigation";
+import { useTranslations } from "next-intl";
+import { useLocaleSwitch } from "@/hooks/use-locale-switch";
 
 export function LanguageSwitcher() {
-  const locale = useLocale();
+  const { locale, switchLocale } = useLocaleSwitch();
   const t = useTranslations("common");
-  const router = useRouter();
-  const pathname = usePathname();
   const isEnglish = locale === "en";
 
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
-
-  const switchLocale = (newLocale: string) => {
-    if (newLocale === locale) {
-      return;
-    }
-    router.push(pathname, { locale: newLocale });
-  };
 
   return (
     <button

@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import Link from "@/navigation"
-import { useRouter, usePathname } from "@/navigation"
+import { usePathname } from "@/navigation"
 import { locales } from "@/i18n"
 import { signOut } from "next-auth/react"
-import { useTranslations, useLocale } from "next-intl"
+import { useTranslations } from "next-intl"
+import { useLocaleSwitch } from "@/hooks/use-locale-switch"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -57,21 +58,13 @@ function NavigationMenuContent({
   handleLogout: () => void
 }) {
   const t = useTranslations()
-  const locale = useLocale()
-  const router = useRouter()
+  const { locale, switchLocale } = useLocaleSwitch()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
   const localeNames: Record<string, string> = {
     en: "English",
     de: "Deutsch",
-  }
-
-  const switchLocale = (newLocale: string) => {
-    if (newLocale === locale) {
-      return
-    }
-    router.push(pathname, { locale: newLocale })
   }
 
   const isActive = (path: string) => pathname === path
@@ -94,7 +87,7 @@ function NavigationMenuContent({
             "hover:bg-background hover:shadow-md",
             open && "border-primary/35 bg-primary/5 shadow-primary/20"
           )}
-          aria-label="Open navigation menu"
+          aria-label={t("navigation.openMenu")}
           aria-expanded={open}
         >
           <span className="relative block h-4 w-5" aria-hidden="true">

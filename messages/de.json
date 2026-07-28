@@ -28,7 +28,14 @@
     "searchPlaceholder": "Ort, Daten suchen...",
     "bookNow": "Jetzt buchen",
     "viewDetails": "Details anzeigen",
-    "close": "Schließen"
+    "close": "Schließen",
+    "share": "Teilen",
+    "linkCopied": "Link in die Zwischenablage kopiert.",
+    "copyLink": "Diesen Link kopieren:",
+    "shareFailed": "Dieser Link konnte nicht geteilt werden.",
+    "previousImage": "Vorheriges Bild",
+    "nextImage": "Nächstes Bild",
+    "showImage": "Bild {number} anzeigen"
   },
   "demoBanner": {
     "title": "Demo-Modus aktiv",
@@ -152,7 +159,13 @@
     "subtitle": "Erstellen Sie ein Konto, um Ihre erste Fahrt zu buchen."
   },
   "verify": {
-    "subtitle": "Wir haben einen 6-stelligen Bestätigungscode an <highlight>{email}</highlight> gesendet. Bitte geben Sie ihn unten ein."
+    "title": "Bestätigen Sie Ihre Identität",
+    "subtitle": "Wir haben einen 6-stelligen Bestätigungscode an <highlight>{email}</highlight> gesendet. Bitte geben Sie ihn unten ein.",
+    "help": "Hilfe",
+    "resendIn": "Code erneut senden in",
+    "verifyAccount": "Konto bestätigen",
+    "checkSpam": "Keine E-Mail erhalten? Prüfen Sie Ihren Spam-Ordner.",
+    "changeEmail": "E-Mail-Adresse ändern"
   },
   "cars": {
     "title": "Alle Autos",
@@ -310,7 +323,13 @@
     "forgotPassword": "Passwort vergessen?",
     "dontHaveAccount": "Noch kein Konto?",
     "haveAccount": "Bereits ein Konto?",
-    "demoMode": "Demo-Modus"
+    "demoMode": "Demo-Modus",
+    "signInBlocked": "Anmeldung blockiert",
+    "accountInactive": "Ihr Konto ist derzeit inaktiv. Bitte wenden Sie sich an einen Administrator.",
+    "signInFailed": "Die Anmeldung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen",
+    "redirectingToSignIn": "Weiterleitung zur sicheren Anmeldung…",
+    "redirectingToSignUp": "Weiterleitung zur Google-Registrierung…"
   },
   "navigation": {
     "home": "Startseite",
@@ -324,7 +343,11 @@
     "contact": "Kontakt",
     "help": "Hilfe & Support",
     "more": "Mehr",
-    "language": "Sprache"
+    "language": "Sprache",
+    "openMenu": "Navigationsmenü öffnen",
+    "closeMenu": "Navigationsmenü schließen",
+    "siteNavigation": "Website-Navigation",
+    "primary": "Hauptnavigation"
   },
   "categories": {
     "all": "Alle",

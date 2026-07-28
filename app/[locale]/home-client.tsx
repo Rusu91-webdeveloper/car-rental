@@ -247,7 +247,7 @@ export function HomeClient({
           <BrandMark inverted className="md:hidden" />
           <BrandMark className="hidden md:inline-flex" />
 
-          <nav className="hidden items-center gap-7 text-sm font-semibold md:flex" aria-label="Primary navigation">
+          <nav className="hidden items-center gap-7 text-sm font-semibold md:flex" aria-label={t("navigation.primary")}>
             <Link href="/cars" className="text-foreground/65 transition-colors hover:text-foreground">
               {t("navigation.cars")}
             </Link>

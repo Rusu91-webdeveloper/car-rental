@@ -28,7 +28,14 @@
     "searchPlaceholder": "Search location, dates...",
     "bookNow": "Book Now",
     "viewDetails": "View Details",
-    "close": "Close"
+    "close": "Close",
+    "share": "Share",
+    "linkCopied": "Link copied to clipboard.",
+    "copyLink": "Copy this link:",
+    "shareFailed": "Unable to share this link.",
+    "previousImage": "Previous image",
+    "nextImage": "Next image",
+    "showImage": "Show image {number}"
   },
   "demoBanner": {
     "title": "Demo mode active",
@@ -152,7 +159,13 @@
     "subtitle": "Create an account to book your first ride."
   },
   "verify": {
-    "subtitle": "We've sent a 6-digit verification code to <highlight>{email}</highlight>. Please enter it below."
+    "title": "Verify it's you",
+    "subtitle": "We've sent a 6-digit verification code to <highlight>{email}</highlight>. Please enter it below.",
+    "help": "Help",
+    "resendIn": "Resend code in",
+    "verifyAccount": "Verify account",
+    "checkSpam": "Didn't receive the email? Check your spam folder.",
+    "changeEmail": "Change email address"
   },
   "cars": {
     "title": "All Cars",
@@ -310,7 +323,13 @@
     "forgotPassword": "Forgot Password?",
     "dontHaveAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
-    "demoMode": "Demo Mode"
+    "demoMode": "Demo Mode",
+    "signInBlocked": "Sign-in blocked",
+    "accountInactive": "Your account is currently inactive. Please contact an administrator.",
+    "signInFailed": "Sign-in failed. Please try again.",
+    "tryAgain": "Try again",
+    "redirectingToSignIn": "Redirecting to secure sign-in…",
+    "redirectingToSignUp": "Redirecting to Google sign-up…"
   },
   "navigation": {
     "home": "Home",
@@ -324,7 +343,11 @@
     "contact": "Contact",
     "help": "Help & Support",
     "more": "More",
-    "language": "Language"
+    "language": "Language",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "siteNavigation": "Site navigation",
+    "primary": "Primary navigation"
   },
   "categories": {
     "all": "All",

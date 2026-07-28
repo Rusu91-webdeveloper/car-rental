@@ -3,8 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { Calendar } from "@/components/ui/calendar"
 import { getCarAvailability } from "@/app/actions/cars"
-import { cn } from "@/lib/utils"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 interface CarAvailabilityCalendarProps {
   carId: string
@@ -17,6 +16,7 @@ interface UnavailableDateRange {
 
 export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps) {
   const t = useTranslations()
+  const locale = useLocale()
   const [unavailableRanges, setUnavailableRanges] = useState<UnavailableDateRange[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +29,7 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
         const result = await getCarAvailability(carId)
         
         if (result.error) {
-          setError(result.error)
+          setError(locale === "de" ? "Die Verfügbarkeit konnte nicht geladen werden." : result.error)
           return
         }
 
@@ -42,14 +42,14 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
         setUnavailableRanges(ranges)
       } catch (err) {
         console.error("Failed to fetch car availability:", err)
-        setError("Failed to load availability")
+        setError(locale === "de" ? "Die Verfügbarkeit konnte nicht geladen werden." : "Failed to load availability")
       } finally {
         setLoading(false)
       }
     }
 
     fetchAvailability()
-  }, [carId])
+  }, [carId, locale])
 
   // Convert date ranges to a set of individual dates for easier checking
   const unavailableDatesSet = useMemo(() => {
@@ -172,4 +172,3 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
     </div>
   )
 }
-

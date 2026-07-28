@@ -388,7 +388,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
 
                     {booking.legalAcceptances.some(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation) && (
                       <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                        <p className="font-semibold">Accepted legal versions</p>
+                        <p className="font-semibold">{locale === "de" ? "Akzeptierte Rechtsdokumente" : "Accepted legal versions"}</p>
                         {booking.legalAcceptances
                           .filter(({ legalAcceptanceConfig }) => legalAcceptanceConfig?.showInConfirmation)
                           .map((acceptance) => (
@@ -399,9 +399,9 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                {acceptance.legalDocumentTranslation.title} · version {acceptance.documentVersionNumber}
+                                {acceptance.legalDocumentTranslation.title} · {locale === "de" ? "Version" : "version"} {acceptance.documentVersionNumber}
                               </a>
-                              <span> · accepted {formatDateTime(acceptance.acceptedAt, locale)}</span>
+                              <span> · {locale === "de" ? "akzeptiert am" : "accepted"} {formatDateTime(acceptance.acceptedAt, locale)}</span>
                             </div>
                           ))}
                       </div>

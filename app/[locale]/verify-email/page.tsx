@@ -50,7 +50,7 @@ function VerifyEmailContent() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <button className="text-muted-foreground text-sm font-medium">Help</button>
+        <button className="text-muted-foreground text-sm font-medium">{t("verify.help")}</button>
       </div>
 
       <div className="max-w-md mx-auto text-center">
@@ -70,7 +70,7 @@ function VerifyEmailContent() {
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold mb-4">Verify it&apos;s you</h1>
+        <h1 className="text-3xl font-bold mb-4">{t("verify.title")}</h1>
         <p className="text-muted-foreground mb-2">
           {t.rich("verify.subtitle", {
             highlight: (chunks) => <span className="text-foreground font-medium">{chunks}</span>,
@@ -94,7 +94,7 @@ function VerifyEmailContent() {
         </div>
 
         <p className="text-muted-foreground text-sm mb-8">
-          Resend code in{" "}
+          {t("verify.resendIn")}{" "}
           <span className="text-foreground font-semibold">
             {String(Math.floor(timer / 60)).padStart(2, "0")}:{String(timer % 60).padStart(2, "0")}
           </span>
@@ -104,11 +104,11 @@ function VerifyEmailContent() {
           onClick={handleVerify}
           className="w-full bg-primary text-white font-semibold py-4 rounded-xl hover:bg-primary-hover transition-colors mb-4"
         >
-          Verify Account
+          {t("verify.verifyAccount")}
         </button>
 
-        <p className="text-muted-foreground text-sm mb-2">Didn&apos;t receive the email? Check your spam folder.</p>
-        <button className="text-primary font-medium text-sm">Change email address</button>
+        <p className="text-muted-foreground text-sm mb-2">{t("verify.checkSpam")}</p>
+        <button className="text-primary font-medium text-sm">{t("verify.changeEmail")}</button>
       </div>
     </div>
   )

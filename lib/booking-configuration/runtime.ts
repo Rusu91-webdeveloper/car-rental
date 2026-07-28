@@ -179,7 +179,7 @@ export async function resolvePublicBookingConfiguration(input: {
     minimumRentalMinutes: record.minimumRentalMinutes,
     gracePeriodMinutes: record.gracePeriodMinutes,
     preparationBufferMinutes: record.preparationBufferMinutes,
-    fields: resolveEffectiveBookingFields(record.customerDriver),
+    fields: resolveEffectiveBookingFields(record.customerDriver, input.locale),
     steps: resolveEffectiveBookingFlow(record.workflow, record.legal),
     insurance: {
       configurationVersionId: record.insuranceVersionId,

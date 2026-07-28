@@ -110,8 +110,27 @@ const metadata: Record<
 }
 
 const systemRequired = new Set<CustomerField>(["FIRST_NAME", "LAST_NAME", "EMAIL"])
+
+const germanMetadata: Record<CustomerField, Pick<EffectiveBookingField, "label" | "helpText">> = {
+  FIRST_NAME: { label: "Vorname", helpText: "Hauptmieter und Fahrer." },
+  LAST_NAME: { label: "Nachname", helpText: "Hauptmieter und Fahrer." },
+  EMAIL: { label: "E-Mail", helpText: "Wird für die Buchungskommunikation verwendet." },
+  PHONE: { label: "Telefon", helpText: "Kontaktnummer für diese Miete." },
+  DATE_OF_BIRTH: { label: "Geburtsdatum", helpText: "Wird verwendet, um das Fahreralter bei Abholung zu prüfen." },
+  COUNTRY: { label: "Land", helpText: "Zweistelliger Ländercode." },
+  ADDRESS: { label: "Adresse", helpText: "Straße und Hausnummer." },
+  CITY: { label: "Ort", helpText: "Wohnort." },
+  POSTAL_CODE: { label: "Postleitzahl", helpText: "Postleitzahl des Wohnorts." },
+  NATIONALITY: { label: "Staatsangehörigkeit", helpText: "Zweistelliger Ländercode." },
+  LICENCE_NUMBER: { label: "Führerscheinnummer", helpText: "Wird sicher gespeichert und in Übersichten maskiert." },
+  LICENCE_ISSUE_DATE: { label: "Ausstellungsdatum des Führerscheins", helpText: "Wird verwendet, um die bisherige Besitzdauer zu prüfen." },
+  LICENCE_EXPIRY_DATE: { label: "Ablaufdatum des Führerscheins", helpText: "Muss den konfigurierten Mietzeitraum abdecken." },
+  LICENCE_ISSUING_COUNTRY: { label: "Ausstellungsland des Führerscheins", helpText: "Zweistelliger Code des Ausstellungslandes." },
+}
+
 export function resolveEffectiveBookingFields(
   configuration?: CustomerDriverRequirementsConfiguration,
+  locale = "en",
 ): EffectiveBookingField[] {
   if (!configuration) return []
   return CUSTOMER_FIELDS.map((key, displayOrder) => {
@@ -125,15 +144,25 @@ export function resolveEffectiveBookingFields(
     const required = system || driver || mode === "REQUIRED"
     return {
       ...metadata[key],
+      ...(locale === "de" ? germanMetadata[key] : {}),
       visible: required || mode !== "DISABLED",
       required,
-      reason: system
-        ? "Required for booking identity and communication."
-        : driver
-          ? "Required by active driver eligibility rules."
-          : mode === "REQUIRED"
-            ? "Required by customer-field configuration."
-            : undefined,
+      reason:
+        locale === "de"
+          ? system
+            ? "Für Identität und Buchungskommunikation erforderlich."
+            : driver
+              ? "Aufgrund der aktiven Fahrerregeln erforderlich."
+              : mode === "REQUIRED"
+                ? "Durch die Konfiguration der Kundendaten erforderlich."
+                : undefined
+          : system
+            ? "Required for booking identity and communication."
+            : driver
+              ? "Required by active driver eligibility rules."
+              : mode === "REQUIRED"
+                ? "Required by customer-field configuration."
+                : undefined,
       displayOrder,
       source: system ? "SYSTEM" : driver ? "DRIVER_RULE" : "CONFIGURATION",
     }

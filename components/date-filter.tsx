@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { format } from "date-fns"
+import { de, enGB } from "date-fns/locale"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ export function DateFilter({
   compact = false,
 }: DateFilterProps) {
   const t = useTranslations()
+  const locale = useLocale()
+  const dateLocale = locale === "de" ? de : enGB
   const [pickupOpen, setPickupOpen] = useState(false)
   const [dropoffOpen, setDropoffOpen] = useState(false)
 
@@ -86,7 +89,7 @@ export function DateFilter({
                 )}
               >
                 <CalendarIcon className={cn("mr-2 h-4 w-4", pickupDateObj && "text-primary")} />
-                {pickupDateObj ? format(pickupDateObj, "MMM dd, yyyy") : t("filters.pickupDate")}
+                {pickupDateObj ? format(pickupDateObj, "PP", { locale: dateLocale }) : t("filters.pickupDate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -114,7 +117,7 @@ export function DateFilter({
                 disabled={!pickupDate}
               >
                 <CalendarIcon className={cn("mr-2 h-4 w-4", dropoffDateObj && "text-primary")} />
-                {dropoffDateObj ? format(dropoffDateObj, "MMM dd, yyyy") : t("filters.dropoffDate")}
+                {dropoffDateObj ? format(dropoffDateObj, "PP", { locale: dateLocale }) : t("filters.dropoffDate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -173,7 +176,7 @@ export function DateFilter({
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {pickupDateObj ? format(pickupDateObj, "PPP") : t("filters.selectPickupDate")}
+                {pickupDateObj ? format(pickupDateObj, "PPP", { locale: dateLocale }) : t("filters.selectPickupDate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -200,7 +203,7 @@ export function DateFilter({
                 disabled={!pickupDate}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {dropoffDateObj ? format(dropoffDateObj, "PPP") : t("filters.selectDropoffDate")}
+                {dropoffDateObj ? format(dropoffDateObj, "PPP", { locale: dateLocale }) : t("filters.selectDropoffDate")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -229,4 +232,3 @@ export function DateFilter({
     </div>
   )
 }
-

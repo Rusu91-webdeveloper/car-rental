@@ -52,6 +52,8 @@ function uploadWithProgress(input: {
   method: string
   headers?: Record<string, string>
   onProgress: (value: number) => void
+  failedMessage: string
+  interruptedMessage: string
 }) {
   return new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest()
@@ -63,8 +65,8 @@ function uploadWithProgress(input: {
     request.onload = () =>
       request.status >= 200 && request.status < 300
         ? resolve()
-        : reject(new Error(`The file transfer failed (${request.status}).`))
-    request.onerror = () => reject(new Error("The file transfer was interrupted."))
+        : reject(new Error(`${input.failedMessage} (${request.status}).`))
+    request.onerror = () => reject(new Error(input.interruptedMessage))
     request.send(input.file)
   })
 }
@@ -74,14 +76,32 @@ type UploadFeedback = {
   message?: string
 }
 
-function customerUploadError(code: string | undefined) {
-  if (code === "RATE_LIMITED") return "Too many upload attempts. Wait a moment, then try again."
+function customerUploadError(code: string | undefined, locale: string) {
+  const copy = (english: string, german: string) => locale === "de" ? german : english
+  if (code === "RATE_LIMITED") return copy("Too many upload attempts. Wait a moment, then try again.", "Zu viele Uploadversuche. Warten Sie einen Moment und versuchen Sie es erneut.")
   if (["DOCUMENT_UPLOAD_INCOMPLETE", "DOCUMENT_UPLOAD_NOT_FOUND"].includes(code ?? ""))
-    return "The file transfer did not finish. Please try again."
+    return copy("The file transfer did not finish. Please try again.", "Die Dateiübertragung wurde nicht abgeschlossen. Bitte versuchen Sie es erneut.")
   if (code === "DOCUMENT_UPLOAD_METADATA_MISMATCH")
-    return "The transferred file could not be verified. Choose the file again and retry."
-  if (code?.includes("PROVIDER")) return "The upload service is temporarily unavailable. Please try again."
-  return "The document failed to upload. Please try again."
+    return copy("The transferred file could not be verified. Choose the file again and retry.", "Die übertragene Datei konnte nicht geprüft werden. Wählen Sie die Datei erneut aus und versuchen Sie es noch einmal.")
+  if (code?.includes("PROVIDER")) return copy("The upload service is temporarily unavailable. Please try again.", "Der Upload-Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.")
+  return copy("The document failed to upload. Please try again.", "Das Dokument konnte nicht hochgeladen werden. Bitte versuchen Sie es erneut.")
+}
+
+function localizeReadinessBlocker(code: string, fallback: string) {
+  const messages: Record<string, string> = {
+    APPLICATION_NOT_FOUND: "Antrag nicht gefunden.",
+    APPLICATION_EXPIRED: "Der Antrag ist abgelaufen.",
+    CUSTOMER_DATA_INVALID: "Vervollständigen Sie gültige Kunden- und Fahrerdaten.",
+    INSURANCE_SELECTION_MISSING: "Wählen Sie eine Versicherungsoption.",
+    PAYMENT_SELECTION_MISSING: "Wählen Sie eine Zahlungsmethode.",
+    QUOTE_EXPIRED: "Aktualisieren Sie den Mietpreis.",
+    QUOTE_CONFIRMATION_REQUIRED: "Bestätigen Sie den aktuellen Mietpreis.",
+    LEGAL_TERMS_REQUIRED: "Akzeptieren Sie die aktuellen Mietbedingungen.",
+    LEGAL_PRIVACY_REQUIRED: "Bestätigen Sie den aktuellen Datenschutzhinweis.",
+    DOCUMENT_APPROVAL_REQUIRED: "Ein Dokument wartet noch auf Freigabe.",
+    IDENTITY_DOCUMENT_APPROVAL_REQUIRED: "Ein Personalausweis oder Reisepass muss freigegeben werden.",
+  }
+  return messages[code] ?? fallback
 }
 
 export function BookingApplicationClient({
@@ -93,6 +113,7 @@ export function BookingApplicationClient({
   initialApplication: BookingApplicationView
   initialReadiness: ApplicationReadiness
 }) {
+  const copy = (english: string, german: string) => locale === "de" ? german : english
   const router = useRouter()
   const [application, setApplication] = useState(initialApplication)
   const [readiness, setReadiness] = useState(initialReadiness)
@@ -118,13 +139,13 @@ export function BookingApplicationClient({
     const key = `${requirement.documentTypeId}:${slotNumber}:${side}`
     setMessage(undefined)
     if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
-      const errorMessage = "Use a PDF, JPEG, or PNG file."
+      const errorMessage = copy("Use a PDF, JPEG, or PNG file.", "Verwenden Sie eine PDF-, JPEG- oder PNG-Datei.")
       setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
       setMessage(errorMessage)
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      const errorMessage = "The maximum file size is 10 MiB."
+      const errorMessage = copy("The maximum file size is 10 MiB.", "Die maximale Dateigröße beträgt 10 MiB.")
       setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
       setMessage(errorMessage)
       return
@@ -169,8 +190,8 @@ export function BookingApplicationClient({
       if (!response.ok || !created.intent || !created.uploadTarget)
         throw new Error(
           created.code === "DOCUMENT_SESSION_EXPIRED"
-            ? "This upload session expired. Restart the application to continue."
-            : "An upload intent could not be created.",
+            ? copy("This upload session expired. Restart the application to continue.", "Diese Upload-Sitzung ist abgelaufen. Starten Sie den Antrag neu, um fortzufahren.")
+            : copy("An upload intent could not be created.", "Der Upload konnte nicht vorbereitet werden."),
         )
       const delivery = created.uploadTarget.delivery
       let transferError: unknown
@@ -184,6 +205,8 @@ export function BookingApplicationClient({
           file,
           headers: delivery.kind === "DIRECT_PUT" ? delivery.requiredHeaders : { "Content-Type": file.type },
           onProgress: (value) => setProgress((current) => ({ ...current, [key]: value })),
+          failedMessage: copy("The file transfer failed", "Die Dateiübertragung ist fehlgeschlagen"),
+          interruptedMessage: copy("The file transfer was interrupted.", "Die Dateiübertragung wurde unterbrochen."),
         })
       } catch (error) {
         // A browser can lose the storage response after the bytes arrived. The
@@ -196,16 +219,16 @@ export function BookingApplicationClient({
       )
       const result = (await completed.json()) as { code?: string }
       if (!completed.ok) {
-        const errorMessage = customerUploadError(result.code)
+        const errorMessage = customerUploadError(result.code, locale)
         throw new Error(transferError instanceof Error ? `${errorMessage} ${transferError.message}` : errorMessage)
       }
       setProgress((current) => ({ ...current, [key]: 100 }))
       setUploadFeedback((current) => ({ ...current, [key]: { status: "success" } }))
-      setMessage("File verified and queued for manual review.")
+      setMessage(copy("File verified and queued for manual review.", "Die Datei wurde geprüft und zur manuellen Prüfung eingereiht."))
       reload()
     } catch (error) {
       setProgress((current) => ({ ...current, [key]: 0 }))
-      const errorMessage = error instanceof Error ? error.message : "The document failed to upload. Please try again."
+      const errorMessage = error instanceof Error ? error.message : copy("The document failed to upload. Please try again.", "Das Dokument konnte nicht hochgeladen werden. Bitte versuchen Sie es erneut.")
       setUploadFeedback((current) => ({ ...current, [key]: { status: "error", message: errorMessage } }))
       setMessage(errorMessage)
     }
@@ -237,10 +260,10 @@ export function BookingApplicationClient({
   if (application.status === "FINALIZED")
     return (
       <main className="mx-auto max-w-3xl p-6">
-        <h1 className="text-2xl font-semibold">Booking finalized</h1>
-        <p className="mt-2 text-muted-foreground">Your application evidence has been preserved with the booking.</p>
+        <h1 className="text-2xl font-semibold">{copy("Booking finalized", "Buchung abgeschlossen")}</h1>
+        <p className="mt-2 text-muted-foreground">{copy("Your application evidence has been preserved with the booking.", "Ihre Antragsnachweise wurden zusammen mit der Buchung gespeichert.")}</p>
         <Button className="mt-6" onClick={() => router.push(`/bookings?booking_id=${application.bookingId}`)}>
-          View booking
+          {copy("View booking", "Buchung anzeigen")}
         </Button>
       </main>
     )
@@ -248,16 +271,16 @@ export function BookingApplicationClient({
   if (TERMINAL.has(application.status))
     return (
       <main className="mx-auto max-w-3xl p-6">
-        <h1 className="text-2xl font-semibold">Application {application.status.toLowerCase()}</h1>
-        <p className="mt-2 text-muted-foreground">{application.terminalReason ?? "This application can no longer be changed."}</p>
+        <h1 className="text-2xl font-semibold">{copy(`Application ${application.status.toLowerCase()}`, `Antrag ${application.status === "EXPIRED" ? "abgelaufen" : application.status === "CANCELLED" ? "storniert" : "abgelehnt"}`)}</h1>
+        <p className="mt-2 text-muted-foreground">{application.terminalReason ?? copy("This application can no longer be changed.", "Dieser Antrag kann nicht mehr geändert werden.")}</p>
       </main>
     )
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-4 pb-24 sm:p-6">
       <header>
-        <p className="text-sm font-medium text-primary">Saved application</p>
-        <h1 className="text-2xl font-semibold">Identity and licence documents</h1>
+        <p className="text-sm font-medium text-primary">{copy("Saved application", "Gespeicherter Antrag")}</p>
+        <h1 className="text-2xl font-semibold">{copy("Identity and licence documents", "Identitäts- und Führerscheindokumente")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {locale === "de" ? "Der Fortschritt wird auf dem Server gespeichert. Der Antrag läuft ab am " : "Progress is saved on the server. Application expires "}
           {formatApplicationDateTime(application.expiresAt, locale)}.
@@ -265,12 +288,12 @@ export function BookingApplicationClient({
       </header>
 
       <section className="rounded-xl border bg-background p-4">
-        <h2 className="font-semibold">Rental evidence</h2>
+        <h2 className="font-semibold">{copy("Rental details", "Mietdaten")}</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <div><dt className="text-muted-foreground">{locale === "de" ? "Abholung" : "Pick-up"}</dt><dd>{formatApplicationDateTime(application.pickupAt, locale)}</dd></div>
           <div><dt className="text-muted-foreground">{locale === "de" ? "Rückgabe" : "Return"}</dt><dd>{formatApplicationDateTime(application.returnAt, locale)}</dd></div>
-          <div><dt className="text-muted-foreground">Shared location</dt><dd>{application.pickupLocation}</dd></div>
-          {application.quote ? <div><dt className="text-muted-foreground">Confirmed quote</dt><dd>{formatCents(application.quote.grandTotal, application.quote.currency)}</dd></div> : null}
+          <div><dt className="text-muted-foreground">{copy("Pick-up and return location", "Abhol- und Rückgabeort")}</dt><dd>{application.pickupLocation}</dd></div>
+          {application.quote ? <div><dt className="text-muted-foreground">{copy("Confirmed price", "Bestätigter Preis")}</dt><dd>{formatCents(application.quote.grandTotal, application.quote.currency)}</dd></div> : null}
         </dl>
       </section>
 
@@ -281,7 +304,7 @@ export function BookingApplicationClient({
               <h2 className="font-semibold">{requirement.name}</h2>
               <p className="text-sm text-muted-foreground">{requirement.instructions}</p>
             </div>
-            <span className="rounded-full bg-muted px-2 py-1 text-xs">{requirement.mode.toLowerCase()}</span>
+            <span className="rounded-full bg-muted px-2 py-1 text-xs">{requirement.mode === "REQUIRED" ? copy("required", "erforderlich") : copy("optional", "optional")}</span>
           </div>
           <div className="mt-4 space-y-3">
             {Array.from({ length: requirement.fileCount }, (_, index) => index + 1).flatMap((slot) =>
@@ -297,30 +320,30 @@ export function BookingApplicationClient({
                   <div key={key} className="rounded-lg border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">{side === "SINGLE" ? `File ${slot}` : `${side.toLowerCase()} · file ${slot}`}</p>
+                        <p className="text-sm font-medium">{side === "SINGLE" ? copy(`File ${slot}`, `Datei ${slot}`) : `${side === "FRONT" ? copy("front", "Vorderseite") : copy("back", "Rückseite")} · ${copy(`file ${slot}`, `Datei ${slot}`)}`}</p>
                         {feedback?.status === "uploading" ? (
                           <p className="mt-1 flex items-center gap-1.5 text-xs text-blue-700" role="status">
                             <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-                            Uploading… {progress[key] ?? 0}%
+                            {copy("Uploading…", "Wird hochgeladen…")} {progress[key] ?? 0}%
                           </p>
                         ) : uploadFailed ? (
                           <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-700" role="alert">
-                            <CircleX className="h-4 w-4" aria-hidden="true" /> Upload failed · please try again
+                            <CircleX className="h-4 w-4" aria-hidden="true" /> {copy("Upload failed · please try again", "Upload fehlgeschlagen · bitte erneut versuchen")}
                           </p>
                         ) : mustReplace ? (
                           <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-700" role="alert">
-                            <CircleX className="h-4 w-4" aria-hidden="true" /> Rejected · upload a replacement
+                            <CircleX className="h-4 w-4" aria-hidden="true" /> {copy("Rejected · upload a replacement", "Abgelehnt · Ersatzdatei hochladen")}
                           </p>
                         ) : approved ? (
                           <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Approved
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {copy("Approved", "Freigegeben")}
                           </p>
                         ) : uploaded ? (
                           <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Uploaded · awaiting approval
+                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {copy("Uploaded · awaiting approval", "Hochgeladen · Freigabe ausstehend")}
                           </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground">Not uploaded</p>
+                          <p className="text-xs text-muted-foreground">{copy("Not uploaded", "Nicht hochgeladen")}</p>
                         )}
                         {feedback?.status === "error" && feedback.message ? (
                           <p className="mt-1 max-w-md text-xs text-red-700">{feedback.message}</p>
@@ -328,7 +351,7 @@ export function BookingApplicationClient({
                       </div>
                       {!approved && feedback?.status !== "uploading" && feedback?.status !== "success" && (!uploaded || uploadFailed || mustReplace) ? (
                         <label className="cursor-pointer rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
-                          {uploadFailed ? "Try again" : mustReplace ? "Upload replacement" : "Choose file"}
+                          {uploadFailed ? copy("Try again", "Erneut versuchen") : mustReplace ? copy("Upload replacement", "Ersatzdatei hochladen") : copy("Choose file", "Datei auswählen")}
                           <input
                             className="sr-only"
                             type="file"
@@ -360,9 +383,9 @@ export function BookingApplicationClient({
 
       {!readiness.ready ? (
         <section className="rounded-xl border bg-muted/30 p-4">
-          <h2 className="font-semibold">Before finalization</h2>
+          <h2 className="font-semibold">{copy("Before finalization", "Vor dem Abschluss")}</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            {readiness.blockers.map((blocker, index) => <li key={`${blocker.code}:${index}`}>{blocker.message}</li>)}
+            {readiness.blockers.map((blocker, index) => <li key={`${blocker.code}:${index}`}>{locale === "de" ? localizeReadinessBlocker(blocker.code, blocker.message) : blocker.message}</li>)}
           </ul>
         </section>
       ) : null}
@@ -404,11 +427,11 @@ export function BookingApplicationClient({
 
       {application.status === "CUSTOMER_ACTION_REQUIRED" && application.actionRequiredReason !== "DOCUMENT_REPLACEMENT_REQUIRED" ? (
         <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
-          <h2 className="font-semibold">Review renewed terms</h2>
-          <p className="text-sm">The price or legal evidence changed. Confirm the server-authoritative replacement before finalization.</p>
-          <label className="flex gap-2 text-sm"><Checkbox checked={terms} onCheckedChange={(value) => setTerms(value === true)} />I accept the current rental terms.</label>
-          <label className="flex gap-2 text-sm"><Checkbox checked={privacy} onCheckedChange={(value) => setPrivacy(value === true)} />I acknowledge the current privacy notice.</label>
-          <Button disabled={!terms || !privacy || isPending} onClick={() => mutate(() => confirmRenewedApplicationTerms({ applicationId: application.id, expectedRevision: application.revision, rentalTerms: terms, privacyNotice: privacy }))}>Confirm renewed evidence</Button>
+          <h2 className="font-semibold">{copy("Review renewed terms", "Aktualisierte Bedingungen prüfen")}</h2>
+          <p className="text-sm">{copy("The price or legal evidence changed. Confirm the authoritative replacement before finalization.", "Der Preis oder die rechtlichen Nachweise haben sich geändert. Bestätigen Sie die verbindliche Aktualisierung vor dem Abschluss.")}</p>
+          <label className="flex gap-2 text-sm"><Checkbox checked={terms} onCheckedChange={(value) => setTerms(value === true)} />{copy("I accept the current rental terms.", "Ich akzeptiere die aktuellen Mietbedingungen.")}</label>
+          <label className="flex gap-2 text-sm"><Checkbox checked={privacy} onCheckedChange={(value) => setPrivacy(value === true)} />{copy("I acknowledge the current privacy notice.", "Ich bestätige den aktuellen Datenschutzhinweis.")}</label>
+          <Button disabled={!terms || !privacy || isPending} onClick={() => mutate(() => confirmRenewedApplicationTerms({ applicationId: application.id, expectedRevision: application.revision, rentalTerms: terms, privacyNotice: privacy }))}>{copy("Confirm updated terms", "Aktualisierte Bedingungen bestätigen")}</Button>
         </section>
       ) : null}
 
@@ -417,7 +440,7 @@ export function BookingApplicationClient({
       <div className="flex flex-wrap gap-3">
         {application.status === "AWAITING_DOCUMENT_UPLOAD" ||
         (application.status === "CUSTOMER_ACTION_REQUIRED" && application.actionRequiredReason === "DOCUMENT_REPLACEMENT_REQUIRED") ? (
-          <Button disabled={isPending} onClick={() => mutate(() => submitBookingApplicationForReview({ applicationId: application.id, expectedRevision: application.revision }))}>Submit uploaded files for review</Button>
+          <Button disabled={isPending} onClick={() => mutate(() => submitBookingApplicationForReview({ applicationId: application.id, expectedRevision: application.revision }))}>{copy("Submit uploaded files for review", "Hochgeladene Dateien zur Prüfung einreichen")}</Button>
         ) : null}
         {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
           <Button disabled={isPending} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>{locale === "de" ? "Bestätigung jetzt abschließen" : "Complete confirmation now"}</Button>
