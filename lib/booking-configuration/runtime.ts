@@ -7,6 +7,11 @@ import { PrismaBookingConfigurationRepository, type ActivePhase6Record } from ".
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import { legalContentHash, renderLegalPlainText } from "@/lib/legal/content"
 import type { BookingLegalDocumentRequirement, BookingLegalRequirements } from "@/lib/legal/types"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 function valid(value: string) {
   return value === "VALID" || value === "WARNING"
@@ -121,6 +126,9 @@ export async function resolvePublicBookingConfiguration(input: {
     return {
       mode: "LEGACY",
       businessTimeZone: "UTC",
+      weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS,
+      openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS,
+      handoverPolicy: DEFAULT_HANDOVER_POLICY,
       minimumRentalMinutes: 1,
       gracePeriodMinutes: 0,
       preparationBufferMinutes: 120,
@@ -165,6 +173,9 @@ export async function resolvePublicBookingConfiguration(input: {
     customerDriverConfigVersionId: record.customerDriverVersionId,
     bookingWorkflowConfigVersionId: record.workflowVersionId,
     businessTimeZone: record.businessTimeZone,
+    weeklyOpeningHours: record.weeklyOpeningHours,
+    openingHoursExceptions: record.openingHoursExceptions,
+    handoverPolicy: record.handoverPolicy,
     minimumRentalMinutes: record.minimumRentalMinutes,
     gracePeriodMinutes: record.gracePeriodMinutes,
     preparationBufferMinutes: record.preparationBufferMinutes,

@@ -16,6 +16,7 @@ import { formatCents } from "@/lib/money"
 import { CalendarIcon, MapPin } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { BookingCustomerDriverInput, PublicBookingConfiguration } from "@/lib/booking-configuration/types"
+import type { BusinessHoursException, HandoverPolicy, WeeklyOpeningHours } from "@/lib/business-configuration/domains"
 import { LegalContent } from "@/components/legal/legal-content"
 import {
   isRentalDurationTooShort,
@@ -26,6 +27,17 @@ import {
 import {
   totalOperationalBufferMinutes,
 } from "@/lib/rental-timing"
+import {
+  businessLocalDateTimeToInstant,
+  handoverSlotHasCapacity,
+  handoverTimeOptions,
+  hasMinimumPickupLeadTime,
+  instantToBusinessDateTimeLocal,
+  openingHoursForDate,
+  timeOfDayMinutes,
+  type HandoverEvent,
+  type HandoverKind,
+} from "@/lib/business-hours"
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear()
@@ -47,6 +59,41 @@ const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: numbe
   const date = new Date(dateString)
   date.setHours(defaultHour, 0, 0, 0)
   return formatDatetimeLocal(date)
+}
+
+const alignToNextOpenTime = (
+  seed: Date,
+  weeklyOpeningHours: WeeklyOpeningHours,
+  exceptions: BusinessHoursException[],
+  policy: HandoverPolicy,
+  kind: HandoverKind,
+  businessTimeZone: string,
+) => {
+  const candidate = new Date(seed)
+  for (let dayOffset = 0; dayOffset < 14; dayOffset += 1) {
+    const hours = openingHoursForDate(candidate, weeklyOpeningHours, exceptions)
+    const options = handoverTimeOptions(hours, kind, policy.slotIntervalMinutes)
+    if (options.length > 0) {
+      const currentMinutes = candidate.getHours() * 60 + candidate.getMinutes()
+      const selected = options.find((time) => {
+        if (dayOffset === 0 && timeOfDayMinutes(time) < currentMinutes) return false
+        if (kind !== "PICKUP") return true
+        const local = new Date(candidate)
+        const [hour, minute] = time.split(":").map(Number)
+        local.setHours(hour, minute, 0, 0)
+        const instant = businessLocalDateTimeToInstant(formatDatetimeLocal(local), businessTimeZone)
+        return Boolean(instant && hasMinimumPickupLeadTime(instant, policy))
+      })
+      if (selected) {
+        const [hour, minute] = selected.split(":").map(Number)
+        candidate.setHours(hour, minute, 0, 0)
+        return candidate
+      }
+    }
+    candidate.setDate(candidate.getDate() + 1)
+    candidate.setHours(0, 0, 0, 0)
+  }
+  return seed
 }
 
 export function CheckoutClient({
@@ -81,6 +128,10 @@ export function CheckoutClient({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const parseBookingInstant = (value: string) =>
+    businessLocalDateTimeToInstant(value, bookingConfiguration.businessTimeZone)
+  const wallDateToBookingInstant = (value: Date) =>
+    parseBookingInstant(formatDatetimeLocal(value))
 
   // Get dates from URL params or use defaults
   const getInitialDates = () => {
@@ -89,22 +140,25 @@ export function CheckoutClient({
 
     if (pickupDateParam && dropoffDateParam) {
       // Convert YYYY-MM-DD from URL to datetime-local format
-      const pickup = convertDateStringToDatetimeLocal(pickupDateParam, 10)
-      const dropoff = convertDateStringToDatetimeLocal(dropoffDateParam, 10)
+      const pickup = formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(pickupDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone))
+      const dropoff = formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(dropoffDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone))
       return { pickup, dropoff }
     }
 
     // Default dates: tomorrow and 3 days later
-    const tomorrow = new Date()
+    const businessNow = instantToBusinessDateTimeLocal(new Date(), bookingConfiguration.businessTimeZone)
+    const tomorrow = new Date(businessNow ?? formatDatetimeLocal(new Date()))
     tomorrow.setDate(tomorrow.getDate() + 1)
     tomorrow.setHours(10, 0, 0, 0)
+    const openPickup = alignToNextOpenTime(tomorrow, bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone)
 
-    const threeDaysLater = new Date(tomorrow)
+    const threeDaysLater = new Date(openPickup)
     threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+    const openDropoff = alignToNextOpenTime(threeDaysLater, bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone)
 
     return {
-      pickup: formatDatetimeLocal(tomorrow),
-      dropoff: formatDatetimeLocal(threeDaysLater),
+      pickup: formatDatetimeLocal(openPickup),
+      dropoff: formatDatetimeLocal(openDropoff),
     }
   }
 
@@ -114,6 +168,7 @@ export function CheckoutClient({
 
   const [isAvailabilityLoading, setIsAvailabilityLoading] = useState(true)
   const [unavailableRanges, setUnavailableRanges] = useState<{ start: Date; end: Date }[]>([])
+  const [handoverEvents, setHandoverEvents] = useState<HandoverEvent[]>([])
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
 
   const unavailableDateSet = useMemo(() => {
@@ -153,10 +208,10 @@ export function CheckoutClient({
     const pickupDateParam = searchParams.get("pickupDate")
     const dropoffDateParam = searchParams.get("dropoffDate")
     if (pickupDateParam && dropoffDateParam) {
-      setPickupDate(convertDateStringToDatetimeLocal(pickupDateParam, 10))
-      setDropoffDate(convertDateStringToDatetimeLocal(dropoffDateParam, 10))
+      setPickupDate(formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(pickupDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone)))
+      setDropoffDate(formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(dropoffDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone)))
     }
-  }, [searchParams])
+  }, [bookingConfiguration.businessTimeZone, bookingConfiguration.handoverPolicy, bookingConfiguration.openingHoursExceptions, bookingConfiguration.weeklyOpeningHours, searchParams])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -181,6 +236,7 @@ export function CheckoutClient({
           end: new Date(range.end),
         }))
         setUnavailableRanges(ranges)
+        setHandoverEvents((result?.handoverEvents ?? []).map((event) => ({ at: new Date(event.at), kind: event.kind })))
         setAvailabilityError(null)
       } catch (err) {
         if (mounted) {
@@ -290,6 +346,50 @@ export function CheckoutClient({
     return Number.isNaN(nextDropoff.getTime()) ? undefined : nextDropoff
   }, [dropoffDate])
 
+  const handoverOptionsForDate = (date: Date, kind: HandoverKind) =>
+    handoverTimeOptions(
+      openingHoursForDate(date, bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions),
+      kind,
+      bookingConfiguration.handoverPolicy.slotIntervalMinutes,
+    )
+
+  const isBusinessClosedDate = (date: Date, kind: HandoverKind) =>
+    handoverOptionsForDate(date, kind).length === 0
+
+  const isWithinConfiguredHandoverHours = (date: Date, kind: HandoverKind) =>
+    handoverOptionsForDate(date, kind).includes(
+      `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
+    )
+
+  const availablePickupTimes = (() => {
+    if (!pickupDateValue) return []
+    return handoverOptionsForDate(pickupDateValue, "PICKUP").filter((time) => {
+      const candidate = new Date(pickupDateValue)
+      const [hour, minute] = time.split(":").map(Number)
+      candidate.setHours(hour, minute, 0, 0)
+      const instant = wallDateToBookingInstant(candidate)
+      return Boolean(instant &&
+        hasMinimumPickupLeadTime(instant, bookingConfiguration.handoverPolicy) &&
+        !isTimeUnavailable(instant) &&
+        handoverSlotHasCapacity(instant, "PICKUP", handoverEvents, bookingConfiguration.handoverPolicy))
+    })
+  })()
+
+  const availableDropoffTimes = (() => {
+    if (!pickupDateValue || !dropoffDateValue) return []
+    return handoverOptionsForDate(dropoffDateValue, "RETURN").filter((time) => {
+      const candidate = new Date(dropoffDateValue)
+      const [hour, minute] = time.split(":").map(Number)
+      candidate.setHours(hour, minute, 0, 0)
+      const pickupInstant = wallDateToBookingInstant(pickupDateValue)
+      const candidateInstant = wallDateToBookingInstant(candidate)
+      return Boolean(pickupInstant && candidateInstant && candidateInstant > pickupInstant &&
+        !isRentalDurationTooShort(pickupInstant, candidateInstant, bookingConfiguration.minimumRentalMinutes) &&
+        !rangeOverlapsUnavailableTime(pickupInstant, candidateInstant) &&
+        handoverSlotHasCapacity(candidateInstant, "RETURN", handoverEvents, bookingConfiguration.handoverPolicy))
+    })
+  })()
+
   const formatDateLabel = (value: Date | undefined, fallback: string) => {
     if (!value) {
       return fallback
@@ -311,6 +411,8 @@ export function CheckoutClient({
     const minutes = String(value.getMinutes()).padStart(2, "0")
     return `${hours}:${minutes}`
   }
+  const selectedPickupTime = formatTimeValue(pickupDateValue)
+  const selectedDropoffTime = formatTimeValue(dropoffDateValue)
 
   const applyTimeToDateTime = (dateTimeValue: string, timeValue: string) => {
     const [hoursRaw, minutesRaw] = timeValue.split(":")
@@ -331,7 +433,7 @@ export function CheckoutClient({
   }
 
   const isDropoffDateDisabled = (date: Date) => {
-    if (isDateInPast(date)) {
+    if (isDateInPast(date) || isBusinessClosedDate(date, "RETURN")) {
       return true
     }
 
@@ -339,10 +441,15 @@ export function CheckoutClient({
       return true
     }
 
-    const earliestDropoffDay = minimumReturnAt(
-      pickupDateValue,
-      bookingConfiguration.minimumRentalMinutes,
+    const pickupInstant = wallDateToBookingInstant(pickupDateValue)
+    if (!pickupInstant) return true
+    const earliestDropoffInstant = minimumReturnAt(pickupInstant, bookingConfiguration.minimumRentalMinutes)
+    const earliestDropoffLocal = instantToBusinessDateTimeLocal(
+      earliestDropoffInstant,
+      bookingConfiguration.businessTimeZone,
     )
+    if (!earliestDropoffLocal) return true
+    const earliestDropoffDay = new Date(earliestDropoffLocal)
     earliestDropoffDay.setHours(0, 0, 0, 0)
 
     const selectedDay = new Date(date)
@@ -353,17 +460,33 @@ export function CheckoutClient({
   const findNextValidDropoff = (pickup: Date, seedDropoff?: Date) => {
     const base = seedDropoff && !Number.isNaN(seedDropoff.getTime()) ? new Date(seedDropoff) : new Date(pickup)
     const candidate = new Date(base)
-    const earliestDropoff = minimumReturnAt(pickup, bookingConfiguration.minimumRentalMinutes)
+    const pickupInstant = wallDateToBookingInstant(pickup)
+    if (!pickupInstant) return null
+    const earliestDropoff = minimumReturnAt(pickupInstant, bookingConfiguration.minimumRentalMinutes)
 
-    if (candidate < earliestDropoff) {
-      candidate.setTime(earliestDropoff.getTime())
+    const earliestDropoffLocal = instantToBusinessDateTimeLocal(
+      earliestDropoff,
+      bookingConfiguration.businessTimeZone,
+    )
+    if (earliestDropoffLocal && candidate < new Date(earliestDropoffLocal)) {
+      candidate.setTime(new Date(earliestDropoffLocal).getTime())
     }
 
     for (let i = 0; i < 370; i += 1) {
-      if (candidate >= earliestDropoff && !rangeOverlapsUnavailableTime(pickup, candidate)) {
-        return candidate
+      const options = handoverOptionsForDate(candidate, "RETURN")
+      for (const time of options) {
+        const option = new Date(candidate)
+        const [hour, minute] = time.split(":").map(Number)
+        option.setHours(hour, minute, 0, 0)
+        const optionInstant = wallDateToBookingInstant(option)
+        if (optionInstant && optionInstant >= earliestDropoff &&
+          !rangeOverlapsUnavailableTime(pickupInstant, optionInstant) &&
+          handoverSlotHasCapacity(optionInstant, "RETURN", handoverEvents, bookingConfiguration.handoverPolicy)) {
+          return option
+        }
       }
       candidate.setDate(candidate.getDate() + 1)
+      candidate.setHours(0, 0, 0, 0)
     }
 
     return null
@@ -371,16 +494,22 @@ export function CheckoutClient({
 
   const handlePickupChange = (value: string) => {
     const nextPickup = new Date(value)
-    if (Number.isNaN(nextPickup.getTime())) {
+    const nextPickupInstant = parseBookingInstant(value)
+    if (Number.isNaN(nextPickup.getTime()) || !nextPickupInstant) {
       return false
     }
 
-    if (isTimeUnavailable(nextPickup)) {
+    if (isTimeUnavailable(nextPickupInstant)) {
       setError("This pickup time is booked or reserved for vehicle preparation. Please choose another time.")
       return false
     }
 
-    if (nextPickup <= new Date()) {
+    if (!isWithinConfiguredHandoverHours(nextPickup, "PICKUP")) {
+      setError("Pick-up must be during the rental company's opening hours.")
+      return false
+    }
+
+    if (nextPickupInstant <= new Date()) {
       setError("Please select a pickup date and time in the future.")
       return false
     }
@@ -404,23 +533,34 @@ export function CheckoutClient({
 
   const handleDropoffChange = (value: string) => {
     const parsedDropoff = new Date(value)
-    if (Number.isNaN(parsedDropoff.getTime())) {
+    const parsedDropoffInstant = parseBookingInstant(value)
+    if (Number.isNaN(parsedDropoff.getTime()) || !parsedDropoffInstant) {
+      return false
+    }
+
+    if (!isWithinConfiguredHandoverHours(parsedDropoff, "RETURN")) {
+      setError("Return must be during the rental company's opening hours.")
       return false
     }
 
     const currentPickup = new Date(pickupDate)
     if (!Number.isNaN(currentPickup.getTime())) {
       const nextDropoff = new Date(parsedDropoff)
+      const currentPickupInstant = parseBookingInstant(pickupDate)
+      if (!currentPickupInstant) {
+        setError("Please select a valid pick-up time.")
+        return false
+      }
 
       if (
-        nextDropoff <= currentPickup ||
-        isRentalDurationTooShort(currentPickup, nextDropoff, bookingConfiguration.minimumRentalMinutes)
+        parsedDropoffInstant <= currentPickupInstant ||
+        isRentalDurationTooShort(currentPickupInstant, parsedDropoffInstant, bookingConfiguration.minimumRentalMinutes)
       ) {
         setError(minimumDurationMessage)
         return false
       }
 
-      if (rangeOverlapsUnavailableTime(currentPickup, nextDropoff)) {
+      if (rangeOverlapsUnavailableTime(currentPickupInstant, parsedDropoffInstant)) {
         setError("The selected times overlap a booking, block, or vehicle preparation period.")
         return false
       }
@@ -444,7 +584,10 @@ export function CheckoutClient({
       return
     }
 
-    const nextPickup = combineDateWithCurrentTime(date, pickupDate, 10)
+    let nextPickup = combineDateWithCurrentTime(date, pickupDate, 10)
+    if (!isWithinConfiguredHandoverHours(nextPickup, "PICKUP")) {
+      nextPickup = alignToNextOpenTime(date, bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone)
+    }
     const updated = handlePickupChange(formatDatetimeLocal(nextPickup))
     if (updated) {
       setPickupCalendarOpen(false)
@@ -456,7 +599,10 @@ export function CheckoutClient({
       return
     }
 
-    const nextDropoff = combineDateWithCurrentTime(date, dropoffDate, 10)
+    let nextDropoff = combineDateWithCurrentTime(date, dropoffDate, 10)
+    if (!isWithinConfiguredHandoverHours(nextDropoff, "RETURN")) {
+      nextDropoff = alignToNextOpenTime(date, bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone)
+    }
     const updated = handleDropoffChange(formatDatetimeLocal(nextDropoff))
     if (updated) {
       setDropoffCalendarOpen(false)
@@ -481,9 +627,9 @@ export function CheckoutClient({
 
   /* eslint-disable react-hooks/set-state-in-effect -- quote state intentionally resets when authoritative inputs change. */
   useEffect(() => {
-    const pickup = new Date(pickupDate)
-    const dropoff = new Date(dropoffDate)
-    if (Number.isNaN(pickup.getTime()) || Number.isNaN(dropoff.getTime()) || dropoff <= pickup) {
+    const pickup = businessLocalDateTimeToInstant(pickupDate, bookingConfiguration.businessTimeZone)
+    const dropoff = businessLocalDateTimeToInstant(dropoffDate, bookingConfiguration.businessTimeZone)
+    if (!pickup || !dropoff || dropoff <= pickup) {
       setQuote(null)
       setQuoteError(null)
       setIsQuoteLoading(false)
@@ -521,6 +667,7 @@ export function CheckoutClient({
     }
   }, [
     bookingConfiguration.minimumRentalMinutes,
+    bookingConfiguration.businessTimeZone,
     car.id,
     dropoffDate,
     insuranceSelected,
@@ -545,10 +692,12 @@ export function CheckoutClient({
   const handleConfirmBooking = () => {
     setError(null)
 
-    const pickup = new Date(pickupDate)
-    const dropoff = new Date(dropoffDate)
+    const pickupWallTime = new Date(pickupDate)
+    const dropoffWallTime = new Date(dropoffDate)
+    const pickup = parseBookingInstant(pickupDate)
+    const dropoff = parseBookingInstant(dropoffDate)
 
-    if (Number.isNaN(pickup.getTime()) || Number.isNaN(dropoff.getTime())) {
+    if (!pickup || !dropoff || Number.isNaN(pickupWallTime.getTime()) || Number.isNaN(dropoffWallTime.getTime())) {
       setError("Please select valid pickup and drop-off dates.")
       return
     }
@@ -570,6 +719,14 @@ export function CheckoutClient({
 
     if (rangeOverlapsUnavailableTime(pickup, dropoff)) {
       setError("Your selected times overlap a booking, block, or vehicle preparation period.")
+      return
+    }
+    if (!availablePickupTimes.includes(selectedPickupTime) || !availableDropoffTimes.includes(selectedDropoffTime)) {
+      setError("Please select an available pick-up and return time.")
+      return
+    }
+    if (!isWithinConfiguredHandoverHours(pickupWallTime, "PICKUP") || !isWithinConfiguredHandoverHours(dropoffWallTime, "RETURN")) {
+      setError("Pick-up and return must be during the rental company's opening hours.")
       return
     }
     if (!pickupLocation) {
@@ -687,7 +844,7 @@ export function CheckoutClient({
                       mode="single"
                       selected={pickupDateValue}
                       onSelect={handlePickupDateSelect}
-                      disabled={(date) => isDateInPast(date)}
+                      disabled={(date) => isDateInPast(date) || isBusinessClosedDate(date, "PICKUP")}
                       modifiers={{
                         unavailable: (date) => hasUnavailableTime(date),
                       }}
@@ -703,12 +860,16 @@ export function CheckoutClient({
 
               <div className="space-y-2">
                 <Label htmlFor="pickup-time">Pick-up Time</Label>
-                <Input
+                <select
                   id="pickup-time"
-                  type="time"
-                  value={formatTimeValue(pickupDateValue)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={availablePickupTimes.includes(selectedPickupTime) ? selectedPickupTime : ""}
                   onChange={(e) => handlePickupTimeChange(e.target.value)}
-                />
+                  disabled={availablePickupTimes.length === 0}
+                >
+                  <option value="" disabled>{availablePickupTimes.length === 0 ? "No available times" : "Select an available time"}</option>
+                  {availablePickupTimes.map((time) => <option key={time} value={time}>{time}</option>)}
+                </select>
               </div>
             </div>
 
@@ -743,12 +904,16 @@ export function CheckoutClient({
 
               <div className="space-y-2">
                 <Label htmlFor="dropoff-time">Drop-off Time</Label>
-                <Input
+                <select
                   id="dropoff-time"
-                  type="time"
-                  value={formatTimeValue(dropoffDateValue)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={availableDropoffTimes.includes(selectedDropoffTime) ? selectedDropoffTime : ""}
                   onChange={(e) => handleDropoffTimeChange(e.target.value)}
-                />
+                  disabled={availableDropoffTimes.length === 0}
+                >
+                  <option value="" disabled>{availableDropoffTimes.length === 0 ? "No available times" : "Select an available time"}</option>
+                  {availableDropoffTimes.map((time) => <option key={time} value={time}>{time}</option>)}
+                </select>
               </div>
             </div>
 
@@ -758,6 +923,11 @@ export function CheckoutClient({
                 : locale === "de"
                   ? `Rote Tage enthalten belegte Zeiten. Freie Uhrzeiten am selben Tag können gewählt werden. Nach jeder Rückgabe sind insgesamt ${operationalBufferMinutes} Minuten gesperrt: 60 Minuten Verspätungspuffer und ${bookingConfiguration.preparationBufferMinutes} Minuten Vorbereitung.`
                   : `Red days contain unavailable times. Free times on the same day remain selectable. Every return is followed by a ${operationalBufferMinutes}-minute block: 60 minutes for possible lateness and ${bookingConfiguration.preparationBufferMinutes} minutes for preparation.`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {locale === "de"
+                ? `Abhol- und Rückgabezeiten berücksichtigen Öffnungszeiten, Sondertage, Vorlaufzeit und verfügbare Übergabekapazität in ${bookingConfiguration.businessTimeZone}.`
+                : `Pick-up and return choices account for opening windows, special dates, minimum notice and remaining handover capacity in ${bookingConfiguration.businessTimeZone}.`}
             </p>
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground" role="status">
               <span className="font-medium">

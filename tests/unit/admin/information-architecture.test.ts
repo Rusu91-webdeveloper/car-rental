@@ -130,7 +130,7 @@ describe("owner-facing admin information architecture", () => {
   it("gives each owner destination one plain business question", () => {
     const pages = {
       "app/[locale]/admin/bookings/settings/flow/page.tsx": "What steps do customers complete?",
-      "app/[locale]/admin/bookings/settings/duration/page.tsx": "Set your booking length and tax",
+      "app/[locale]/admin/bookings/settings/duration/page.tsx": "Set your booking schedule, length and tax",
       "app/[locale]/admin/bookings/driver-rules/page.tsx": "Who is allowed to drive?",
       "app/[locale]/admin/cars/pricing/page.tsx": "What should each car cost?",
       "app/[locale]/admin/cars/rental-rules/page.tsx": "Should customers be offered insurance?",
@@ -141,6 +141,19 @@ describe("owner-facing admin information architecture", () => {
       "app/[locale]/admin/team/page.tsx": "Who can manage the business?",
     }
     for (const [path, question] of Object.entries(pages)) expect(source(path)).toContain(question)
+  })
+
+  it("gives owners a guided schedule setup instead of seven repetitive forms", () => {
+    const billingRules = source("components/business-configuration/billing-rule-form.tsx")
+    expect(billingRules).toContain("Quick setup")
+    expect(billingRules).toContain("Weekdays 09:00–18:00")
+    expect(billingRules).toContain("Weekdays 08:00–18:00")
+    expect(billingRules).toContain("Copy Monday to weekdays")
+    expect(billingRules).toContain("Copy Monday to every day")
+    expect(billingRules).toContain("Vehicle turnaround preview")
+    expect(billingRules).toContain("Fix these schedule details before saving")
+    expect(billingRules.indexOf('label="Business timezone"')).toBeLessThan(billingRules.indexOf("Advanced rental calculation"))
+    expect(billingRules.indexOf('label="Preparation after return"')).toBeLessThan(billingRules.indexOf("Advanced rental calculation"))
   })
 
   it("removes owner-facing release jargon and required change notes", () => {

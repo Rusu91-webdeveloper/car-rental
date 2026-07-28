@@ -1,11 +1,19 @@
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import type {
   BookingWorkflowConfiguration,
+  BusinessHoursException,
   CustomerDriverRequirementsConfiguration,
+  HandoverPolicy,
   InsuranceConfiguration,
   LegalAcceptanceConfiguration,
   PaymentConfiguration,
 } from "@/lib/business-configuration/domains"
+import type { WeeklyOpeningHours } from "@/lib/business-configuration/domains"
+import {
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
 
 export interface ActiveLegalDocumentRecord {
   id: string
@@ -30,6 +38,9 @@ export interface ActivePhase6Record {
   releaseNumber: number
   releaseValidationStatus: string
   businessTimeZone: string
+  weeklyOpeningHours: WeeklyOpeningHours
+  openingHoursExceptions: BusinessHoursException[]
+  handoverPolicy: HandoverPolicy
   currency: string
   minimumRentalMinutes: number
   gracePeriodMinutes: number
@@ -101,6 +112,9 @@ export class PrismaBookingConfigurationRepository {
       releaseNumber: release.releaseNumber,
       releaseValidationStatus: release.validationStatus,
       businessTimeZone: release.generalRentalConfig.businessTimeZone,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(release.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(release.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy),
       currency: release.generalRentalConfig.currency,
       minimumRentalMinutes: release.pricingBillingConfig.minimumRentalMinutes,
       gracePeriodMinutes: release.pricingBillingConfig.gracePeriodMinutes,

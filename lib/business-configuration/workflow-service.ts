@@ -20,6 +20,11 @@ import { databaseUserHasCapability } from "@/lib/authorization/database-capabili
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 
@@ -317,6 +322,9 @@ export async function loadConfigurationOverview(options?: {
             businessTimeZone: "UTC",
             currency: pricingDraftEvidence.fleetRateSet.currency,
             supportedLocales: ["en"],
+            weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS,
+            openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS,
+            handoverPolicy: DEFAULT_HANDOVER_POLICY,
           },
         },
         fleetRateSet: pricingDraftEvidence.fleetRateSet,

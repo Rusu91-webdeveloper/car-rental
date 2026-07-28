@@ -8,6 +8,11 @@ import type {
   ConfigurationEvidenceRepository,
   ReleaseAggregate,
 } from "./repositories"
+import {
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
 
 export type ConfigurationDbClient = PrismaClient | Prisma.TransactionClient
 
@@ -111,6 +116,9 @@ function mapDomains(row: ReleaseRow): BusinessConfigurationDomains {
       businessTimeZone: row.generalRentalConfig.businessTimeZone,
       currency: row.generalRentalConfig.currency,
       supportedLocales: row.generalRentalConfig.supportedLocales,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(row.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(row.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(row.generalRentalConfig.handoverPolicy),
     },
     "pricing-billing": {
       weeklyPricingEnabled: row.pricingBillingConfig.weeklyPricingEnabled,

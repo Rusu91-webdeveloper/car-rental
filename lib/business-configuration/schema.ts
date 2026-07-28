@@ -9,6 +9,7 @@ import {
   PAYMENT_METHODS,
   REQUIREMENT_LEVELS,
 } from "./domains";
+import { BUSINESS_WEEKDAYS, timeOfDayMinutes } from "@/lib/business-hours";
 
 const codeMessage = (code: string, message: string) => `${code}|${message}`;
 
@@ -32,6 +33,84 @@ function isIanaTimeZone(value: string) {
   }
 }
 
+const timeWindowSchema = z.object({
+  opensAt: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm"),
+  closesAt: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Use HH:mm"),
+}).superRefine((window, context) => {
+  if (timeOfDayMinutes(window.opensAt) >= timeOfDayMinutes(window.closesAt)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["closesAt"],
+      message: "Closing time must be later than opening time",
+    });
+  }
+});
+
+const timeWindowsSchema = z.array(timeWindowSchema).max(4).superRefine((windows, context) => {
+  const sorted = [...windows].sort((left, right) => timeOfDayMinutes(left.opensAt) - timeOfDayMinutes(right.opensAt));
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (timeOfDayMinutes(sorted[index].opensAt) < timeOfDayMinutes(sorted[index - 1].closesAt)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index],
+        message: "Opening windows must not overlap",
+      });
+    }
+  }
+});
+
+const businessDayHoursObjectSchema = z.object({
+  isOpen: z.boolean(),
+  pickupWindows: timeWindowsSchema,
+  returnWindows: timeWindowsSchema,
+});
+
+const openDayHasWindow = (hours: { isOpen: boolean; pickupWindows: unknown[]; returnWindows: unknown[] }) =>
+  !hours.isOpen || hours.pickupWindows.length > 0 || hours.returnWindows.length > 0;
+
+const businessDayHoursSchema = businessDayHoursObjectSchema.refine(
+  openDayHasWindow,
+  "An open day needs at least one pickup or return window",
+);
+
+export const weeklyOpeningHoursSchema = z.object(
+  Object.fromEntries(
+    BUSINESS_WEEKDAYS.map((day) => [day, businessDayHoursSchema]),
+  ) as Record<(typeof BUSINESS_WEEKDAYS)[number], typeof businessDayHoursSchema>,
+);
+
+export const openingHoursExceptionsSchema = z.array(
+  businessDayHoursObjectSchema.extend({
+    id: z.string().trim().min(1).max(100),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
+    label: z.string().trim().max(100).optional(),
+  }).refine(openDayHasWindow, "An open exception needs at least one pickup or return window"),
+).max(366).superRefine((exceptions, context) => {
+  const dates = new Set<string>();
+  exceptions.forEach((exception, index) => {
+    if (dates.has(exception.date)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: [index, "date"], message: "Only one exception is allowed per date" });
+    }
+    dates.add(exception.date);
+  });
+});
+
+export const handoverPolicySchema = z.object({
+  slotIntervalMinutes: z.union([z.literal(15), z.literal(30), z.literal(60)]),
+  minimumLeadTimeMinutes: z.number().int().min(0).max(43_200),
+  maximumPickupsPerSlot: z.number().int().min(1).max(100),
+  maximumReturnsPerSlot: z.number().int().min(1).max(100),
+  maximumTotalHandoversPerSlot: z.number().int().min(1).max(200),
+}).superRefine((policy, context) => {
+  if (policy.maximumTotalHandoversPerSlot < Math.max(policy.maximumPickupsPerSlot, policy.maximumReturnsPerSlot)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maximumTotalHandoversPerSlot"],
+      message: "Total slot capacity must not be below a pickup or return capacity",
+    });
+  }
+});
+
 export const generalRentalConfigurationSchema = z.object({
   businessTimeZone: z
     .string()
@@ -46,6 +125,13 @@ export const generalRentalConfigurationSchema = z.object({
     .array(localeSchema)
     .min(1, "At least one language is required")
     .refine(uniqueStrings, "Languages must not be repeated"),
+  weeklyOpeningHours: weeklyOpeningHoursSchema.refine(
+    (hours) => BUSINESS_WEEKDAYS.some((day) => hours[day].isOpen && hours[day].pickupWindows.length > 0) &&
+      BUSINESS_WEEKDAYS.some((day) => hours[day].isOpen && hours[day].returnWindows.length > 0),
+    "At least one weekly pickup and return window is required",
+  ),
+  openingHoursExceptions: openingHoursExceptionsSchema,
+  handoverPolicy: handoverPolicySchema,
 });
 
 export const pricingBillingConfigurationSchema = z.object({

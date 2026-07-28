@@ -1,4 +1,10 @@
-import type { BookingStep, CustomerField } from "@/lib/business-configuration/domains"
+import type {
+  BookingStep,
+  BusinessHoursException,
+  CustomerField,
+  HandoverPolicy,
+  WeeklyOpeningHours,
+} from "@/lib/business-configuration/domains"
 import type { InsuranceTaxTreatment } from "@/lib/pricing/types"
 import type { BookingLegalRequirements } from "@/lib/legal/types"
 
@@ -101,6 +107,9 @@ export interface PublicBookingConfiguration {
   customerDriverConfigVersionId?: string
   bookingWorkflowConfigVersionId?: string
   businessTimeZone: string
+  weeklyOpeningHours: WeeklyOpeningHours
+  openingHoursExceptions: BusinessHoursException[]
+  handoverPolicy: HandoverPolicy
   minimumRentalMinutes: number
   gracePeriodMinutes: number
   preparationBufferMinutes: number

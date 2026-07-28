@@ -32,6 +32,62 @@ describe("configuration validation contracts", () => {
     );
   });
 
+  it("requires at least one open business day", () => {
+    const general = validBusinessConfigurationDomains()["general-rental"];
+    const result = validateConfigurationDomain("general-rental", {
+      ...general,
+      weeklyOpeningHours: Object.fromEntries(
+        Object.entries(general.weeklyOpeningHours).map(([day, hours]) => [day, { ...hours, isOpen: false }]),
+      ),
+    });
+    expect(result.outcome).toBe("BLOCKED");
+  });
+
+  it("rejects an opening window whose closing time is not later", () => {
+    const general = validBusinessConfigurationDomains()["general-rental"];
+    const result = validateConfigurationDomain("general-rental", {
+      ...general,
+      weeklyOpeningHours: {
+        ...general.weeklyOpeningHours,
+        MONDAY: {
+          isOpen: true,
+          pickupWindows: [{ opensAt: "18:00", closesAt: "09:00" }],
+          returnWindows: [{ opensAt: "09:00", closesAt: "18:00" }],
+        },
+      },
+    });
+    expect(result.outcome).toBe("BLOCKED");
+  });
+
+  it("rejects duplicate special-date exceptions", () => {
+    const general = validBusinessConfigurationDomains()["general-rental"];
+    const exception = {
+      id: "holiday-1",
+      date: "2026-12-25",
+      isOpen: false,
+      pickupWindows: [],
+      returnWindows: [],
+    };
+    const result = validateConfigurationDomain("general-rental", {
+      ...general,
+      openingHoursExceptions: [exception, { ...exception, id: "holiday-2" }],
+    });
+    expect(result.outcome).toBe("BLOCKED");
+  });
+
+  it("keeps total handover capacity at or above each individual limit", () => {
+    const general = validBusinessConfigurationDomains()["general-rental"];
+    const result = validateConfigurationDomain("general-rental", {
+      ...general,
+      handoverPolicy: {
+        ...general.handoverPolicy,
+        maximumPickupsPerSlot: 5,
+        maximumTotalHandoversPerSlot: 4,
+      },
+    });
+    expect(result.outcome).toBe("BLOCKED");
+  });
+
   it("reports an invalid numeric range", () => {
     const pricing = validBusinessConfigurationDomains()["pricing-billing"];
     const result = validateConfigurationDomain("pricing-billing", {

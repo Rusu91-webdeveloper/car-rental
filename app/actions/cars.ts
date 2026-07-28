@@ -15,6 +15,7 @@ import { Prisma } from "@prisma/client"
 import { prepareOwnerPricingEdit } from "@/lib/admin/owner-settings-edit"
 import { newCarPublishingMode } from "@/lib/admin/new-car-publishing"
 import { activateDraftRelease, validateDraftRelease } from "@/lib/business-configuration/workflow-service"
+import { getHandoverEvents } from "@/lib/handover-capacity"
 
 const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
@@ -487,9 +488,15 @@ export async function getCarAvailability(carId: string) {
       return { error: "Car not found" }
     }
 
-    const unavailableDates = await getUnavailableDates(carId)
+    const now = new Date()
+    const capacityHorizon = new Date(now)
+    capacityHorizon.setFullYear(capacityHorizon.getFullYear() + 2)
+    const [unavailableDates, handoverEvents] = await Promise.all([
+      getUnavailableDates(carId),
+      getHandoverEvents(prisma, now, capacityHorizon),
+    ])
 
-    return { unavailableDates }
+    return { unavailableDates, handoverEvents }
   } catch (error) {
     console.error("[GET_CAR_AVAILABILITY_ERROR]", error)
     return { error: "Failed to fetch availability" }

@@ -1082,6 +1082,9 @@ model GeneralRentalConfigVersion {
   businessTimeZone       String
   currency               String   @db.VarChar(3)
   supportedLocales       String[]
+  weeklyOpeningHours     Json
+  openingHoursExceptions Json
+  handoverPolicy         Json
 
   version             ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
   releases            BusinessConfigurationRelease[]

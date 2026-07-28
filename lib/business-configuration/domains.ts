@@ -82,6 +82,45 @@ export interface GeneralRentalConfiguration {
   businessTimeZone: string;
   currency: string;
   supportedLocales: string[];
+  weeklyOpeningHours: WeeklyOpeningHours;
+  openingHoursExceptions: BusinessHoursException[];
+  handoverPolicy: HandoverPolicy;
+}
+
+export type BusinessWeekday =
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY"
+  | "SATURDAY"
+  | "SUNDAY";
+
+export interface BusinessTimeWindow {
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface BusinessDayHours {
+  isOpen: boolean;
+  pickupWindows: BusinessTimeWindow[];
+  returnWindows: BusinessTimeWindow[];
+}
+
+export type WeeklyOpeningHours = Record<BusinessWeekday, BusinessDayHours>;
+
+export interface BusinessHoursException extends BusinessDayHours {
+  id: string;
+  date: string;
+  label?: string;
+}
+
+export interface HandoverPolicy {
+  slotIntervalMinutes: 15 | 30 | 60;
+  minimumLeadTimeMinutes: number;
+  maximumPickupsPerSlot: number;
+  maximumReturnsPerSlot: number;
+  maximumTotalHandoversPerSlot: number;
 }
 
 export interface PricingBillingConfiguration {

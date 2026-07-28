@@ -1,4 +1,9 @@
-import type { PricingBillingConfiguration } from "@/lib/business-configuration/domains"
+import type {
+  BusinessHoursException,
+  HandoverPolicy,
+  PricingBillingConfiguration,
+  WeeklyOpeningHours,
+} from "@/lib/business-configuration/domains"
 import type { ConfigurationValidationIssue } from "@/lib/business-configuration/types"
 import type { PricingResult } from "@/lib/pricing/types"
 
@@ -83,6 +88,12 @@ export interface PricingAdminPageData {
   fleetDraftAttached: boolean
   businessTimeZone: string
   liveBusinessTimeZone?: string
+  weeklyOpeningHours: WeeklyOpeningHours
+  liveWeeklyOpeningHours?: WeeklyOpeningHours
+  openingHoursExceptions: BusinessHoursException[]
+  liveOpeningHoursExceptions?: BusinessHoursException[]
+  handoverPolicy: HandoverPolicy
+  liveHandoverPolicy?: HandoverPolicy
   currency: string
   livePricing?: PricingVersionView
   draftPricing?: PricingVersionView

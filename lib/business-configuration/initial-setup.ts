@@ -4,6 +4,11 @@ import {
   defaultDocumentRolePermission,
 } from "@/lib/document-configuration/default-role-permissions"
 import { BOOKING_STEPS, CONFIRMATION_SECTIONS, CUSTOMER_FIELDS } from "./domains"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 const requiredCustomerFields = new Set(["FIRST_NAME", "LAST_NAME", "EMAIL"])
 
@@ -113,6 +118,9 @@ export async function initializeBusinessConfiguration(
               businessTimeZone: "UTC",
               currency,
               supportedLocales: ["en", "de"],
+              weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS as unknown as Prisma.InputJsonValue,
+              openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS as unknown as Prisma.InputJsonValue,
+              handoverPolicy: DEFAULT_HANDOVER_POLICY as unknown as Prisma.InputJsonValue,
             },
           },
         }))

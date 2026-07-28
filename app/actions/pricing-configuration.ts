@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { CAPABILITIES } from "@/lib/authorization/capabilities"
 import { requireCapability } from "@/lib/authorization/server"
-import { pricingBillingConfigurationSchema } from "@/lib/business-configuration/schema"
+import {
+  handoverPolicySchema,
+  openingHoursExceptionsSchema,
+  pricingBillingConfigurationSchema,
+  weeklyOpeningHoursSchema,
+} from "@/lib/business-configuration/schema"
 import { ConfigurationWorkflowError, publicConfigurationWorkflowMessage } from "@/lib/business-configuration/workflow-errors"
 import { PricingError } from "@/lib/pricing/errors"
 import {
@@ -48,6 +53,9 @@ const rulesSchema = z.object({
   configuration: pricingBillingConfigurationSchema,
   changeSummary: z.string().trim().min(3).max(500),
   businessTimeZone: z.string().trim().min(1).max(100),
+  weeklyOpeningHours: weeklyOpeningHoursSchema,
+  openingHoursExceptions: openingHoursExceptionsSchema,
+  handoverPolicy: handoverPolicySchema,
 })
 
 const previewSchema = z.object({

@@ -10,6 +10,14 @@ import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { enqueueInitialBookingNotifications } from "@/lib/booking-notifications"
+import {
+  hasMinimumPickupLeadTime,
+  isHandoverTimeAllowed,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 import { calculateConfiguredDeposit, resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
 import type {
@@ -350,11 +358,52 @@ export class PrismaBookingApplicationRepository
             "APPLICATION_CONFIGURATION_UNAVAILABLE",
             "No active booking configuration is available.",
           )
+        const weeklyOpeningHours = normalizeWeeklyOpeningHours(
+          release.generalRentalConfig.weeklyOpeningHours,
+        )
+        const openingHoursExceptions = normalizeOpeningHoursExceptions(
+          release.generalRentalConfig.openingHoursExceptions,
+        )
+        const handoverPolicy = normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy)
+        if (!isHandoverTimeAllowed(input.pickupAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "PICKUP"))
+          applicationError(
+            "APPLICATION_OUTSIDE_OPENING_HOURS",
+            "Pick-up must be during the rental company's opening hours.",
+          )
+        if (!isHandoverTimeAllowed(input.returnAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "RETURN"))
+          applicationError(
+            "APPLICATION_OUTSIDE_OPENING_HOURS",
+            "Return must be during the rental company's opening hours.",
+          )
+        if (!hasMinimumPickupLeadTime(input.pickupAt, handoverPolicy))
+          applicationError(
+            "APPLICATION_INSUFFICIENT_LEAD_TIME",
+            "Pick-up does not meet the rental company's minimum advance-booking time.",
+          )
         await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${input.carId} FOR UPDATE`
         if (!(await isCarAvailable(input.carId, input.pickupAt, input.returnAt, { db: tx })))
           applicationError(
             "APPLICATION_VEHICLE_UNAVAILABLE",
             "The vehicle is no longer available for the selected period.",
+          )
+        // Capacity is shared across the fleet, so serialize the final check for
+        // concurrent applications involving different cars.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(2026072821)`
+        const capacity = await evaluateRentalHandoverCapacity({
+          db: tx,
+          pickupAt: input.pickupAt,
+          returnAt: input.returnAt,
+          policy: handoverPolicy,
+        })
+        if (!capacity.pickupAvailable)
+          applicationError(
+            "APPLICATION_HANDOVER_CAPACITY_REACHED",
+            "The selected pick-up slot has reached its handover capacity.",
+          )
+        if (!capacity.returnAvailable)
+          applicationError(
+            "APPLICATION_HANDOVER_CAPACITY_REACHED",
+            "The selected return slot has reached its handover capacity.",
           )
         const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
         if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))

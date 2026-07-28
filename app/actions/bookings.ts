@@ -24,6 +24,14 @@ import {
   dispatchPendingBookingNotificationsForBooking,
   enqueueBookingNotification,
 } from "@/lib/booking-notifications"
+import {
+  hasMinimumPickupLeadTime,
+  isHandoverTimeAllowed,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -106,6 +114,14 @@ export async function getBookingQuote(data: unknown) {
     const release = await prisma.businessConfigurationRelease.findFirst({
       where: { status: "ACTIVE" },
       select: {
+        generalRentalConfig: {
+          select: {
+            businessTimeZone: true,
+            weeklyOpeningHours: true,
+            openingHoursExceptions: true,
+            handoverPolicy: true,
+          },
+        },
         paymentConfig: {
           select: {
             depositType: true,
@@ -117,6 +133,22 @@ export async function getBookingQuote(data: unknown) {
     })
     if (!release?.paymentConfig.methods.some((method) => method.enabled))
       return { error: "This payment method is not available.", code: "PAYMENT_METHOD_UNAVAILABLE" }
+    const weeklyOpeningHours = normalizeWeeklyOpeningHours(release.generalRentalConfig.weeklyOpeningHours)
+    const openingHoursExceptions = normalizeOpeningHoursExceptions(release.generalRentalConfig.openingHoursExceptions)
+    const handoverPolicy = normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy)
+    const pickupAt = new Date(validated.pickupDate)
+    const returnAt = new Date(validated.dropoffDate)
+    if (!isHandoverTimeAllowed(pickupAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "PICKUP"))
+      return { error: "Pick-up must be during the rental company's opening hours.", code: "OUTSIDE_OPENING_HOURS" }
+    if (!isHandoverTimeAllowed(returnAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "RETURN"))
+      return { error: "Return must be during the rental company's opening hours.", code: "OUTSIDE_OPENING_HOURS" }
+    if (!hasMinimumPickupLeadTime(pickupAt, handoverPolicy))
+      return { error: "Pick-up does not meet the rental company's minimum advance-booking time.", code: "INSUFFICIENT_LEAD_TIME" }
+    const capacity = await evaluateRentalHandoverCapacity({ db: prisma, pickupAt, returnAt, policy: handoverPolicy })
+    if (!capacity.pickupAvailable)
+      return { error: "The selected pick-up slot has reached its handover capacity.", code: "PICKUP_SLOT_FULL" }
+    if (!capacity.returnAvailable)
+      return { error: "The selected return slot has reached its handover capacity.", code: "RETURN_SLOT_FULL" }
     const configured = await quoteConfiguredVehicleRental({
       db: prisma,
       pricingRepository: new PrismaPricingContextRepository(prisma),
