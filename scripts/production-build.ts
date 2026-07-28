@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process"
+import { getMigrationDatabaseUrl } from "../lib/db-url"
 
-function run(command: string, args: string[]) {
+function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env) {
   const result = spawnSync(command, args, {
-    env: process.env,
+    env,
     stdio: "inherit",
   })
 
@@ -13,7 +14,10 @@ function run(command: string, args: string[]) {
 // Production code must never be deployed before its additive schema changes.
 // Preview and local builds remain read-only against their configured databases.
 if (process.env.VERCEL_ENV === "production") {
-  run("npm", ["run", "db:deploy"])
+  run("npm", ["run", "db:deploy"], {
+    ...process.env,
+    DATABASE_URL: getMigrationDatabaseUrl(),
+  })
 }
 
 run("next", ["build"])

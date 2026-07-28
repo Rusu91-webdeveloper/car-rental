@@ -7,7 +7,8 @@ describe("production build database safety", () => {
     const script = readFileSync(resolve(process.cwd(), "scripts/production-build.ts"), "utf8")
 
     expect(script).toContain('process.env.VERCEL_ENV === "production"')
-    expect(script).toContain('run("npm", ["run", "db:deploy"])')
+    expect(script).toContain('DATABASE_URL: getMigrationDatabaseUrl()')
+    expect(script).toContain('run("npm", ["run", "db:deploy"], {')
     expect(script).toContain('run("next", ["build"])')
   })
 })

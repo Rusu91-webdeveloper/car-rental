@@ -28,12 +28,12 @@ Scope cells use: **R** required, **O** optional, **C** conditionally required fo
 
 The requirement count used in this guide is intentionally precise:
 
-- **67** unique names are referenced by executable application, test, configuration, Prisma, preflight, or shell code.
+- **68** unique names are referenced by executable application, test, configuration, Prisma, preflight, or shell code.
 - **31** are required for the fully enabled Production state measured by current preflight/health; 27 are operator-configured, `NODE_ENV`, `VERCEL`, and `VERCEL_OIDC_TOKEN` are platform-supplied, and `BLOB_STORE_ID` is supplied by the approved Blob integration but remains a required binding.
 - **9** are baseline Preview requirements (`DATABASE_URL`, the two application URLs, Auth.js/Google's three values, `ADMIN_EMAILS`, `RATE_LIMIT_HASH_SECRET`, plus platform `NODE_ENV`). `VERCEL` is also automatically present. A document-enabled Preview adds the ten document/Blob binding values listed in the Preview matrix; the synthetic provider harness adds four explicit guard values.
-- **33** executable-code names are optional, conditional, test/operator-only, or compatibility values rather than fully enabled Production requirements.
+- **34** executable-code names are optional, conditional, test/operator-only, or compatibility values rather than fully enabled Production requirements.
 - **7** names are deprecated/forbidden: three Stripe names enforced by preflight and four historical SMTP names found only in stale documentation.
-- The safe template also includes requested operator convention `DIRECT_URL`; the current Prisma schema and application do **not** consume it. The guide therefore covers 72 names: 67 executable-code names, four historical SMTP names, and one explicit operator-only convention.
+- The safe template also includes `DIRECT_URL`, now consumed only by the production migration build path. The guide therefore covers 72 names: 68 executable-code names and four historical SMTP names.
 
 ### 2.1 Core application
 
@@ -52,9 +52,9 @@ The requirement count used in this guide is intentionally precise:
 | --- | --- | --- | --- | --- | --- |
 | `DATABASE_URL` | Required; **secret** | R / R / R / C | PostgreSQL URI beginning `postgres://` or `postgresql://`; pooled Neon runtime URL recommended. No default. Obtain from the exact Neon branch/role/database. | `prisma/schema.prisma`, `lib/db-url.ts`, `next.config.mjs`, Prisma client and preflight. Missing/wrong URL breaks database runtime, migrations, health and usually build/install paths; non-Postgres fails preflight. **B/R/H/T** | Yes |
 | `CAR_DATABASE_URL` | Compatibility; **secret** | O / O / O / C | PostgreSQL URI; no default. Used only when `DATABASE_URL` is absent and normalized into it. | `lib/db-url.ts`, `next.config.mjs`, `scripts/with-db-url.ts`. Can support old environments, but Production preflight still requires canonical `DATABASE_URL`. **B/R/T** | Yes |
-| `DIRECT_URL` | Operator convention only; **secret** | C / — / — / C | Direct/unpooled Neon PostgreSQL URI, normally a hostname without `-pooler`; no default. Obtain from the same exact branch/role/database as runtime. | **No repository consumer.** `prisma/schema.prisma` has no `directUrl`. Use only by explicitly mapping it to `DATABASE_URL` for approved migration/status/dump commands. Missing does not affect app/preflight. **T** when direct operations are required | No app redeploy; operator session only |
+| `DIRECT_URL` | Optional migration override; **secret** | O / O / O / C | Direct/unpooled Neon PostgreSQL URI, normally a hostname without `-pooler`; no default. Obtain from the same exact branch/role/database as runtime. | `scripts/production-build.ts` prefers it for `prisma migrate deploy`; when omitted, Neon pooled hostnames are converted to their direct equivalent. It is never used by application runtime queries. **B/T** | Yes when changing the deployed migration endpoint |
 
-`DIRECT_URL` must never point at a different branch than its paired `DATABASE_URL`. Do not add it to Vercel merely because it appears in this guide; the deployed application cannot use it without a separately reviewed schema/code change.
+`DIRECT_URL` must never point at a different branch than its paired `DATABASE_URL`. It is optional on Vercel because the production build derives the direct Neon hostname from a pooled runtime URL when possible.
 
 ### 2.3 Auth.js
 
