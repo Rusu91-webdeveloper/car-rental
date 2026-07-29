@@ -238,7 +238,7 @@
     "step3": "Sobald die Zahlung verifiziert wurde, wird Ihre Buchung bestätigt",
     "step4": "Sie erhalten eine finale Bestätigungs-E-Mail mit Abholdetails",
     "viewBookings": "Meine Buchungen anzeigen",
-    "confirmationEmail": "Eine Bestätigungs-E-Mail wurde mit allen oben genannten Details gesendet."
+    "confirmationEmail": "Eine Bestätigungs-E-Mail mit allen oben genannten Details wurde gesendet. Falls sie nicht in Ihrem Posteingang angezeigt wird, prüfen Sie bitte Ihren Spam- oder Junk-Ordner."
   },
   "profile": {
     "title": "Profil",

@@ -238,7 +238,7 @@
     "step3": "Once payment is verified, your booking will be confirmed",
     "step4": "You'll receive a final confirmation email with pickup details",
     "viewBookings": "View My Bookings",
-    "confirmationEmail": "A confirmation email has been sent with all the details above."
+    "confirmationEmail": "A confirmation email has been sent with all the details above. If you don't see it in your inbox, please check your spam or junk folder."
   },
   "profile": {
     "title": "Profile",
