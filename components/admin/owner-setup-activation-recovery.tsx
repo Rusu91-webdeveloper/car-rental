@@ -5,12 +5,14 @@ import { CircleAlert, LoaderCircle } from "lucide-react"
 import Link, { useRouter } from "@/navigation"
 import { recoverCompletedOwnerSetupAction } from "@/app/actions/owner-setup"
 import { Button } from "@/components/ui/button"
+import { useLocale } from "next-intl"
 
 function editHref(href: string) {
   return `${href}${href.includes("?") ? "&" : "?"}edit=1`
 }
 
 export function OwnerSetupActivationRecovery() {
+  const de = useLocale() === "de"
   const router = useRouter()
   const attempted = useRef(false)
   const [message, setMessage] = useState<string>()
@@ -52,23 +54,23 @@ export function OwnerSetupActivationRecovery() {
         <div className="flex items-start gap-3">
           <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-medium">Online booking still needs one final check</p>
-            <p className="mt-1 text-sm text-amber-900/80">{message}</p>
+            <p className="font-medium">{de ? "Die Online-Buchung benötigt noch eine letzte Prüfung" : "Online booking still needs one final check"}</p>
+            <p className="mt-1 text-sm text-amber-900/80">{de ? "Einige Einstellungen müssen noch geprüft werden, bevor die Online-Buchung aktiviert werden kann." : message}</p>
             {issues.length > 1 ? (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900/80">
-                {issues.slice(1).map((issue) => <li key={issue.code}>{issue.message}</li>)}
+                {issues.slice(1).map((issue) => <li key={issue.code}>{de ? "Prüfen Sie diese Einstellung." : issue.message}</li>)}
               </ul>
             ) : null}
           </div>
         </div>
         {issues[0] ? (
           <Button asChild variant="outline">
-            <Link href={editHref(issues[0].href)}>Review settings</Link>
+            <Link href={editHref(issues[0].href)}>{de ? "Einstellungen prüfen" : "Review settings"}</Link>
           </Button>
         ) : (
           <Button type="button" variant="outline" onClick={retry} disabled={pending}>
             {pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
-            Try again
+            {de ? "Erneut versuchen" : "Try again"}
           </Button>
         )}
       </section>
@@ -83,8 +85,8 @@ export function OwnerSetupActivationRecovery() {
     >
       <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
       <div>
-        <p className="font-medium">Enabling online booking</p>
-        <p className="mt-1 text-sm text-blue-900/75">Your settings are complete. We are making them available to customers.</p>
+        <p className="font-medium">{de ? "Online-Buchung wird aktiviert" : "Enabling online booking"}</p>
+        <p className="mt-1 text-sm text-blue-900/75">{de ? "Ihre Einstellungen sind vollständig. Wir stellen sie jetzt Ihren Kunden zur Verfügung." : "Your settings are complete. We are making them available to customers."}</p>
       </div>
     </section>
   )

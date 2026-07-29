@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { updateOwnerPaymentDraft } from "@/app/actions/notification-configuration"
 import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import type { loadNotificationConfigurationPage, ManualPaymentMethod } from "@/lib/notification-configuration/service"
+import { useLocale } from "next-intl"
 
 type PageData = Awaited<ReturnType<typeof loadNotificationConfigurationPage>>
 const methods: Array<{
@@ -39,6 +40,7 @@ interface PaymentProfileValue {
 }
 
 export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref }: { data: PageData; paymentProfile: PaymentProfileValue; canEdit: boolean; nextHref?: string }) {
+  const de = useLocale() === "de"
   const draft = data.draftPayment
   const source = draft?.configuration ?? data.activePayment?.configuration
   const router = useRouter()
@@ -61,17 +63,19 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
   })
   const initialInstructions = useMemo(() => Object.fromEntries(methods.flatMap(({ method }) => data.supportedLocales.map((locale) => [`${method}:${locale}`, source?.instructions.find((item) => item.method === method && item.locale === locale)?.instructions ?? ""]))), [data.supportedLocales, source])
   const [instructions, setInstructions] = useState<Record<string, string>>(initialInstructions)
-  if (!source) return <p className="text-sm text-muted-foreground">Set up payment messages first.</p>
+  if (!source) return <p className="text-sm text-muted-foreground">{de ? "Richten Sie zuerst die Zahlungsnachrichten ein." : "Set up payment messages first."}</p>
   return (
     <section className="rounded-xl border bg-background p-5">
-      <h2 className="font-semibold">Payment choices shown to customers</h2>
-      <p className="mt-1 text-sm text-muted-foreground">These instructions appear in the booking confirmation. Payments are completed outside this app.</p>
+      <h2 className="font-semibold">{de ? "Zahlungsarten für Kunden" : "Payment choices shown to customers"}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{de ? "Diese Hinweise erscheinen in der Buchungsbestätigung. Zahlungen werden außerhalb dieser App abgeschlossen." : "These instructions appear in the booking confirmation. Payments are completed outside this app."}</p>
       <div className="mt-5 rounded-lg border p-4">
-        <h3 className="font-medium">Bank transfer and security details</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Bank details are required when bank transfer or an advance deposit is enabled. The damage guarantee remains separate from the booking deposit.</p>
+        <h3 className="font-medium">{de ? "Bankverbindung und Sicherheitsleistung" : "Bank transfer and security details"}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{de ? "Bankdaten sind erforderlich, wenn Überweisung oder Anzahlung aktiviert ist. Die Schadenssicherheit bleibt von der Buchungsanzahlung getrennt." : "Bank details are required when bank transfer or an advance deposit is enabled. The damage guarantee remains separate from the booking deposit."}</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {(["bankName", "accountName", "accountNumber", "swiftCode", "iban"] as const).map((field) => {
-            const labels = { bankName: "Bank name", accountName: "Account holder", accountNumber: "Account number", swiftCode: "SWIFT / BIC", iban: "IBAN" }
+            const labels = de
+              ? { bankName: "Bankname", accountName: "Kontoinhaber", accountNumber: "Kontonummer", swiftCode: "SWIFT / BIC", iban: "IBAN" }
+              : { bankName: "Bank name", accountName: "Account holder", accountNumber: "Account number", swiftCode: "SWIFT / BIC", iban: "IBAN" }
             return (
               <div key={field} className="space-y-2">
                 <Label htmlFor={`payment-${field}`}>{labels[field]}</Label>
@@ -85,7 +89,7 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
             )
           })}
           <div className="space-y-2">
-            <Label htmlFor="payment-guarantee">Refundable damage guarantee</Label>
+            <Label htmlFor="payment-guarantee">{de ? "Rückerstattbare Schadenssicherheit" : "Refundable damage guarantee"}</Label>
             <div className="relative">
               <Input
                 id="payment-guarantee"
@@ -113,15 +117,15 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
             }}
           />
           <span>
-            <span className="font-medium">Require an advance booking deposit</span>
+            <span className="font-medium">{de ? "Buchungsanzahlung verlangen" : "Require an advance booking deposit"}</span>
             <span className="block text-sm text-muted-foreground">
-              Applies to bank transfer and payment at pickup. The reservation remains pending until the transfer is verified.
+              {de ? "Gilt für Banküberweisung und Zahlung bei Abholung. Die Reservierung bleibt ausstehend, bis die Überweisung geprüft wurde." : "Applies to bank transfer and payment at pickup. The reservation remains pending until the transfer is verified."}
             </span>
           </span>
         </label>
         {depositEnabled ? (
           <label className="mt-4 block max-w-xs text-sm">
-            <span className="font-medium">Deposit percentage</span>
+            <span className="font-medium">{de ? "Anzahlung in Prozent" : "Deposit percentage"}</span>
             <span className="relative mt-2 block">
               <input
                 className="w-full rounded-md border bg-background px-3 py-2 pr-10"
@@ -139,7 +143,7 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
               <span className="absolute right-3 top-2 text-muted-foreground">%</span>
             </span>
             <span className="mt-1 block text-xs text-muted-foreground">
-              Set this to 0% to disable the booking deposit.
+              {de ? "Auf 0 % setzen, um die Buchungsanzahlung zu deaktivieren." : "Set this to 0% to disable the booking deposit."}
             </span>
           </label>
         ) : null}
@@ -160,15 +164,15 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
                   }}
                 />
                 <span>
-                  <span className="font-medium">{label}</span>
-                  <span className="block text-sm text-muted-foreground">{description}</span>
+                  <span className="font-medium">{de ? (method === "BANK_TRANSFER" ? "Banküberweisung" : "Barzahlung bei Abholung") : label}</span>
+                  <span className="block text-sm text-muted-foreground">{de ? (method === "BANK_TRANSFER" ? "Bank- und Referenzhinweise senden; die Überweisung wird nicht in dieser App verarbeitet." : "Teilen Sie Kunden mit, was sie mitbringen und wo sie bezahlen sollen.") : description}</span>
                 </span>
               </label>
               {checked ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {data.supportedLocales.map((locale) => (
                     <label key={locale} className="text-sm">
-                      <span className="font-medium">Instructions ({locale})</span>
+                      <span className="font-medium">{de ? "Hinweise" : "Instructions"} ({locale})</span>
                       <Textarea
                         className="mt-2 min-h-28"
                         value={instructions[`${method}:${locale}`] ?? ""}
@@ -189,13 +193,13 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
         })}
       </div>
       <label className="mt-5 block max-w-sm text-sm">
-        <span className="font-medium">Suggested payment choice</span>
+        <span className="font-medium">{de ? "Empfohlene Zahlungsart" : "Suggested payment choice"}</span>
         <select className="mt-2 w-full rounded-md border bg-background p-2" value={defaultMethod} onChange={(event) => setDefaultMethod(event.target.value as ManualPaymentMethod)} disabled={!draft || !canEdit}>
           {methods
             .filter(({ method }) => enabled.includes(method))
             .map(({ method, label }) => (
               <option key={method} value={method}>
-                {label}
+                {de ? (method === "BANK_TRANSFER" ? "Banküberweisung" : "Barzahlung bei Abholung") : label}
               </option>
             ))}
         </select>
@@ -232,16 +236,16 @@ export function PaymentInstructionForm({ data, paymentProfile, canEdit, nextHref
               instructions: values,
             })
             if ("error" in result) {
-              setMessage(result.error)
+              setMessage(de ? "Die Zahlungseinstellungen konnten nicht gespeichert werden." : result.error)
               return
             }
-            setMessage("Payment settings saved.")
+            setMessage(de ? "Zahlungseinstellungen gespeichert." : "Payment settings saved.")
             const navigationError = await completeOwnerSetupStep("payments", nextHref, router)
-            if (navigationError) setMessage(navigationError)
+            if (navigationError) setMessage(de ? "Die Zahlungseinstellungen wurden gespeichert, aber der nächste Schritt konnte nicht geöffnet werden." : navigationError)
           })
         }
       >
-        {ownerSetupSaveLabel(nextHref)}
+        {ownerSetupSaveLabel(nextHref, de)}
       </Button>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
     </section>

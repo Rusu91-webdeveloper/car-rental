@@ -34,6 +34,7 @@ interface OwnerSettingsStepContentProps {
   adminId: string
   nextHref: string
   editing: boolean
+  locale: string
 }
 
 function requireCompanySettings(
@@ -51,11 +52,13 @@ export async function OwnerSettingsStepContent({
   adminId,
   nextHref,
   editing,
+  locale,
 }: OwnerSettingsStepContentProps) {
+  const de = locale === "de"
   if (step.id === "business-profile") {
     const settings = requireCompanySettings(
       await getCompanySettings(),
-      "Business settings are unavailable.",
+      de ? "Die Unternehmenseinstellungen sind nicht verfügbar." : "Business settings are unavailable.",
     )
     return <BusinessProfileForm value={settings} nextHref={nextHref} />
   }
@@ -75,7 +78,7 @@ export async function OwnerSettingsStepContent({
           canManage={caps.canManagePricing}
           nextHref={nextHref}
         />
-        <PricingIssueList title="What needs attention" issues={data.issues} />
+        <PricingIssueList title={de ? "Was benötigt Aufmerksamkeit?" : "What needs attention"} issues={data.issues} />
       </>
     )
   }
@@ -95,7 +98,7 @@ export async function OwnerSettingsStepContent({
             nextHref={nextHref}
           />
           <PricingIssueList
-            title="What needs attention"
+            title={de ? "Was benötigt Aufmerksamkeit?" : "What needs attention"}
             issues={data.issues.filter((issue) => issue.domain === "insurance")}
           />
         </>
@@ -126,7 +129,7 @@ export async function OwnerSettingsStepContent({
             nextHref={nextHref}
           />
           <PricingIssueList
-            title="What needs attention"
+            title={de ? "Was benötigt Aufmerksamkeit?" : "What needs attention"}
             issues={data.issues.filter((issue) => issue.domain === "customer-driver-requirements")}
           />
         </>
@@ -162,7 +165,10 @@ export async function OwnerSettingsStepContent({
         ? prepareOwnerNotificationEdit(adminId)
         : loadNotificationConfigurationPage(),
     ])
-    const settings = requireCompanySettings(settingsResult, "Payment settings are unavailable.")
+    const settings = requireCompanySettings(
+      settingsResult,
+      de ? "Die Zahlungseinstellungen sind nicht verfügbar." : "Payment settings are unavailable.",
+    )
     return (
       <>
         <PaymentInstructionForm
@@ -185,7 +191,7 @@ export async function OwnerSettingsStepContent({
     ])
     const settings = requireCompanySettings(
       settingsResult,
-      "Notification settings are unavailable.",
+      de ? "Die Benachrichtigungseinstellungen sind nicht verfügbar." : "Notification settings are unavailable.",
     )
     return (
       <>

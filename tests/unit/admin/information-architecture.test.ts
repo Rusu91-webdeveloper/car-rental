@@ -78,7 +78,34 @@ describe("owner-facing admin information architecture", () => {
     expect(action).toContain("activeRelease || completedSteps.length === ownerSetupStepIds.length")
     expect(helper).toContain("completeOwnerSetupStepAction(stepId)")
     expect(helper).toContain("router.push(nextHref)")
-    expect(helper).toContain('return "Save and publish"')
+    expect(helper).toContain('"Save and publish"')
+    expect(helper).toContain('"Speichern und veröffentlichen"')
+  })
+
+  it("keeps every owner settings step localized when German is selected", () => {
+    const localizedSteps = [
+      "components/admin/business-profile-form.tsx",
+      "components/business-configuration/billing-rule-form.tsx",
+      "components/business-configuration/insurance-configuration-form.tsx",
+      "components/business-configuration/booking-flow-step-list.tsx",
+      "components/business-configuration/driver-requirements-form.tsx",
+      "components/business-configuration/customer-field-requirement-table.tsx",
+      "app/[locale]/admin/business-configuration/documents/policy-editor.tsx",
+      "components/business-configuration/notification-configuration-form.tsx",
+      "components/business-configuration/confirmation-content-form.tsx",
+      "components/legal/owner-legal-setup-form.tsx",
+    ]
+
+    for (const path of localizedSteps) {
+      const form = source(path)
+      expect(form, path).toContain("useLocale")
+      expect(form, path).toContain('=== "de"')
+    }
+
+    const businessProfile = source("components/admin/business-profile-form.tsx")
+    expect(businessProfile).toContain('"Unternehmensprofil"')
+    expect(businessProfile).toContain('"Eingetragener Unternehmensname"')
+    expect(businessProfile).toContain('"Rechtliche Angaben für das Impressum"')
   })
 
   it("keeps technical operations outside the owner navigation", () => {

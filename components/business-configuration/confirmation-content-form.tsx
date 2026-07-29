@@ -9,10 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service"
+import { useLocale } from "next-intl"
 
 type PageData = Awaited<ReturnType<typeof loadNotificationConfigurationPage>>
 
 export function ConfirmationContentForm({ data, canEdit, nextHref }: { data: PageData; canEdit: boolean; nextHref?: string }) {
+  const de = useLocale() === "de"
   const draft = data.draftConfirmation
   const source = draft?.configuration ?? data.activeConfirmation?.configuration
   const router = useRouter()
@@ -27,29 +29,29 @@ export function ConfirmationContentForm({ data, canEdit, nextHref }: { data: Pag
       safeContent: source?.content.find((item) => item.locale === locale)?.safeContent ?? "",
     })),
   )
-  if (!source) return <p className="text-sm text-muted-foreground">Set up customer messages first.</p>
+  if (!source) return <p className="text-sm text-muted-foreground">{de ? "Richten Sie zuerst die Kundennachrichten ein." : "Set up customer messages first."}</p>
   return (
     <section className="rounded-xl border bg-background p-5">
-      <h2 className="font-semibold">What appears in the booking confirmation?</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Choose the useful sections, then write the heading and message customers receive.</p>
+      <h2 className="font-semibold">{de ? "Was erscheint in der Buchungsbestätigung?" : "What appears in the booking confirmation?"}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{de ? "Wählen Sie die nützlichen Abschnitte und verfassen Sie anschließend Überschrift und Nachricht für Kunden." : "Choose the useful sections, then write the heading and message customers receive."}</p>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {sections.map((item) => (
           <label key={item.section} className="flex gap-2 rounded border p-3 text-sm">
             <Checkbox checked={item.enabled} disabled={!draft || !canEdit} onCheckedChange={(value) => setSections((current) => current.map((section) => (section.section === item.section ? { ...section, enabled: value === true } : section)))} />
-            {item.section.replaceAll("_", " ")}
+            {de ? ({ BOOKING_SUMMARY: "Buchungsübersicht", PAYMENT_INSTRUCTIONS: "Zahlungshinweise", PICKUP_INSTRUCTIONS: "Abholhinweise", LEGAL_DOCUMENT_LINKS: "Links zu Rechtsdokumenten", SUPPORT_CONTACT: "Supportkontakt" } as Record<string, string>)[item.section] ?? item.section.replaceAll("_", " ") : item.section.replaceAll("_", " ")}
           </label>
         ))}
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         {content.map((item, index) => (
           <div key={item.locale} className="rounded-lg border p-4">
-            <h3 className="font-medium">Content ({item.locale})</h3>
+            <h3 className="font-medium">{de ? "Inhalt" : "Content"} ({item.locale})</h3>
             <label className="mt-3 block text-sm">
-              Heading
+              {de ? "Überschrift" : "Heading"}
               <Input className="mt-2" value={item.heading} disabled={!draft || !canEdit} onChange={(event) => setContent((current) => current.map((value, position) => (position === index ? { ...value, heading: event.target.value } : value)))} />
             </label>
             <label className="mt-3 block text-sm">
-              Message
+              {de ? "Nachricht" : "Message"}
               <Textarea className="mt-2 min-h-28" value={item.safeContent} disabled={!draft || !canEdit} onChange={(event) => setContent((current) => current.map((value, position) => (position === index ? { ...value, safeContent: event.target.value } : value)))} />
             </label>
           </div>
@@ -75,16 +77,16 @@ export function ConfirmationContentForm({ data, canEdit, nextHref }: { data: Pag
               },
             })
             if ("error" in result) {
-              setMessage(result.error)
+              setMessage(de ? "Die Kundennachrichten konnten nicht gespeichert werden." : result.error)
               return
             }
-            setMessage("Customer messages saved.")
+            setMessage(de ? "Kundennachrichten gespeichert." : "Customer messages saved.")
             const navigationError = await completeOwnerSetupStep("customer-messages", nextHref, router)
-            if (navigationError) setMessage(navigationError)
+            if (navigationError) setMessage(de ? "Die Kundennachrichten wurden gespeichert, aber der nächste Schritt konnte nicht geöffnet werden." : navigationError)
           })
         }
       >
-        {ownerSetupSaveLabel(nextHref)}
+        {ownerSetupSaveLabel(nextHref, de)}
       </Button>
       {message ? <p className="mt-3 text-sm">{message}</p> : null}
     </section>

@@ -12,7 +12,8 @@ import {
   type OwnerSettingsPageSearchParams,
 } from "@/lib/admin/owner-settings-edit";
 
-export default async function NotificationSettingsPage({ searchParams }: { searchParams: Promise<OwnerSettingsPageSearchParams> }) {
+export default async function NotificationSettingsPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<OwnerSettingsPageSearchParams> }) {
+  const de = (await params).locale === "de";
   const admin = await requireAdmin();
   const { editing, nextHref } = await ownerSettingsPageMode(searchParams, "/admin/settings/legal");
   const [settingsResult, caps, data] = await Promise.all([
@@ -22,14 +23,14 @@ export default async function NotificationSettingsPage({ searchParams }: { searc
   ]);
   if (!("settings" in settingsResult) || !settingsResult.settings)
     throw new Error(
-      settingsResult.error ?? "Notification settings are unavailable.",
+      settingsResult.error ?? (de ? "Die Benachrichtigungseinstellungen sind nicht verfügbar." : "Notification settings are unavailable."),
     );
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       <AdminPageHeader
-        eyebrow={editing ? "Edit settings" : "Business setup"}
-        title="What should booking messages say?"
-        description="Choose where replies go and what customers read in their confirmation."
+        eyebrow={editing ? (de ? "Einstellungen bearbeiten" : "Edit settings") : (de ? "Unternehmenseinrichtung" : "Business setup")}
+        title={de ? "Was soll in Buchungsnachrichten stehen?" : "What should booking messages say?"}
+        description={de ? "Legen Sie fest, wohin Antworten gehen und was Kunden in ihrer Bestätigung lesen." : "Choose where replies go and what customers read in their confirmation."}
         action={<ConfigurationReturnLink />}
       />
       <NotificationContactsForm

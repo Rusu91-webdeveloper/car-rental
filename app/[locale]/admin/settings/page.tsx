@@ -97,6 +97,7 @@ export default async function BusinessSettingsPage({
             adminId={admin.id}
             nextHref={nextHref}
             editing={editing}
+            locale={locale}
           />
         </OwnerSettingsWizard>
       ) : (

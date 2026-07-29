@@ -7,6 +7,7 @@ import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useLocale } from "next-intl"
 
 interface BusinessProfileValue {
   companyName: string
@@ -27,6 +28,7 @@ interface BusinessProfileValue {
 }
 
 export function BusinessProfileForm({ value, nextHref }: { value: BusinessProfileValue; nextHref?: string }) {
+  const de = useLocale() === "de"
   const router = useRouter()
   const [form, setForm] = useState({
     companyName: "Qujo Autovermietung GmbH",
@@ -57,51 +59,51 @@ export function BusinessProfileForm({ value, nextHref }: { value: BusinessProfil
         startTransition(async () => {
           const result = await updateBusinessProfile(form)
           if ("error" in result) {
-            setMessage(result.error)
+            setMessage(de ? "Die Unternehmensdaten konnten nicht gespeichert werden. Bitte prüfen Sie Ihre Angaben." : result.error)
             return
           }
-          setMessage("Business details saved.")
+          setMessage(de ? "Unternehmensdaten gespeichert." : "Business details saved.")
           const navigationError = await completeOwnerSetupStep("business-profile", nextHref, router)
-          if (navigationError) setMessage(navigationError)
+          if (navigationError) setMessage(de ? "Die Unternehmensdaten wurden gespeichert, aber der nächste Schritt konnte nicht geöffnet werden." : navigationError)
         })
       }}
     >
       <div>
-        <h2 className="font-semibold">Business profile</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Shown on customer pages, emails, and legal contact areas.</p>
-        <p className="mt-1 text-xs text-muted-foreground">All fields marked required must contain the company’s real registered information before online booking can be enabled.</p>
+        <h2 className="font-semibold">{de ? "Unternehmensprofil" : "Business profile"}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{de ? "Wird auf Kundenseiten, in E-Mails und in rechtlichen Kontaktbereichen angezeigt." : "Shown on customer pages, emails, and legal contact areas."}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{de ? "Alle als erforderlich markierten Felder müssen die echten eingetragenen Unternehmensdaten enthalten, bevor die Online-Buchung aktiviert werden kann." : "All fields marked required must contain the company’s real registered information before online booking can be enabled."}</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Registered business name" htmlFor="company-name"><Input id="company-name" value={form.companyName} readOnly aria-readonly="true" className="bg-muted" required /></Field>
-        <Field label="Contact email" htmlFor="company-email"><Input id="company-email" type="email" value={form.companyEmail} onChange={(event) => set("companyEmail", event.target.value)} required /></Field>
-        <Field label="Phone" htmlFor="company-phone"><Input id="company-phone" value={form.companyPhone} onChange={(event) => set("companyPhone", event.target.value)} required /></Field>
-        <Field label="Street address" htmlFor="company-address"><Input id="company-address" value={form.companyAddress} onChange={(event) => set("companyAddress", event.target.value)} required /></Field>
-        <Field label="City" htmlFor="company-city"><Input id="company-city" value={form.companyCity} onChange={(event) => set("companyCity", event.target.value)} required /></Field>
-        <Field label="State or region" htmlFor="company-state"><Input id="company-state" value={form.companyState} onChange={(event) => set("companyState", event.target.value)} /></Field>
-        <Field label="Postal code" htmlFor="company-postcode"><Input id="company-postcode" value={form.companyZipCode} onChange={(event) => set("companyZipCode", event.target.value)} required /></Field>
-        <Field label="Country" htmlFor="company-country"><Input id="company-country" value={form.companyCountry} onChange={(event) => set("companyCountry", event.target.value)} required /></Field>
+        <Field label={de ? "Eingetragener Unternehmensname" : "Registered business name"} htmlFor="company-name"><Input id="company-name" value={form.companyName} readOnly aria-readonly="true" className="bg-muted" required /></Field>
+        <Field label={de ? "Kontakt-E-Mail" : "Contact email"} htmlFor="company-email"><Input id="company-email" type="email" value={form.companyEmail} onChange={(event) => set("companyEmail", event.target.value)} required /></Field>
+        <Field label={de ? "Telefon" : "Phone"} htmlFor="company-phone"><Input id="company-phone" value={form.companyPhone} onChange={(event) => set("companyPhone", event.target.value)} required /></Field>
+        <Field label={de ? "Straße und Hausnummer" : "Street address"} htmlFor="company-address"><Input id="company-address" value={form.companyAddress} onChange={(event) => set("companyAddress", event.target.value)} required /></Field>
+        <Field label={de ? "Ort" : "City"} htmlFor="company-city"><Input id="company-city" value={form.companyCity} onChange={(event) => set("companyCity", event.target.value)} required /></Field>
+        <Field label={de ? "Bundesland oder Region" : "State or region"} htmlFor="company-state"><Input id="company-state" value={form.companyState} onChange={(event) => set("companyState", event.target.value)} /></Field>
+        <Field label={de ? "Postleitzahl" : "Postal code"} htmlFor="company-postcode"><Input id="company-postcode" value={form.companyZipCode} onChange={(event) => set("companyZipCode", event.target.value)} required /></Field>
+        <Field label={de ? "Land" : "Country"} htmlFor="company-country"><Input id="company-country" value={form.companyCountry} onChange={(event) => set("companyCountry", event.target.value)} required /></Field>
       </div>
       <details open className="rounded-lg border p-4">
-        <summary className="cursor-pointer text-sm font-medium">Legal details for the Impressum</summary>
-        <p className="mt-2 text-xs text-muted-foreground">Enter the exact details from the commercial register. Empty fields are never replaced with sample data.</p>
+        <summary className="cursor-pointer text-sm font-medium">{de ? "Rechtliche Angaben für das Impressum" : "Legal details for the Impressum"}</summary>
+        <p className="mt-2 text-xs text-muted-foreground">{de ? "Geben Sie die exakten Angaben aus dem Handelsregister ein. Leere Felder werden niemals durch Beispieldaten ersetzt." : "Enter the exact details from the commercial register. Empty fields are never replaced with sample data."}</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Managing director" htmlFor="managing-director"><Input id="managing-director" value={form.managingDirector} onChange={(event) => set("managingDirector", event.target.value)} required /></Field>
-          <Field label="Commercial register number" htmlFor="commercial-register"><Input id="commercial-register" placeholder="e.g. HRB …" value={form.commercialRegister} onChange={(event) => set("commercialRegister", event.target.value)} required /></Field>
-          <Field label="Register court" htmlFor="register-court"><Input id="register-court" value={form.registerCourt} onChange={(event) => set("registerCourt", event.target.value)} required /></Field>
-          <Field label="VAT identification number" htmlFor="vat-id"><Input id="vat-id" value={form.vatId} onChange={(event) => set("vatId", event.target.value)} /></Field>
-          <div className="sm:col-span-2"><Field label="Editorially responsible person (only if applicable)" htmlFor="responsible-person"><Input id="responsible-person" value={form.responsiblePerson} onChange={(event) => set("responsiblePerson", event.target.value)} /></Field></div>
+          <Field label={de ? "Geschäftsführer" : "Managing director"} htmlFor="managing-director"><Input id="managing-director" value={form.managingDirector} onChange={(event) => set("managingDirector", event.target.value)} required /></Field>
+          <Field label={de ? "Handelsregisternummer" : "Commercial register number"} htmlFor="commercial-register"><Input id="commercial-register" placeholder={de ? "z. B. HRB …" : "e.g. HRB …"} value={form.commercialRegister} onChange={(event) => set("commercialRegister", event.target.value)} required /></Field>
+          <Field label={de ? "Registergericht" : "Register court"} htmlFor="register-court"><Input id="register-court" value={form.registerCourt} onChange={(event) => set("registerCourt", event.target.value)} required /></Field>
+          <Field label={de ? "Umsatzsteuer-Identifikationsnummer" : "VAT identification number"} htmlFor="vat-id"><Input id="vat-id" value={form.vatId} onChange={(event) => set("vatId", event.target.value)} /></Field>
+          <div className="sm:col-span-2"><Field label={de ? "Redaktionell verantwortliche Person (falls zutreffend)" : "Editorially responsible person (only if applicable)"} htmlFor="responsible-person"><Input id="responsible-person" value={form.responsiblePerson} onChange={(event) => set("responsiblePerson", event.target.value)} /></Field></div>
         </div>
       </details>
       <details className="rounded-lg border p-4">
-        <summary className="cursor-pointer text-sm font-medium">Currency display</summary>
-        <p className="mt-2 text-xs text-muted-foreground">Used for new car prices and customer-facing totals.</p>
+        <summary className="cursor-pointer text-sm font-medium">{de ? "Währungsanzeige" : "Currency display"}</summary>
+        <p className="mt-2 text-xs text-muted-foreground">{de ? "Wird für neue Fahrzeugpreise und für Kundengesamtsummen verwendet." : "Used for new car prices and customer-facing totals."}</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Currency code" htmlFor="currency"><Input id="currency" maxLength={3} value={form.currency} onChange={(event) => set("currency", event.target.value)} /></Field>
-          <Field label="Currency symbol" htmlFor="currency-symbol"><Input id="currency-symbol" maxLength={5} value={form.currencySymbol} onChange={(event) => set("currencySymbol", event.target.value)} /></Field>
+          <Field label={de ? "Währungscode" : "Currency code"} htmlFor="currency"><Input id="currency" maxLength={3} value={form.currency} onChange={(event) => set("currency", event.target.value)} /></Field>
+          <Field label={de ? "Währungssymbol" : "Currency symbol"} htmlFor="currency-symbol"><Input id="currency-symbol" maxLength={5} value={form.currencySymbol} onChange={(event) => set("currencySymbol", event.target.value)} /></Field>
         </div>
       </details>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>{pending ? "Saving…" : ownerSetupSaveLabel(nextHref)}</Button>
+        <Button type="submit" disabled={pending}>{pending ? (de ? "Wird gespeichert…" : "Saving…") : ownerSetupSaveLabel(nextHref, de)}</Button>
         {message ? <p className="text-sm text-muted-foreground" role="status">{message}</p> : null}
       </div>
     </form>
