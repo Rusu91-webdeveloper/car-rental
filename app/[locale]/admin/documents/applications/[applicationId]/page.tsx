@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { selectLatestDocumentAttempts } from "@/lib/booking-applications/document-view"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 export const dynamic = "force-dynamic"
 
@@ -50,6 +51,7 @@ export default async function ApplicationReviewWorkspace({
       locale: true,
       pickupAt: true,
       returnAt: true,
+      businessTimeZone: true,
       pickupLocation: true,
       returnLocation: true,
       paymentMethod: true,
@@ -150,14 +152,10 @@ export default async function ApplicationReviewWorkspace({
   const carName = locale === "de" ? application.car.nameDe || application.car.name : application.car.name
 
   const formatDateTime = (value: Date) =>
-    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Berlin",
-    }).format(value)
+    formatBookingDateTime(value, locale, application.businessTimeZone)
   const formatDate = (value: Date | null | undefined) =>
     value
-      ? new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(value)
+      ? formatBookingDateTime(value, locale, application.businessTimeZone, { dateStyle: "medium" })
       : "—"
 
   return (

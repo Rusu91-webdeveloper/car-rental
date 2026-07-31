@@ -120,7 +120,8 @@ describe("Phase 8F-B application and UI integration", () => {
     const adminPage = read("app/[locale]/admin/page.tsx")
     const adminDashboard = read("app/[locale]/admin/admin-client.tsx")
 
-    expect(application).toContain('timeZone: "Europe/Berlin"')
+    expect(application).toContain("application.businessTimeZone")
+    expect(application).not.toContain('timeZone: "Europe/Berlin"')
     expect(application).toContain("submittedForReview")
     expect(application).toContain("Documents submitted for review")
     expect(application).toContain("Uploaded · awaiting approval")

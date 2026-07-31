@@ -26,19 +26,12 @@ import {
 } from "@/components/ui/alert-dialog"
 import { formatCents } from "@/lib/money"
 import { CheckCircle2, CircleX, LoaderCircle } from "lucide-react"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 const TERMINAL = new Set(["FINALIZED", "EXPIRED", "CANCELLED", "REJECTED"])
 
 function sides(value: "SINGLE_FILE" | "FRONT_AND_BACK") {
   return value === "FRONT_AND_BACK" ? (["FRONT", "BACK"] as const) : (["SINGLE"] as const)
-}
-
-function formatApplicationDateTime(value: Date, locale: string) {
-  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Berlin",
-  }).format(new Date(value))
 }
 
 async function sha256(file: File) {
@@ -283,15 +276,15 @@ export function BookingApplicationClient({
         <h1 className="text-2xl font-semibold">{copy("Identity and licence documents", "Identitäts- und Führerscheindokumente")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {locale === "de" ? "Der Fortschritt wird auf dem Server gespeichert. Der Antrag läuft ab am " : "Progress is saved on the server. Application expires "}
-          {formatApplicationDateTime(application.expiresAt, locale)}.
+          {formatBookingDateTime(application.expiresAt, locale, application.businessTimeZone)}.
         </p>
       </header>
 
       <section className="rounded-xl border bg-background p-4">
         <h2 className="font-semibold">{copy("Rental details", "Mietdaten")}</h2>
         <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-          <div><dt className="text-muted-foreground">{locale === "de" ? "Abholung" : "Pick-up"}</dt><dd>{formatApplicationDateTime(application.pickupAt, locale)}</dd></div>
-          <div><dt className="text-muted-foreground">{locale === "de" ? "Rückgabe" : "Return"}</dt><dd>{formatApplicationDateTime(application.returnAt, locale)}</dd></div>
+          <div><dt className="text-muted-foreground">{locale === "de" ? "Abholung" : "Pick-up"}</dt><dd>{formatBookingDateTime(application.pickupAt, locale, application.businessTimeZone)}</dd></div>
+          <div><dt className="text-muted-foreground">{locale === "de" ? "Rückgabe" : "Return"}</dt><dd>{formatBookingDateTime(application.returnAt, locale, application.businessTimeZone)}</dd></div>
           <div><dt className="text-muted-foreground">{copy("Pick-up and return location", "Abhol- und Rückgabeort")}</dt><dd>{application.pickupLocation}</dd></div>
           {application.quote ? <div><dt className="text-muted-foreground">{copy("Confirmed price", "Bestätigter Preis")}</dt><dd>{formatCents(application.quote.grandTotal, application.quote.currency)}</dd></div> : null}
         </dl>

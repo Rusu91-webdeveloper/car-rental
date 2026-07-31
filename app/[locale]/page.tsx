@@ -8,30 +8,38 @@ import { formatCompanyPickupLocation } from "@/lib/company-pickup-location"
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
-  const user = await getCurrentUser()
-  const cars = await prisma.car.findMany({
-    where: { isDeleted: false },
-    orderBy: { createdAt: "desc" },
-  })
-  const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
-  const publicPrices = await getPublicCarPrices(prisma, cars)
-  const companySettings = await prisma.companySettings.findUnique({
-    where: { id: "company-settings" },
-    select: {
-      companyAddress: true,
-      companyCity: true,
-      companyState: true,
-      companyZipCode: true,
-      companyCountry: true,
-    },
-  })
+  const [user, cars, companySettings, activeGeneralRental] = await Promise.all([
+    getCurrentUser(),
+    prisma.car.findMany({
+      where: { isDeleted: false },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: {
+        companyAddress: true,
+        companyCity: true,
+        companyState: true,
+        companyZipCode: true,
+        companyCountry: true,
+      },
+    }),
+    prisma.businessConfigurationRelease.findFirst({
+      where: { status: "ACTIVE" },
+      select: { generalRentalConfig: { select: { businessTimeZone: true } } },
+    }),
+  ])
+  const [reviewStatsByCar, publicPrices, savedCarIds] = await Promise.all([
+    getCarReviewStatsMap(cars.map((car) => car.id)),
+    getPublicCarPrices(prisma, cars),
+    user
+      ? prisma.savedCar.findMany({
+          where: { userId: user.id },
+          select: { carId: true },
+        })
+      : Promise.resolve([]),
+  ])
 
-  const savedCarIds = user
-    ? await prisma.savedCar.findMany({
-        where: { userId: user.id },
-        select: { carId: true },
-      })
-    : []
 
   return (
     <HomeClient
@@ -75,6 +83,7 @@ export default async function HomePage() {
       savedCarIds={savedCarIds.map((item) => item.carId)}
       signInUrl="/sign-in"
       pickupLocation={formatCompanyPickupLocation(companySettings)}
+      businessTimeZone={activeGeneralRental?.generalRentalConfig.businessTimeZone ?? "UTC"}
     />
   )
 }

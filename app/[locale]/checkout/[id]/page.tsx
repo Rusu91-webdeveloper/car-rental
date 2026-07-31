@@ -19,7 +19,11 @@ export default async function CheckoutPage({
 }) {
   const { id, locale } = await params
   const car = await prisma.car.findFirst({
-    where: { id, isDeleted: false },
+    where: {
+      id,
+      isDeleted: false,
+      status: { in: ["AVAILABLE", "LOW_STOCK"] },
+    },
   })
 
   if (!car) {

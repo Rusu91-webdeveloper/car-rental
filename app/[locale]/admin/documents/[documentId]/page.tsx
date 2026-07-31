@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db"
 import { Link } from "@/navigation"
 import { ArrowLeft, CalendarDays, UserRound } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +35,7 @@ async function loadReviewPage(documentId: string) {
               status: true,
               pickupAt: true,
               returnAt: true,
+              businessTimeZone: true,
               customer: { select: { name: true, email: true } },
               car: { select: { name: true, nameDe: true } },
             },
@@ -109,7 +111,7 @@ export default async function DocumentReviewPage({
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border bg-muted/20 p-4 text-sm">
             <strong>{locale === "de" ? state.application.car.nameDe || state.application.car.name : state.application.car.name}</strong>
             <span className="inline-flex items-center gap-1.5 text-muted-foreground"><UserRound className="h-4 w-4" />{state.application.customer.name || state.application.customer.email}</span>
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="h-4 w-4" />{new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(state.application.pickupAt)} – {new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", { dateStyle: "medium", timeZone: "Europe/Berlin" }).format(state.application.returnAt)}</span>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="h-4 w-4" />{formatBookingDateTime(state.application.pickupAt, locale, state.application.businessTimeZone, { dateStyle: "medium" })} – {formatBookingDateTime(state.application.returnAt, locale, state.application.businessTimeZone, { dateStyle: "medium" })}</span>
             <Badge variant="secondary">{state.application.status.replaceAll("_", " ").toLowerCase()}</Badge>
           </div>
         ) : null}
@@ -119,6 +121,7 @@ export default async function DocumentReviewPage({
         history={state.history}
         replacements={state.replacements}
         locale={locale}
+        businessTimeZone={state.application?.businessTimeZone ?? "UTC"}
         returnTo={state.application ? `/admin/documents/applications/${state.application.id}` : "/admin/documents"}
       />
     </main>

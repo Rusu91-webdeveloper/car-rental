@@ -17,6 +17,7 @@ import {
   normalizeOpeningHoursExceptions,
   normalizeWeeklyOpeningHours,
 } from "@/lib/business-hours"
+import { isRentalDurationTooShort } from "@/lib/booking-configuration/minimum-rental"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 import { calculateConfiguredDeposit, resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
@@ -25,6 +26,11 @@ import type {
   ApplicationReadiness,
   BookingApplicationView,
   CreateBookingApplicationInput,
+} from "../domain"
+import {
+  bookingApplicationExpiresAt,
+  isApplicationFinalizationTimeValid,
+  isCarLifecycleBookable,
 } from "../domain"
 import { applicationError, BookingApplicationError } from "../errors"
 import { mapApplicationLocationToBooking } from "../mapping"
@@ -39,8 +45,6 @@ const ACTIVE = [
   "CUSTOMER_ACTION_REQUIRED",
   "READY_TO_FINALIZE",
 ] as const
-const HOUR = 3_600_000
-const DAY = 24 * HOUR
 
 const applicationInclude = {
   customerDriver: true,
@@ -95,6 +99,7 @@ function mapView(row: LoadedApplication): BookingApplicationView {
     locale: row.locale,
     pickupAt: row.pickupAt,
     returnAt: row.returnAt,
+    businessTimeZone: row.businessTimeZone,
     pickupLocation: row.pickupLocation,
     returnLocation: row.returnLocation,
     status: row.status,
@@ -351,7 +356,11 @@ export class PrismaBookingApplicationRepository
         }
         const release = await tx.businessConfigurationRelease.findFirst({
           where: { status: "ACTIVE" },
-          include: { generalRentalConfig: true, paymentConfig: { include: { methods: true } } },
+          include: {
+            generalRentalConfig: true,
+            pricingBillingConfig: true,
+            paymentConfig: { include: { methods: true } },
+          },
         })
         if (!release)
           applicationError(
@@ -380,7 +389,21 @@ export class PrismaBookingApplicationRepository
             "APPLICATION_INSUFFICIENT_LEAD_TIME",
             "Pick-up does not meet the rental company's minimum advance-booking time.",
           )
+        if (isRentalDurationTooShort(input.pickupAt, input.returnAt, release.pricingBillingConfig.minimumRentalMinutes))
+          applicationError(
+            "APPLICATION_NOT_READY",
+            "The selected rental is shorter than the configured minimum rental period.",
+          )
         await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${input.carId} FOR UPDATE`
+        const car = await tx.car.findUnique({
+          where: { id: input.carId },
+          select: { isDeleted: true, status: true },
+        })
+        if (!car || !isCarLifecycleBookable(car))
+          applicationError(
+            "APPLICATION_VEHICLE_UNAVAILABLE",
+            "The vehicle is not currently available for booking.",
+          )
         if (!(await isCarAvailable(input.carId, input.pickupAt, input.returnAt, { db: tx })))
           applicationError(
             "APPLICATION_VEHICLE_UNAVAILABLE",
@@ -408,9 +431,11 @@ export class PrismaBookingApplicationRepository
         const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
         if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))
           applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
-        const expiresAt = new Date(
-          Date.now() + Math.min(7 * DAY, Math.max(HOUR, input.expiresInMs ?? 2 * DAY)),
-        )
+        const expiresAt = bookingApplicationExpiresAt({
+          now: new Date(),
+          pickupAt: input.pickupAt,
+          requestedLifetimeMs: input.expiresInMs,
+        })
         const created = await tx.bookingApplication.create({
           data: {
             customerUserId: input.customerUserId,
@@ -1070,9 +1095,23 @@ export class PrismaBookingApplicationRepository
           if (row.customerUserId !== input.customerUserId)
             applicationError("APPLICATION_ACCESS_DENIED", "Application belongs to another customer.")
           if (row.status === "FINALIZED") return mapView(row)
+          if (!isApplicationFinalizationTimeValid(row))
+            applicationError(
+              "APPLICATION_EXPIRED",
+              "This application expired before the rental could be finalized.",
+            )
           if (row.revision !== input.expectedRevision || row.status !== "READY_TO_FINALIZE")
             applicationError("APPLICATION_REVISION_CONFLICT", "Application is not at the expected ready revision.")
           await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${row.carId} FOR UPDATE`
+          const car = await tx.car.findUnique({
+            where: { id: row.carId },
+            select: { isDeleted: true, status: true },
+          })
+          if (!car || !isCarLifecycleBookable(car))
+            applicationError(
+              "APPLICATION_VEHICLE_UNAVAILABLE",
+              "The vehicle is not currently available for booking.",
+            )
           if (!(await isCarAvailable(row.carId, row.pickupAt, row.returnAt, {
             excludeBookingApplicationId: row.id,
             db: tx,
@@ -1080,7 +1119,17 @@ export class PrismaBookingApplicationRepository
             applicationError("APPLICATION_VEHICLE_UNAVAILABLE", "The vehicle is no longer available.")
           const activeRelease = await tx.businessConfigurationRelease.findFirst({
             where: { status: "ACTIVE" },
-            select: { id: true },
+            select: {
+              id: true,
+              generalRentalConfig: {
+                select: {
+                  businessTimeZone: true,
+                  weeklyOpeningHours: true,
+                  openingHoursExceptions: true,
+                  handoverPolicy: true,
+                },
+              },
+            },
           })
           if (activeRelease?.id !== row.configurationReleaseId) {
             await tx.bookingApplication.update({
@@ -1094,6 +1143,38 @@ export class PrismaBookingApplicationRepository
             })
             return mapView((await load(tx, row.id))!)
           }
+          const weeklyOpeningHours = normalizeWeeklyOpeningHours(
+            activeRelease.generalRentalConfig.weeklyOpeningHours,
+          )
+          const openingHoursExceptions = normalizeOpeningHoursExceptions(
+            activeRelease.generalRentalConfig.openingHoursExceptions,
+          )
+          const handoverPolicy = normalizeHandoverPolicy(
+            activeRelease.generalRentalConfig.handoverPolicy,
+          )
+          if (
+            !isHandoverTimeAllowed(
+              row.pickupAt,
+              activeRelease.generalRentalConfig.businessTimeZone,
+              weeklyOpeningHours,
+              openingHoursExceptions,
+              handoverPolicy,
+              "PICKUP",
+            ) ||
+            !isHandoverTimeAllowed(
+              row.returnAt,
+              activeRelease.generalRentalConfig.businessTimeZone,
+              weeklyOpeningHours,
+              openingHoursExceptions,
+              handoverPolicy,
+              "RETURN",
+            ) ||
+            !hasMinimumPickupLeadTime(row.pickupAt, handoverPolicy)
+          )
+            applicationError(
+              "APPLICATION_EXPIRED",
+              "The rental timing is no longer valid. Start a new booking application.",
+            )
           const calculated = await authoritativeQuote(tx, row)
           const accepted = row.pricingQuotes[0]
           if (!accepted || accepted.grandTotal !== calculated.quote.grandTotal) {
@@ -1156,6 +1237,7 @@ export class PrismaBookingApplicationRepository
               locale: row.locale,
               pickupDate: row.pickupAt,
               dropoffDate: row.returnAt,
+              businessTimeZone: row.businessTimeZone,
               location: mapApplicationLocationToBooking(row),
               pricePerDay: calculated.quote.sourceDailyRate,
               totalDays: calculated.quote.chargeableDuration.chargeableDays,

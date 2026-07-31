@@ -192,9 +192,10 @@ model Booking {
   car   Car    @relation(fields: [carId], references: [id])
 
   // Dates stored in UTC
-  pickupDate  DateTime
-  dropoffDate DateTime
-  location    String
+  pickupDate       DateTime
+  dropoffDate      DateTime
+  businessTimeZone String   @default("UTC")
+  location         String
 
   // Pricing
   pricePerDay          Int // in cents, locked at booking time

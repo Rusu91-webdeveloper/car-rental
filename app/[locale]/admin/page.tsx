@@ -73,7 +73,7 @@ export default async function AdminPage({
   const capabilities = await getBusinessConfigurationCapabilities()
   await runBookingLifecycleMaintenance()
 
-  const [cars, bookings, bookingApplications, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
+  const [cars, bookings, bookingApplications, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps, activeGeneralRental] =
     await Promise.all([
       prisma.car.findMany({
         where: { isDeleted: false },
@@ -120,6 +120,7 @@ export default async function AdminPage({
           revision: true,
           pickupAt: true,
           returnAt: true,
+          businessTimeZone: true,
           pickupLocation: true,
           paymentMethod: true,
           updatedAt: true,
@@ -181,6 +182,10 @@ export default async function AdminPage({
         distinct: ["targetId"],
         select: { targetId: true },
       }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { generalRentalConfig: { select: { businessTimeZone: true } } },
+      }),
     ])
 
   const manualReservations = blockedDates
@@ -235,6 +240,7 @@ export default async function AdminPage({
       key={`${initialSection}:${generatedAt}`}
       initialSection={initialSection}
       generatedAt={generatedAt}
+      businessTimeZone={activeGeneralRental?.generalRentalConfig.businessTimeZone ?? "UTC"}
       setup={setup}
       documentReviewCount={documentReviewCount}
       canReviewDocuments={capabilities.canViewDocuments}
@@ -277,6 +283,7 @@ export default async function AdminPage({
         carId: booking.carId,
         pickupDate: booking.pickupDate.toISOString(),
         dropoffDate: booking.dropoffDate.toISOString(),
+        businessTimeZone: booking.businessTimeZone,
         location: booking.location,
         totalPrice: booking.pricingSnapshot?.grandTotal ?? booking.totalPrice,
         currency: booking.pricingSnapshot?.currency ?? "EUR",
@@ -353,6 +360,7 @@ export default async function AdminPage({
         revision: application.revision,
         pickupDate: application.pickupAt.toISOString(),
         dropoffDate: application.returnAt.toISOString(),
+        businessTimeZone: application.businessTimeZone,
         location: application.pickupLocation,
         totalPrice: application.pricingQuotes[0]?.grandTotal ?? null,
         currency: application.pricingQuotes[0]?.currency ?? "EUR",

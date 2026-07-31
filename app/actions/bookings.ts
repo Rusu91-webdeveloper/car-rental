@@ -32,18 +32,9 @@ import {
   normalizeWeeklyOpeningHours,
 } from "@/lib/business-hours"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
-
-const formatDateForLocale = (date: Date, locale: string) =>
-  new Date(date).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
 
 const bookingQuoteSchema = z
   .object({
@@ -111,26 +102,38 @@ export async function getBookingQuote(data: unknown) {
     await requireAuth()
     const validated = bookingQuoteSchema.parse(data)
     const requiredMode = validated.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
-    const release = await prisma.businessConfigurationRelease.findFirst({
-      where: { status: "ACTIVE" },
-      select: {
-        generalRentalConfig: {
-          select: {
-            businessTimeZone: true,
-            weeklyOpeningHours: true,
-            openingHoursExceptions: true,
-            handoverPolicy: true,
+    const [release, car] = await Promise.all([
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: {
+          generalRentalConfig: {
+            select: {
+              businessTimeZone: true,
+              weeklyOpeningHours: true,
+              openingHoursExceptions: true,
+              handoverPolicy: true,
+            },
+          },
+          paymentConfig: {
+            select: {
+              depositType: true,
+              depositValue: true,
+              methods: { where: { method: requiredMode }, select: { enabled: true } },
+            },
           },
         },
-        paymentConfig: {
-          select: {
-            depositType: true,
-            depositValue: true,
-            methods: { where: { method: requiredMode }, select: { enabled: true } },
-          },
+      }),
+      prisma.car.findFirst({
+        where: {
+          id: validated.carId,
+          isDeleted: false,
+          status: { in: ["AVAILABLE", "LOW_STOCK"] },
         },
-      },
-    })
+        select: { id: true },
+      }),
+    ])
+    if (!car)
+      return { error: "This vehicle is not currently available for booking.", code: "VEHICLE_UNAVAILABLE" }
     if (!release?.paymentConfig.methods.some((method) => method.enabled))
       return { error: "This payment method is not available.", code: "PAYMENT_METHOD_UNAVAILABLE" }
     const weeklyOpeningHours = normalizeWeeklyOpeningHours(release.generalRentalConfig.weeklyOpeningHours)
@@ -275,8 +278,22 @@ export async function updateBookingStatus(data: unknown) {
           userName: booking.user.name || booking.user.email,
           carName: localizedCarName,
           bookingNumber: booking.bookingNumber,
-          pickupDate: formatDateForLocale(booking.pickupDate, bookingLocale),
-          dropoffDate: formatDateForLocale(booking.dropoffDate, bookingLocale),
+          pickupDate: formatBookingDateTime(booking.pickupDate, bookingLocale, booking.businessTimeZone, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          dropoffDate: formatBookingDateTime(booking.dropoffDate, bookingLocale, booking.businessTimeZone, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           reviewUrl,
           locale: bookingLocale,
         })

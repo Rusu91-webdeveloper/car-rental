@@ -38,6 +38,7 @@ import {
   type HandoverEvent,
   type HandoverKind,
 } from "@/lib/business-hours"
+import { businessDayOverlapsRanges, businessTodayLocalDate, parseDateOnlyLocal } from "@/lib/business-date"
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear()
@@ -56,7 +57,8 @@ const formatDatetimeLocal = (date: Date) => {
 }
 
 const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: number = 10) => {
-  const date = new Date(dateString)
+  const date = parseDateOnlyLocal(dateString)
+  if (!date) return ""
   date.setHours(defaultHour, 0, 0, 0)
   return formatDatetimeLocal(date)
 }
@@ -172,32 +174,21 @@ export function CheckoutClient({
   const [handoverEvents, setHandoverEvents] = useState<HandoverEvent[]>([])
   const [availabilityError, setAvailabilityError] = useState<string | null>(null)
 
-  const unavailableDateSet = useMemo(() => {
-    const blocked = new Set<string>()
-    unavailableRanges.forEach((range) => {
-      const start = new Date(range.start)
-      const end = new Date(range.end)
-      start.setHours(0, 0, 0, 0)
-      end.setHours(0, 0, 0, 0)
-
-      const current = new Date(start)
-      while (current <= end) {
-        blocked.add(formatDateKey(current))
-        current.setDate(current.getDate() + 1)
-      }
-    })
-    return blocked
-  }, [unavailableRanges])
-
   const isDateInPast = (date: Date) => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = businessTodayLocalDate(bookingConfiguration.businessTimeZone)
     const dateCopy = new Date(date)
     dateCopy.setHours(0, 0, 0, 0)
     return dateCopy < today
   }
 
-  const hasUnavailableTime = (date: Date) => unavailableDateSet.has(formatDateKey(date))
+  const hasUnavailableTime = useCallback(
+    (date: Date) => businessDayOverlapsRanges(
+      date,
+      bookingConfiguration.businessTimeZone,
+      unavailableRanges,
+    ),
+    [bookingConfiguration.businessTimeZone, unavailableRanges],
+  )
   const isTimeUnavailable = (date: Date) =>
     unavailableRanges.some((range) => date >= range.start && date < range.end)
   const rangeOverlapsUnavailableTime = (start: Date, end: Date) =>

@@ -23,6 +23,7 @@ export interface PresentedReviewQueueItem {
     carImage: string
     pickupAt: Date
     returnAt: Date
+    businessTimeZone: string
     location: string
     grandTotal: number | null
     currency: string
@@ -49,6 +50,7 @@ export async function presentReviewQueue(items: ReviewQueueItem[]): Promise<Pres
               status: true,
               pickupAt: true,
               returnAt: true,
+              businessTimeZone: true,
               pickupLocation: true,
               customer: { select: { name: true, email: true } },
               car: { select: { name: true, nameDe: true, image: true } },
@@ -90,6 +92,7 @@ export async function presentReviewQueue(items: ReviewQueueItem[]): Promise<Pres
             carImage: application.car.image,
             pickupAt: application.pickupAt,
             returnAt: application.returnAt,
+            businessTimeZone: application.businessTimeZone,
             location: application.pickupLocation,
             grandTotal: quote?.grandTotal ?? null,
             currency: quote?.currency ?? "EUR",

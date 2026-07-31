@@ -62,6 +62,8 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ManualReservationCalendar } from "@/components/admin/manual-reservation-calendar"
+import { businessLocalDateTimeToInstant, instantToBusinessDateTimeLocal } from "@/lib/business-hours"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 interface AdminUser {
   id: string
@@ -103,6 +105,7 @@ interface AdminBooking {
   carId: string
   pickupDate: string
   dropoffDate: string
+  businessTimeZone: string
   location: string
   totalPrice: number
   currency: string
@@ -177,6 +180,7 @@ interface AdminBookingApplication {
   revision: number
   pickupDate: string
   dropoffDate: string
+  businessTimeZone: string
   location: string
   totalPrice: number | null
   currency: string
@@ -220,6 +224,7 @@ export default function AdminDashboard({
   manualReservations,
   initialSection,
   generatedAt,
+  businessTimeZone,
   setup,
   documentReviewCount,
   canReviewDocuments,
@@ -233,6 +238,7 @@ export default function AdminDashboard({
   manualReservations: AdminManualReservation[]
   initialSection: string
   generatedAt: string
+  businessTimeZone: string
   setup: OwnerSetupProgress
   documentReviewCount: number | null
   canReviewDocuments: boolean
@@ -396,23 +402,10 @@ export default function AdminDashboard({
     return tr(labels[status].en, labels[status].de)
   }
 
-  const formatApplicationDateTime = (value: string) =>
-    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Berlin",
-    }).format(new Date(value))
-  const formatAdminDate = (value: string) =>
-    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeZone: "Europe/Berlin",
-    }).format(new Date(value))
-  const formatAdminDateTime = (value: string) =>
-    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Berlin",
-    }).format(new Date(value))
+  const formatAdminDate = (value: string, timeZone = businessTimeZone) =>
+    formatBookingDateTime(value, locale, timeZone, { dateStyle: "medium" })
+  const formatAdminDateTime = (value: string, timeZone = businessTimeZone) =>
+    formatBookingDateTime(value, locale, timeZone)
 
   const filteredCars = carsState.filter((car) => {
     const matchesSearch =
@@ -951,10 +944,10 @@ export default function AdminDashboard({
 
   const handleCreateManualReservation = (reservation: ManualReservationFormValues) => {
     startTransition(async () => {
-      const pickupDate = new Date(reservation.pickupDate)
-      const dropoffDate = new Date(reservation.dropoffDate)
+      const pickupDate = businessLocalDateTimeToInstant(reservation.pickupDate, businessTimeZone)
+      const dropoffDate = businessLocalDateTimeToInstant(reservation.dropoffDate, businessTimeZone)
 
-      if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(dropoffDate.getTime())) {
+      if (!pickupDate || !dropoffDate) {
         toast({
           title: tr("Error", "Fehler"),
           description: tr("Please select valid pickup and drop-off date/time values.", "Bitte wählen Sie gültige Abhol- und Rückgabedaten mit Uhrzeit."),
@@ -1287,7 +1280,7 @@ export default function AdminDashboard({
                           {bookingUser.name || bookingUser.email}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {formatAdminDate(booking.createdAt)}
+                          {formatAdminDate(booking.createdAt, booking.businessTimeZone)}
                         </div>
                       </div>
                       <div className="flex items-center justify-between sm:block sm:text-right">
@@ -1586,8 +1579,8 @@ export default function AdminDashboard({
                             {customer?.email && customer.name ? ` • ${customer.email}` : ""}
                           </p>
                           <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-                            <p>{tr("Pick-up:", "Abholung:")} {formatApplicationDateTime(application.pickupDate)}</p>
-                            <p>{tr("Return:", "Rückgabe:")} {formatApplicationDateTime(application.dropoffDate)}</p>
+                            <p>{tr("Pick-up:", "Abholung:")} {formatAdminDateTime(application.pickupDate, application.businessTimeZone)}</p>
+                            <p>{tr("Return:", "Rückgabe:")} {formatAdminDateTime(application.dropoffDate, application.businessTimeZone)}</p>
                             <p>{tr("Location:", "Ort:")} {application.location}</p>
                             <p>
                               {tr("Quote:", "Angebot:")} {application.totalPrice === null
@@ -1644,6 +1637,7 @@ export default function AdminDashboard({
               <ManualReservationForm
                 cars={carsState}
                 referenceTime={generatedAt}
+                businessTimeZone={businessTimeZone}
                 availabilityRefreshToken={manualReservationsState.map(({ id }) => id).join("|")}
                 onSubmit={handleCreateManualReservation}
                 isSubmitting={isPending}
@@ -1859,7 +1853,7 @@ export default function AdminDashboard({
                           {booking.paymentDueAt ? (
                             <div>
                               <span className="text-muted-foreground">{tr("Payment deadline:", "Zahlungsfrist:")}</span>
-                              <span className="ml-2 font-medium">{formatAdminDateTime(booking.paymentDueAt)}</span>
+                              <span className="ml-2 font-medium">{formatAdminDateTime(booking.paymentDueAt, booking.businessTimeZone)}</span>
                             </div>
                           ) : null}
                           {booking.paymentMethod === "TRANSFER" ? (
@@ -1883,13 +1877,13 @@ export default function AdminDashboard({
                           <div>
                             <span className="text-muted-foreground">{tr("Pick-up:", "Abholung:")}</span>
                             <span className="ml-2 font-medium">
-                              {formatAdminDate(booking.pickupDate)}
+                              {formatAdminDate(booking.pickupDate, booking.businessTimeZone)}
                             </span>
                           </div>
                           <div>
                             <span className="text-muted-foreground">{tr("Drop-off:", "Rückgabe:")}</span>
                             <span className="ml-2 font-medium">
-                              {formatAdminDate(booking.dropoffDate)}
+                              {formatAdminDate(booking.dropoffDate, booking.businessTimeZone)}
                             </span>
                           </div>
                           {booking.guaranteeAmount > 0 && (
@@ -1921,7 +1915,7 @@ export default function AdminDashboard({
                               {booking.customer.licenceNumber && <p>{tr("Licence:", "Führerschein:")} {booking.customer.licenceNumber}</p>}
                               <p className="text-xs text-muted-foreground">
                                 {booking.customer.validatedAt
-                                  ? tr(`Checked ${formatAdminDateTime(booking.customer.validatedAt)}`, `Geprüft am ${formatAdminDateTime(booking.customer.validatedAt)}`)
+                                  ? tr(`Checked ${formatAdminDateTime(booking.customer.validatedAt, booking.businessTimeZone)}`, `Geprüft am ${formatAdminDateTime(booking.customer.validatedAt, booking.businessTimeZone)}`)
                                   : tr("Saved with this booking", "Mit dieser Buchung gespeichert")}
                               </p>
                             </div>
@@ -1939,7 +1933,7 @@ export default function AdminDashboard({
                                   >
                                     {acceptance.title}
                                   </a>{" "}
-                                  · {acceptance.locale} · {tr("accepted", "akzeptiert")} {formatAdminDateTime(acceptance.acceptedAt)} ·{" "}
+                                  · {acceptance.locale} · {tr("accepted", "akzeptiert")} {formatAdminDateTime(acceptance.acceptedAt, booking.businessTimeZone)} ·{" "}
                                   {tr(acceptance.source.replaceAll("_", " "), ({ CUSTOMER_CHECKBOX: "KUNDEN-CHECKBOX", CUSTOMER_SUBMISSION: "KUNDENÜBERMITTLUNG", STAFF_RECORDED: "VON MITARBEITER ERFASST" } as const)[acceptance.source])}
                                 </p>
                               ))}
@@ -2394,47 +2388,30 @@ interface UserFormValues {
 function ManualReservationForm({
   cars,
   referenceTime,
+  businessTimeZone,
   availabilityRefreshToken,
   onSubmit,
   isSubmitting = false,
 }: {
   cars: AdminCar[]
   referenceTime: string
+  businessTimeZone: string
   availabilityRefreshToken: string
   onSubmit: (reservation: ManualReservationFormValues) => void
   isSubmitting?: boolean
 }) {
   const locale = useLocale()
   const tr = (english: string, german: string) => (locale === "de" ? german : english)
-  const formatDatetimeLocal = (date: Date) => {
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Europe/Berlin",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).formatToParts(date).map((part) => [part.type, part.value]),
-    )
-    const { year, month, day, hour: hours, minute: minutes } = parts
-    return `${year}-${month}-${day}T${hours}:${minutes}`
-  }
+  const formatDatetimeLocal = (date: Date) =>
+    instantToBusinessDateTimeLocal(date, businessTimeZone) ?? ""
 
   const createInitialDates = () => {
-    const referenceParts = Object.fromEntries(
-      new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Europe/Berlin",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(new Date(referenceTime)).map((part) => [part.type, part.value]),
-    )
+    const referenceLocal = instantToBusinessDateTimeLocal(new Date(referenceTime), businessTimeZone)
+    const [year, month, day] = (referenceLocal?.slice(0, 10) ?? referenceTime.slice(0, 10)).split("-").map(Number)
     const base = new Date(Date.UTC(
-      Number(referenceParts.year),
-      Number(referenceParts.month) - 1,
-      Number(referenceParts.day),
+      year,
+      month - 1,
+      day,
     ))
     const dateAtOffset = (days: number) => {
       const date = new Date(base)
@@ -2483,10 +2460,10 @@ function ManualReservationForm({
       errors.push(tr("Price must be 0 or greater.", "Der Preis muss mindestens 0 betragen."))
     }
 
-    const pickupDate = new Date(formData.pickupDate)
-    const dropoffDate = new Date(formData.dropoffDate)
+    const pickupDate = businessLocalDateTimeToInstant(formData.pickupDate, businessTimeZone)
+    const dropoffDate = businessLocalDateTimeToInstant(formData.dropoffDate, businessTimeZone)
 
-    if (Number.isNaN(pickupDate.getTime()) || Number.isNaN(dropoffDate.getTime())) {
+    if (!pickupDate || !dropoffDate) {
       errors.push(tr("Please select valid pickup and drop-off date/time.", "Bitte wählen Sie gültige Abhol- und Rückgabedaten mit Uhrzeit."))
     } else {
       if (pickupDate <= new Date()) {
@@ -2656,6 +2633,7 @@ function ManualReservationForm({
         carId={formData.carId}
         pickupDate={formData.pickupDate}
         dropoffDate={formData.dropoffDate}
+        businessTimeZone={businessTimeZone}
         refreshToken={availabilityRefreshToken}
         onRangeSelect={handleCalendarRangeSelect}
         onConflictChange={handleAvailabilityConflict}

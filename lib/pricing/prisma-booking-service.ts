@@ -105,6 +105,7 @@ export async function createAuthoritativeBooking(db: PrismaClient, input: Author
             locale: input.locale,
             pickupDate: input.pickupAt,
             dropoffDate: input.returnAt,
+            businessTimeZone: configured.configuration.businessTimeZone,
             location: input.location,
             pricePerDay: quote.sourceDailyRate,
             totalDays: quote.chargeableDuration.chargeableDays,

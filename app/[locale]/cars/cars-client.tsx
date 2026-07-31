@@ -84,7 +84,7 @@ export function CarsClient({
 
         if (result.error) {
           console.error(result.error)
-          setFilteredCars(filtered)
+          setFilteredCars([])
           return
         }
 

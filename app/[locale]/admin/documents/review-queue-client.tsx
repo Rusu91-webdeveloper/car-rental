@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { formatCents } from "@/lib/money"
 import { ArrowRight, CalendarDays, Clock3, FileCheck2, Files, MapPin, UserRound } from "lucide-react"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 interface ApplicationSummary {
   id: string
@@ -22,6 +23,7 @@ interface ApplicationSummary {
   carImage: string
   pickupAt: Date | string
   returnAt: Date | string
+  businessTimeZone: string
   location: string
   grandTotal: number | null
   currency: string
@@ -82,12 +84,8 @@ export function DocumentReviewQueue({
   const cases = groupIntoCases(items)
   const oldestAgeMs = items.reduce((oldest, item) => Math.max(oldest, item.pendingAgeMs), 0)
 
-  const formatDateTime = (value: Date | string) =>
-    new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Berlin",
-    }).format(new Date(value))
+  const formatDateTime = (value: Date | string, businessTimeZone: string) =>
+    formatBookingDateTime(value, locale, businessTimeZone)
 
   const load = (next = false) =>
     startTransition(async () => {
@@ -185,7 +183,7 @@ export function DocumentReviewQueue({
                     {application ? (
                       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-1.5"><UserRound className="h-4 w-4" />{application.customerName} · {application.customerEmail}</span>
-                        <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{formatDateTime(application.pickupAt)} – {formatDateTime(application.returnAt)}</span>
+                        <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{formatDateTime(application.pickupAt, application.businessTimeZone)} – {formatDateTime(application.returnAt, application.businessTimeZone)}</span>
                         <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{application.location}</span>
                       </div>
                     ) : null}

@@ -6,6 +6,8 @@ import { ProductionAlertTest } from "@/components/admin/production-alert-test"
 import { DeveloperMaintenanceConsole } from "@/components/admin/developer-maintenance-console"
 import { isMaintenanceDeveloperEmail } from "@/lib/developer-maintenance/authorization"
 import { getDeveloperMaintenancePreview } from "@/lib/developer-maintenance/service"
+import { prisma } from "@/lib/db"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 export const dynamic = "force-dynamic"
 
@@ -71,16 +73,22 @@ export default async function ProductionHealthPage() {
   const developerMaintenance = isMaintenanceDeveloperEmail(admin.email)
     ? getDeveloperMaintenancePreview()
     : undefined
-  const [report, maintenancePreview] = await Promise.all([
+  const [report, maintenancePreview, activeGeneralRental] = await Promise.all([
     getProductionHealthReport(),
     developerMaintenance,
+    prisma.businessConfigurationRelease.findFirst({
+      where: { status: "ACTIVE" },
+      select: { generalRentalConfig: { select: { businessTimeZone: true } } },
+    }),
   ])
+  const businessTimeZone = activeGeneralRental?.generalRentalConfig.businessTimeZone ?? "UTC"
+  const displayDateTime = (value: Date | string) => formatBookingDateTime(value, locale, businessTimeZone)
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
       <AdminPageHeader
         eyebrow={isGerman ? "Systemstatus" : "System status"}
         title={isGerman ? "Ist das Unternehmen bereit, Buchungen anzunehmen?" : "Is the business ready to take bookings?"}
-        description={`${report.status === "READY" ? (isGerman ? "Alles ist bereit." : "Everything is ready.") : isGerman ? "Einige Punkte benötigen Aufmerksamkeit." : "Some items need attention."} ${isGerman ? "Zuletzt geprüft" : "Last checked"} ${new Date(report.generatedAt).toLocaleString(isGerman ? "de-DE" : "en-GB", { timeZone: "Europe/Berlin" })}.`}
+        description={`${report.status === "READY" ? (isGerman ? "Alles ist bereit." : "Everything is ready.") : isGerman ? "Einige Punkte benötigen Aufmerksamkeit." : "Some items need attention."} ${isGerman ? "Zuletzt geprüft" : "Last checked"} ${displayDateTime(report.generatedAt)}.`}
       />
       <div className="grid gap-3 md:grid-cols-2">
         {report.checks.map((item) => (
@@ -105,7 +113,7 @@ export default async function ProductionHealthPage() {
               {item.lastVerifiedAt ? (
                 <p className="mt-1">
                   {isGerman ? "Zuletzt bestätigt" : "Last confirmed"}:{" "}
-                  {new Date(item.lastVerifiedAt).toLocaleString(isGerman ? "de-DE" : "en-GB", { timeZone: "Europe/Berlin" })}
+                  {displayDateTime(item.lastVerifiedAt)}
                 </p>
               ) : null}
             </details>

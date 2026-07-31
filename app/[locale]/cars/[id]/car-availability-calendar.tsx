@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { Calendar } from "@/components/ui/calendar"
 import { getCarAvailability } from "@/app/actions/cars"
 import { useLocale, useTranslations } from "next-intl"
+import { businessDayOverlapsRanges, businessTodayLocalDate } from "@/lib/business-date"
 
 interface CarAvailabilityCalendarProps {
   carId: string
@@ -18,6 +19,7 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
   const t = useTranslations()
   const locale = useLocale()
   const [unavailableRanges, setUnavailableRanges] = useState<UnavailableDateRange[]>([])
+  const [businessTimeZone, setBusinessTimeZone] = useState("UTC")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,6 +42,7 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
         }))
         
         setUnavailableRanges(ranges)
+        setBusinessTimeZone(result.businessTimeZone ?? "UTC")
       } catch (err) {
         console.error("Failed to fetch car availability:", err)
         setError(locale === "de" ? "Die Verfügbarkeit konnte nicht geladen werden." : "Failed to load availability")
@@ -51,41 +54,13 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
     fetchAvailability()
   }, [carId, locale])
 
-  // Convert date ranges to a set of individual dates for easier checking
-  const unavailableDatesSet = useMemo(() => {
-    const dates = new Set<string>()
-    
-    unavailableRanges.forEach((range) => {
-      const start = new Date(range.start)
-      const end = new Date(range.end)
-      
-      // Reset time to start of day for accurate comparison
-      start.setHours(0, 0, 0, 0)
-      end.setHours(0, 0, 0, 0)
-      
-      // Add all dates in the range (inclusive)
-      const current = new Date(start)
-      while (current <= end) {
-        dates.add(current.toISOString().split("T")[0])
-        current.setDate(current.getDate() + 1)
-      }
-    })
-    
-    return dates
-  }, [unavailableRanges])
-
   // Check if a date is unavailable
-  const isUnavailable = (date: Date): boolean => {
-    const dateCopy = new Date(date)
-    dateCopy.setHours(0, 0, 0, 0)
-    const dateStr = dateCopy.toISOString().split("T")[0]
-    return unavailableDatesSet.has(dateStr)
-  }
+  const isUnavailable = (date: Date): boolean =>
+    businessDayOverlapsRanges(date, businessTimeZone, unavailableRanges)
 
   // Check if a date is available (not in the past and not unavailable)
   const isAvailable = (date: Date): boolean => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = businessTodayLocalDate(businessTimeZone)
     const dateCopy = new Date(date)
     dateCopy.setHours(0, 0, 0, 0)
     
@@ -137,8 +112,7 @@ export function CarAvailabilityCalendar({ carId }: CarAvailabilityCalendarProps)
               available: "!bg-green-100 !text-green-700 hover:!bg-green-200 hover:!text-green-800 dark:!bg-green-900/30 dark:!text-green-400",
             }}
             disabled={(date) => {
-              const today = new Date()
-              today.setHours(0, 0, 0, 0)
+              const today = businessTodayLocalDate(businessTimeZone)
               const dateCopy = new Date(date)
               dateCopy.setHours(0, 0, 0, 0)
               return dateCopy < today

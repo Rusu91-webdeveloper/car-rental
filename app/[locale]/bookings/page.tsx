@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/money"
 import { getTranslations } from "next-intl/server"
 import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { BookingReviewSection } from "./booking-review-section"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 export const dynamic = "force-dynamic"
 
@@ -149,17 +150,6 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
     return new Date(createdAt.getTime() + BOOKING_PAYMENT_WINDOW_MS)
   }
 
-  const formatDateTime = (date: Date, locale: string) => {
-    return new Date(date).toLocaleString(locale, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Europe/Berlin",
-    })
-  }
-
   const applicationStatus = (status: string) => {
     const copy: Record<string, { en: string; de: string; descriptionEn: string; descriptionDe: string }> = {
       DRAFT: { en: "In progress", de: "In Bearbeitung", descriptionEn: "Continue the booking application.", descriptionDe: "Setzen Sie den Buchungsantrag fort." },
@@ -217,7 +207,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">{locale === "de" ? status.descriptionDe : status.descriptionEn}</p>
                       <p className="mt-2 text-sm">
-                        {formatDateTime(application.pickupAt, locale)} – {formatDateTime(application.returnAt, locale)}
+                        {formatBookingDateTime(application.pickupAt, locale, application.businessTimeZone)} – {formatBookingDateTime(application.returnAt, locale, application.businessTimeZone)}
                         {quote ? ` · ${formatCents(quote.grandTotal, quote.currency)}` : ""}
                       </p>
                     </div>
@@ -344,7 +334,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         ) : null}
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">{t("bookings.bookedAt")}</span>
-                          <span>{formatDateTime(booking.createdAt, locale)}</span>
+                          <span>{formatBookingDateTime(booking.createdAt, locale, booking.businessTimeZone)}</span>
                         </div>
                         {showCancellationDeadline && (
                           <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -365,7 +355,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                               {t("bookings.willCancelAt")}
                             </span>
                             <span className="font-medium text-warning">
-                              {formatDateTime(cancellationDeadline, locale)}
+                              {formatBookingDateTime(cancellationDeadline, locale, booking.businessTimeZone)}
                             </span>
                           </div>
                         )}
@@ -401,7 +391,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                               >
                                 {acceptance.legalDocumentTranslation.title} · {locale === "de" ? "Version" : "version"} {acceptance.documentVersionNumber}
                               </a>
-                              <span> · {locale === "de" ? "akzeptiert am" : "accepted"} {formatDateTime(acceptance.acceptedAt, locale)}</span>
+                              <span> · {locale === "de" ? "akzeptiert am" : "accepted"} {formatBookingDateTime(acceptance.acceptedAt, locale, booking.businessTimeZone)}</span>
                             </div>
                           ))}
                       </div>
@@ -418,8 +408,8 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
                         />
                       </svg>
                       <span>
-                        {new Date(booking.pickupDate).toLocaleDateString()} -{" "}
-                        {new Date(booking.dropoffDate).toLocaleDateString()}
+                        {formatBookingDateTime(booking.pickupDate, locale, booking.businessTimeZone)} -{" "}
+                        {formatBookingDateTime(booking.dropoffDate, locale, booking.businessTimeZone)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">

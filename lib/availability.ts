@@ -16,19 +16,30 @@ const AVAILABILITY_BLOCKING_APPLICATION_STATUSES = [
   "READY_TO_FINALIZE",
 ] as const
 
+const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
+
 interface AvailabilityOptions {
   excludeBookingId?: string
   excludeBookingApplicationId?: string
   db?: DbClient
 }
 
-function availabilityBlockingBookingFilter(now: Date): Prisma.BookingWhereInput {
+function availabilityBlockingBookingFilter(
+  now: Date,
+  preparationBufferMinutes: number,
+): Prisma.BookingWhereInput {
   return {
     OR: [
       { status: { in: ["CONFIRMED", "IN_PROGRESS"] } },
       {
         status: "PENDING",
         OR: [{ paymentDueAt: null }, { paymentDueAt: { gt: now } }],
+      },
+      {
+        status: "COMPLETED",
+        dropoffDate: {
+          gt: subtractOperationalBuffer(now, preparationBufferMinutes),
+        },
       },
     ],
   }
@@ -72,7 +83,7 @@ export async function isCarAvailable(
       where: {
         carId,
         id: options.excludeBookingId ? { not: options.excludeBookingId } : undefined,
-        ...availabilityBlockingBookingFilter(now),
+        ...availabilityBlockingBookingFilter(now, preparationBufferMinutes),
         AND: [
           {
             pickupDate: {
@@ -105,8 +116,25 @@ export async function isCarAvailable(
     db.blockedDate.findMany({
       where: {
         carId,
-        startDate: { lt: dropoffDate },
-        endDate: { gt: pickupDate },
+        OR: [
+          {
+            reason: { startsWith: MANUAL_RESERVATION_PREFIX },
+            startDate: { lt: dropoffWithBuffer },
+            endDate: { gt: pickupBeforeBuffer },
+          },
+          {
+            AND: [
+              {
+                OR: [
+                  { reason: null },
+                  { reason: { not: { startsWith: MANUAL_RESERVATION_PREFIX } } },
+                ],
+              },
+              { startDate: { lt: dropoffDate } },
+              { endDate: { gt: pickupDate } },
+            ],
+          },
+        ],
       },
       select: { id: true },
     }),
@@ -120,12 +148,12 @@ export async function getUnavailableDates(
   db: DbClient = prisma,
 ): Promise<{ start: Date; end: Date }[]> {
   const now = new Date()
-  const [preparationBufferMinutes, bookings, applications, blockedDates] = await Promise.all([
-    resolvePreparationBufferMinutes(db),
+  const preparationBufferMinutes = await resolvePreparationBufferMinutes(db)
+  const [bookings, applications, blockedDates] = await Promise.all([
     db.booking.findMany({
       where: {
         carId,
-        ...availabilityBlockingBookingFilter(now),
+        ...availabilityBlockingBookingFilter(now, preparationBufferMinutes),
       },
       select: {
         pickupDate: true,
@@ -147,6 +175,7 @@ export async function getUnavailableDates(
       select: {
         startDate: true,
         endDate: true,
+        reason: true,
       },
     }),
   ])
@@ -160,6 +189,46 @@ export async function getUnavailableDates(
       start: subtractOperationalBuffer(application.pickupAt, preparationBufferMinutes),
       end: addOperationalBuffer(application.returnAt, preparationBufferMinutes),
     })),
-    ...blockedDates.map((b) => ({ start: b.startDate, end: b.endDate })),
+    ...blockedDates.map((b) =>
+      b.reason?.startsWith(MANUAL_RESERVATION_PREFIX)
+        ? {
+            start: subtractOperationalBuffer(b.startDate, preparationBufferMinutes),
+            end: addOperationalBuffer(b.endDate, preparationBufferMinutes),
+          }
+        : { start: b.startDate, end: b.endDate },
+    ),
   ]
+}
+
+export async function hasActiveVehicleCommitments(
+  carId: string,
+  db: DbClient = prisma,
+  now = new Date(),
+): Promise<boolean> {
+  const preparationBufferMinutes = await resolvePreparationBufferMinutes(db)
+  const bufferStart = subtractOperationalBuffer(now, preparationBufferMinutes)
+  const [bookingCount, applicationCount, manualReservationCount] = await Promise.all([
+    db.booking.count({
+      where: {
+        carId,
+        ...availabilityBlockingBookingFilter(now, preparationBufferMinutes),
+        dropoffDate: { gt: subtractOperationalBuffer(now, preparationBufferMinutes) },
+      },
+    }),
+    db.bookingApplication.count({
+      where: {
+        carId,
+        ...availabilityBlockingApplicationFilter(now),
+      },
+    }),
+    db.blockedDate.count({
+      where: {
+        carId,
+        reason: { startsWith: MANUAL_RESERVATION_PREFIX },
+        endDate: { gt: bufferStart },
+      },
+    }),
+  ])
+
+  return bookingCount > 0 || applicationCount > 0 || manualReservationCount > 0
 }

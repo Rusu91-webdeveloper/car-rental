@@ -31,15 +31,9 @@ import {
   LATE_RETURN_SAFETY_BUFFER_MINUTES,
   totalOperationalBufferMinutes,
 } from "@/lib/rental-timing"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 const normalizeLocale = (locale: string): "de" | "en" => (locale === "de" ? "de" : "en")
-
-const formatApplicationDate = (date: Date, locale: "de" | "en") =>
-  new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Berlin",
-  }).format(date)
 
 async function loadApplicationEmailContext(applicationId: string) {
   const [application, companySettings] = await Promise.all([
@@ -72,8 +66,8 @@ async function loadApplicationEmailContext(applicationId: string) {
     to: email,
     userName,
     carName: locale === "de" ? application.car.nameDe || application.car.name : application.car.name,
-    pickupDate: formatApplicationDate(application.pickupAt, locale),
-    returnDate: formatApplicationDate(application.returnAt, locale),
+    pickupDate: formatBookingDateTime(application.pickupAt, locale, application.businessTimeZone),
+    returnDate: formatBookingDateTime(application.returnAt, locale, application.businessTimeZone),
     location: application.pickupLocation,
     locale,
     adminEmails,

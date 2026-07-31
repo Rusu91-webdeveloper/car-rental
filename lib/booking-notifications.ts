@@ -13,6 +13,7 @@ import {
   sendTransferPaymentConfirmedEmail,
 } from "@/lib/email"
 import { logger } from "@/lib/logger"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 type DbClient = Prisma.TransactionClient | typeof prisma
 
@@ -21,14 +22,6 @@ const PROCESSING_STALE_MS = 10 * 60 * 1000
 
 function normalizeLocale(locale: string): "de" | "en" {
   return locale === "de" ? "de" : "en"
-}
-
-function formatDate(value: Date, locale: "de" | "en") {
-  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Berlin",
-  }).format(value)
 }
 
 function initialEvents(method: BookingPaymentMethod, requiresAdvance: boolean) {
@@ -128,8 +121,8 @@ async function deliver(event: BookingNotificationEvent, bookingId: string, idemp
     to: customerEmail,
     userName,
     carName,
-    pickupDate: formatDate(booking.pickupDate, locale),
-    dropoffDate: formatDate(booking.dropoffDate, locale),
+    pickupDate: formatBookingDateTime(booking.pickupDate, locale, booking.businessTimeZone),
+    dropoffDate: formatBookingDateTime(booking.dropoffDate, locale, booking.businessTimeZone),
     location: booking.location,
     bookingNumber: booking.bookingNumber,
     locale,

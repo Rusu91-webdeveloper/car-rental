@@ -18,6 +18,36 @@ export type BookingApplicationStatus =
 
 export type ApplicationPaymentMethod = "TRANSFER" | "PAY_AT_PICKUP"
 
+const MINIMUM_APPLICATION_LIFETIME_MS = 60 * 60_000
+const MAXIMUM_APPLICATION_LIFETIME_MS = 7 * 24 * 60 * 60_000
+const DEFAULT_APPLICATION_LIFETIME_MS = 2 * 24 * 60 * 60_000
+
+export function bookingApplicationExpiresAt(input: {
+  now: Date
+  pickupAt: Date
+  requestedLifetimeMs?: number
+}): Date {
+  const requestedLifetime = Math.min(
+    MAXIMUM_APPLICATION_LIFETIME_MS,
+    Math.max(MINIMUM_APPLICATION_LIFETIME_MS, input.requestedLifetimeMs ?? DEFAULT_APPLICATION_LIFETIME_MS),
+  )
+  return new Date(Math.min(input.now.getTime() + requestedLifetime, input.pickupAt.getTime()))
+}
+
+export function isCarLifecycleBookable(car: {
+  isDeleted: boolean
+  status: string
+}): boolean {
+  return !car.isDeleted && (car.status === "AVAILABLE" || car.status === "LOW_STOCK")
+}
+
+export function isApplicationFinalizationTimeValid(
+  application: { expiresAt: Date; pickupAt: Date },
+  now = new Date(),
+): boolean {
+  return application.expiresAt > now && application.pickupAt > now
+}
+
 export interface CreateBookingApplicationInput {
   customerUserId: string
   carId: string
@@ -44,6 +74,7 @@ export interface BookingApplicationView {
   locale: string
   pickupAt: Date
   returnAt: Date
+  businessTimeZone: string
   pickupLocation: string
   returnLocation: string
   status: BookingApplicationStatus

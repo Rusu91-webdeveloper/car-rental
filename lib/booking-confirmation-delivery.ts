@@ -5,17 +5,10 @@ import { sendAdminBookingConfirmationNotification, sendBookingConfirmationEmail 
 import { loadBookingConfirmationConfiguration } from "@/lib/booking-confirmation-configuration"
 import { bookingTotalFromSnapshot } from "@/lib/pricing/snapshot"
 import { config } from "@/lib/config"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 function normalizeLocale(locale: string | null | undefined): "de" | "en" {
   return locale === "de" ? "de" : "en"
-}
-
-function formatDate(date: Date, locale: "de" | "en") {
-  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Berlin",
-  }).format(date)
 }
 
 type BookingConfirmationDeliveryResult = {
@@ -58,8 +51,8 @@ export async function deliverBookingConfirmation(bookingId: string, options: { m
     userName:
       [booking.customerDriverSnapshot?.firstName, booking.customerDriverSnapshot?.lastName].filter(Boolean).join(" ") || booking.user.name || customerEmail,
     carName: locale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name,
-    pickupDate: formatDate(booking.pickupDate, locale),
-    dropoffDate: formatDate(booking.dropoffDate, locale),
+    pickupDate: formatBookingDateTime(booking.pickupDate, locale, booking.businessTimeZone),
+    dropoffDate: formatBookingDateTime(booking.dropoffDate, locale, booking.businessTimeZone),
     location: booking.location,
     totalPrice: bookingTotalFromSnapshot(booking),
     currency: booking.pricingSnapshot?.currency,
@@ -89,8 +82,8 @@ export async function deliverBookingConfirmation(bookingId: string, options: { m
       [booking.customerDriverSnapshot?.firstName, booking.customerDriverSnapshot?.lastName].filter(Boolean).join(" ") || booking.user.name || customerEmail,
     userEmail: customerEmail,
     carName: locale === "de" ? booking.car.nameDe || booking.car.name : booking.car.name,
-    pickupDate: formatDate(booking.pickupDate, locale),
-    dropoffDate: formatDate(booking.dropoffDate, locale),
+    pickupDate: formatBookingDateTime(booking.pickupDate, locale, booking.businessTimeZone),
+    dropoffDate: formatBookingDateTime(booking.dropoffDate, locale, booking.businessTimeZone),
     location: booking.location,
     totalPrice: bookingTotalFromSnapshot(booking),
     currency: booking.pricingSnapshot?.currency,

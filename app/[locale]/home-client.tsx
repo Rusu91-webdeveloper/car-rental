@@ -47,12 +47,14 @@ export function HomeClient({
   savedCarIds,
   signInUrl,
   pickupLocation,
+  businessTimeZone,
 }: {
   cars: Car[]
   user: { name: string; email: string; role: string } | null
   savedCarIds: string[]
   signInUrl: string
   pickupLocation: string | null
+  businessTimeZone: string
 }) {
   const t = useTranslations()
   const locale = useLocale()
@@ -119,7 +121,7 @@ export function HomeClient({
 
         if (result.error) {
           console.error(result.error)
-          setFilteredCars(filtered)
+          setFilteredCars([])
           return
         }
 
@@ -338,6 +340,7 @@ export function HomeClient({
               <div className="mt-4 rounded-2xl bg-[#f7f7f3] p-3">
                 <ClientOnly>
                   <DateFilter
+                    businessTimeZone={businessTimeZone}
                     pickupDate={pickupDateParam}
                     dropoffDate={dropoffDateParam}
                     onPickupDateChange={handlePickupDateChange}
@@ -488,6 +491,7 @@ export function HomeClient({
                 </div>
                 <ClientOnly>
                   <DateFilter
+                    businessTimeZone={businessTimeZone}
                     pickupDate={pickupDateParam}
                     dropoffDate={dropoffDateParam}
                     onPickupDateChange={handlePickupDateChange}

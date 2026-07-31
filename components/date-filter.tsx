@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { CalendarIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { businessTodayLocalDate, parseDateOnlyLocal } from "@/lib/business-date"
 
 interface DateFilterProps {
   pickupDate: string | null
@@ -18,6 +19,7 @@ interface DateFilterProps {
   onDropoffDateChange: (date: string | null) => void
   onClear: () => void
   compact?: boolean
+  businessTimeZone: string
 }
 
 export function DateFilter({
@@ -27,6 +29,7 @@ export function DateFilter({
   onDropoffDateChange,
   onClear,
   compact = false,
+  businessTimeZone,
 }: DateFilterProps) {
   const t = useTranslations()
   const locale = useLocale()
@@ -34,10 +37,9 @@ export function DateFilter({
   const [pickupOpen, setPickupOpen] = useState(false)
   const [dropoffOpen, setDropoffOpen] = useState(false)
 
-  const pickupDateObj = pickupDate ? new Date(pickupDate) : undefined
-  const dropoffDateObj = dropoffDate ? new Date(dropoffDate) : undefined
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const pickupDateObj = pickupDate ? parseDateOnlyLocal(pickupDate) ?? undefined : undefined
+  const dropoffDateObj = dropoffDate ? parseDateOnlyLocal(dropoffDate) ?? undefined : undefined
+  const today = businessTodayLocalDate(businessTimeZone)
 
   const handlePickupSelect = (date: Date | undefined) => {
     if (date) {

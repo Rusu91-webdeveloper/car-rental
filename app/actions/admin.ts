@@ -15,6 +15,8 @@ import {
   normalizeWeeklyOpeningHours,
 } from "@/lib/business-hours"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
+import { isCarLifecycleBookable } from "@/lib/booking-applications/domain"
+import { isRentalDurationTooShort } from "@/lib/booking-configuration/minimum-rental"
 
 const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
 
@@ -416,21 +418,24 @@ export async function createManualReservation(data: unknown) {
     const [car, activeRelease] = await Promise.all([
       prisma.car.findUnique({
         where: { id: validated.carId },
-        select: { id: true, name: true, isDeleted: true },
+        select: { id: true, name: true, isDeleted: true, status: true },
       }),
       prisma.businessConfigurationRelease.findFirst({
         where: { status: "ACTIVE" },
-        select: { generalRentalConfig: { select: {
-          businessTimeZone: true,
-          weeklyOpeningHours: true,
-          openingHoursExceptions: true,
-          handoverPolicy: true,
-        } } },
+        select: {
+          generalRentalConfig: { select: {
+            businessTimeZone: true,
+            weeklyOpeningHours: true,
+            openingHoursExceptions: true,
+            handoverPolicy: true,
+          } },
+          pricingBillingConfig: { select: { minimumRentalMinutes: true } },
+        },
       }),
     ])
 
-    if (!car || car.isDeleted) {
-      return { error: "Car not found" }
+    if (!car || !isCarLifecycleBookable(car)) {
+      return { error: "Car is not currently bookable" }
     }
     if (!activeRelease) return { error: "Active booking configuration not found" }
     const weeklyOpeningHours = normalizeWeeklyOpeningHours(activeRelease.generalRentalConfig.weeklyOpeningHours)
@@ -442,6 +447,8 @@ export async function createManualReservation(data: unknown) {
       return { error: "Return must be during the configured return windows" }
     if (!hasMinimumPickupLeadTime(pickupDate, handoverPolicy))
       return { error: "Pick-up does not meet the configured minimum booking notice" }
+    if (isRentalDurationTooShort(pickupDate, dropoffDate, activeRelease.pricingBillingConfig.minimumRentalMinutes))
+      return { error: "The reservation is shorter than the configured minimum rental period" }
 
     const reservationReason = encodeManualReservationReason({
       customerName: validated.customerName,
@@ -452,6 +459,13 @@ export async function createManualReservation(data: unknown) {
     const blockedDate = await prisma.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
+        const lockedCar = await tx.car.findUnique({
+          where: { id: validated.carId },
+          select: { isDeleted: true, status: true },
+        })
+        if (!lockedCar || !isCarLifecycleBookable(lockedCar)) {
+          throw new Error("Car is not currently bookable")
+        }
         const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, { db: tx })
 
         if (!stillAvailable) {

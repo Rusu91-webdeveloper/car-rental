@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
-import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
+import { getUnavailableDates, hasActiveVehicleCommitments } from "@/lib/availability"
 import {
   createCarSlugBase,
   getNextCarSlug,
@@ -16,6 +16,17 @@ import { prepareOwnerPricingEdit } from "@/lib/admin/owner-settings-edit"
 import { newCarPublishingMode } from "@/lib/admin/new-car-publishing"
 import { activateDraftRelease, validateDraftRelease } from "@/lib/business-configuration/workflow-service"
 import { getHandoverEvents } from "@/lib/handover-capacity"
+import { addDateOnlyDays, parseDateOnlyLocal } from "@/lib/business-date"
+import {
+  businessLocalDateTimeToInstant,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import {
+  dateOnlySearchHandoverWindows,
+  hasAvailableSearchWindow,
+} from "@/lib/date-only-search-availability"
 
 const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
@@ -434,33 +445,33 @@ export async function updateCar(carId: string, data: unknown) {
 export async function deleteCar(carId: string) {
   try {
     const admin = await requireAdmin()
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${carId} FOR UPDATE`
+      const existingCar = await tx.car.findUnique({ where: { id: carId } })
+      if (!existingCar) throw new Error("Car not found")
+      if (existingCar.isDeleted) throw new Error("Car is already deleted")
+      if (await hasActiveVehicleCommitments(carId, tx))
+        throw new Error(
+          "This car has an active booking, booking application, buffer period, or manual reservation and cannot be deleted.",
+        )
 
-    const existingCar = await prisma.car.findUnique({
-      where: { id: carId },
-    })
+      await tx.car.update({
+        where: { id: carId },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+      })
 
-    if (!existingCar) {
-      return { error: "Car not found" }
-    }
-
-    // Soft delete
-    await prisma.car.update({
-      where: { id: carId },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-      },
-    })
-
-    // Create audit log
-    await prisma.adminAuditLog.create({
-      data: {
-        adminId: admin.id,
-        action: "CAR_DELETED",
-        targetType: "car",
-        targetId: carId,
-        oldValue: existingCar,
-      },
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "CAR_DELETED",
+          targetType: "car",
+          targetId: carId,
+          oldValue: existingCar,
+        },
+      })
     })
 
     revalidatePath("/")
@@ -491,12 +502,20 @@ export async function getCarAvailability(carId: string) {
     const now = new Date()
     const capacityHorizon = new Date(now)
     capacityHorizon.setFullYear(capacityHorizon.getFullYear() + 2)
-    const [unavailableDates, handoverEvents] = await Promise.all([
+    const [unavailableDates, handoverEvents, activeRelease] = await Promise.all([
       getUnavailableDates(carId),
       getHandoverEvents(prisma, now, capacityHorizon),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { generalRentalConfig: { select: { businessTimeZone: true } } },
+      }),
     ])
 
-    return { unavailableDates, handoverEvents }
+    return {
+      unavailableDates,
+      handoverEvents,
+      businessTimeZone: activeRelease?.generalRentalConfig.businessTimeZone ?? "UTC",
+    }
   } catch (error) {
     console.error("[GET_CAR_AVAILABILITY_ERROR]", error)
     return { error: "Failed to fetch availability" }
@@ -518,42 +537,94 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
       }
     }
 
-    // Validate and parse dates
-    // Normalize dates to midnight local time to avoid timezone issues
-    const pickup = new Date(pickupDate + "T00:00:00")
-    const dropoff = new Date(dropoffDate + "T00:00:00")
-
-    if (isNaN(pickup.getTime()) || isNaN(dropoff.getTime())) {
+    const pickupDay = parseDateOnlyLocal(pickupDate)
+    const dropoffDay = parseDateOnlyLocal(dropoffDate)
+    if (!pickupDay || !dropoffDay) {
       return {
         error: "Invalid date format provided",
       }
     }
 
-    if (pickup >= dropoff) {
+    if (pickupDay >= dropoffDay) {
       return {
         error: "Pickup date must be before dropoff date",
       }
     }
 
-    // Cancel expired bookings first
-    try {
-    } catch (cancelError) {
-      console.error("[CANCEL_EXPIRED_BOOKINGS_ERROR]", cancelError)
-      // Continue with filtering even if cancellation fails
-    }
+    const uniqueCarIds = [...new Set(carIds)].slice(0, 200)
+    const [candidateCars, activeRelease] = await Promise.all([
+      prisma.car.findMany({
+        where: {
+          id: { in: uniqueCarIds },
+          isDeleted: false,
+          status: { in: ["AVAILABLE", "LOW_STOCK"] },
+        },
+        select: { id: true },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: {
+          generalRentalConfig: {
+            select: {
+              businessTimeZone: true,
+              weeklyOpeningHours: true,
+              openingHoursExceptions: true,
+              handoverPolicy: true,
+            },
+          },
+          pricingBillingConfig: { select: { minimumRentalMinutes: true } },
+          fleetRateSet: {
+            select: {
+              rates: {
+                where: { carId: { in: uniqueCarIds } },
+                select: { carId: true },
+              },
+            },
+          },
+        },
+      }),
+    ])
+    if (!activeRelease) return { error: "Active booking configuration not found" }
+    const pricedCarIds = new Set(activeRelease.fleetRateSet.rates.map(({ carId }) => carId))
+    const bookableCars = candidateCars.filter(({ id }) => pricedCarIds.has(id))
+    if (bookableCars.length === 0) return { availableCarIds: [] }
 
-    // Check availability for each car
+    const configuration = {
+      businessTimeZone: activeRelease.generalRentalConfig.businessTimeZone,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(activeRelease.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(activeRelease.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(activeRelease.generalRentalConfig.handoverPolicy),
+      minimumRentalMinutes: activeRelease.pricingBillingConfig.minimumRentalMinutes,
+    }
+    const dayAfterReturn = addDateOnlyDays(dropoffDate, 1)
+    const horizonStart = businessLocalDateTimeToInstant(
+      `${pickupDate}T00:00`,
+      configuration.businessTimeZone,
+    )
+    const horizonEnd = dayAfterReturn
+      ? businessLocalDateTimeToInstant(`${dayAfterReturn}T00:00`, configuration.businessTimeZone)
+      : null
+    if (!horizonStart || !horizonEnd) return { error: "Invalid date range for the configured business timezone" }
+
+    const handoverEvents = await getHandoverEvents(prisma, horizonStart, horizonEnd)
+    const windows = dateOnlySearchHandoverWindows({
+      pickupDate,
+      returnDate: dropoffDate,
+      configuration,
+      handoverEvents,
+    })
+    if (windows.length === 0) return { availableCarIds: [] }
+
     const availabilityChecks = await Promise.all(
-      carIds.map(async (carId) => {
+      bookableCars.map(async ({ id: carId }) => {
         try {
-          const available = await isCarAvailable(carId, pickup, dropoff)
-          return { carId, available }
+          const unavailableRanges = await getUnavailableDates(carId)
+          return { carId, available: hasAvailableSearchWindow(windows, unavailableRanges) }
         } catch (carError) {
           console.error(`[CAR_AVAILABILITY_CHECK_ERROR] Car ID: ${carId}`, carError)
-          // If we can't check availability for a specific car, assume it's unavailable
           return { carId, available: false }
         }
-      })
+      }),
     )
 
     return {

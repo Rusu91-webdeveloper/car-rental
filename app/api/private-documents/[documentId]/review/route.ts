@@ -5,6 +5,7 @@ import { PrismaBookingApplicationRepository } from "@/lib/booking-applications/i
 import { dispatchPendingBookingNotificationsForBooking } from "@/lib/booking-notifications"
 import { prisma } from "@/lib/db"
 import { logger } from "@/lib/logger"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 import { sendDocumentReviewDecisionEmail } from "@/lib/email"
 import { enforceRateLimit, PHASE8FB_RATE_LIMITS } from "@/lib/rate-limit"
 import { revalidatePath } from "next/cache"
@@ -181,11 +182,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ doc
                 ? documentTypeLabel(requirement.documentType.key, requirement.documentType.name, locale)
                 : document.documentTypeId
               const formatDate = (value: Date) =>
-                new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Europe/Berlin",
-                }).format(value)
+                formatBookingDateTime(value, locale, emailContext.businessTimeZone)
               const delivery = await sendDocumentReviewDecisionEmail({
                 applicationId: emailContext.id,
                 to: customerEmail,

@@ -38,6 +38,7 @@ describe("booking confirmation delivery", () => {
       locale: "de",
       pickupDate: new Date("2026-08-01T08:00:00.000Z"),
       dropoffDate: new Date("2026-08-03T08:00:00.000Z"),
+      businessTimeZone: "UTC",
       location: "Berlin Hauptbahnhof",
       totalPrice: 24000,
       guaranteeAmount: 5000,
@@ -72,6 +73,7 @@ describe("booking confirmation delivery", () => {
         totalPrice: 26000,
         bookingNumber: "BK-100",
         locale: "de",
+        pickupDate: expect.stringContaining("08:00"),
         idempotencyKey: "booking-confirmation-customer-BK-100",
       }),
     )

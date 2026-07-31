@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "@/navigation"
 import { Button } from "@/components/ui/button"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 const REASONS = [
   "UNREADABLE",
@@ -23,6 +24,7 @@ export function DocumentReviewClient({
   replacements,
   locale,
   returnTo,
+  businessTimeZone,
 }: {
   document: {
     documentId: string
@@ -53,6 +55,7 @@ export function DocumentReviewClient({
   }>
   locale: string
   returnTo: string
+  businessTimeZone: string
 }) {
   const router = useRouter()
   const tr = (english: string, german: string) => (locale === "de" ? german : english)
@@ -201,7 +204,7 @@ export function DocumentReviewClient({
               <li key={item.id} className="border-t pt-2">
                 {reviewDecision(item.decision, locale)} · {item.reasonCode ? reviewReason(item.reasonCode, locale) : tr("no reason", "kein Grund")}
                 <span className="block text-xs text-muted-foreground">
-                  {new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(new Date(item.reviewedAt))}
+                  {formatBookingDateTime(item.reviewedAt, locale, businessTimeZone)}
                 </span>
               </li>
             ))}

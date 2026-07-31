@@ -6,6 +6,9 @@ import { Calendar } from "@/components/ui/calendar"
 import { getCarAvailability } from "@/app/actions/cars"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, CalendarDays } from "lucide-react"
+import { businessLocalDateTimeToInstant } from "@/lib/business-hours"
+import { businessDayOverlapsRanges, businessTodayLocalDate } from "@/lib/business-date"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 interface UnavailableRange {
   start: Date
@@ -24,6 +27,7 @@ export function ManualReservationCalendar({
   carId,
   pickupDate,
   dropoffDate,
+  businessTimeZone,
   refreshToken,
   onRangeSelect,
   onConflictChange,
@@ -31,6 +35,7 @@ export function ManualReservationCalendar({
   carId: string
   pickupDate: string
   dropoffDate: string
+  businessTimeZone: string
   refreshToken: string
   onRangeSelect: (pickupDate: string, dropoffDate: string) => void
   onConflictChange: (hasConflict: boolean) => void
@@ -83,9 +88,16 @@ export function ManualReservationCalendar({
   }, [carId, locale, refreshToken])
 
   const selectedRange = useMemo(() => {
-    const from = new Date(pickupDate)
-    const to = new Date(dropoffDate)
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return undefined
+    const from = businessLocalDateTimeToInstant(pickupDate, businessTimeZone)
+    const to = businessLocalDateTimeToInstant(dropoffDate, businessTimeZone)
+    if (!from || !to) return undefined
+    return { from, to }
+  }, [businessTimeZone, dropoffDate, pickupDate])
+
+  const selectedCalendarRange = useMemo(() => {
+    const from = pickupDate ? new Date(`${pickupDate.slice(0, 10)}T00:00:00`) : null
+    const to = dropoffDate ? new Date(`${dropoffDate.slice(0, 10)}T00:00:00`) : null
+    if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return undefined
     return { from, to }
   }, [dropoffDate, pickupDate])
 
@@ -100,21 +112,11 @@ export function ManualReservationCalendar({
     onConflictChange(hasConflict)
   }, [hasConflict, onConflictChange])
 
-  const isUnavailableDay = (day: Date) => {
-    const dayStart = new Date(day)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayStart)
-    dayEnd.setDate(dayEnd.getDate() + 1)
-    return unavailableRanges.some((range) => range.start < dayEnd && range.end > dayStart)
-  }
+  const isUnavailableDay = (day: Date) =>
+    businessDayOverlapsRanges(day, businessTimeZone, unavailableRanges)
 
   const formatPeriod = (range: UnavailableRange) => {
-    const formatter = new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-GB", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Europe/Berlin",
-    })
-    return `${formatter.format(range.start)} – ${formatter.format(range.end)}`
+    return `${formatBookingDateTime(range.start, locale, businessTimeZone)} – ${formatBookingDateTime(range.end, locale, businessTimeZone)}`
   }
 
   if (!carId) return null
@@ -150,8 +152,8 @@ export function ManualReservationCalendar({
             <Calendar
               key={`${carId}-${refreshToken}`}
               mode="range"
-              defaultMonth={selectedRange?.from ?? new Date()}
-              selected={selectedRange}
+              defaultMonth={selectedCalendarRange?.from ?? new Date()}
+              selected={selectedCalendarRange}
               excludeDisabled
               onSelect={(range) => {
                 if (!range?.from) return
@@ -163,8 +165,7 @@ export function ManualReservationCalendar({
                 )
               }}
               disabled={(day) => {
-                const today = new Date()
-                today.setHours(0, 0, 0, 0)
+                const today = businessTodayLocalDate(businessTimeZone)
                 const candidate = new Date(day)
                 candidate.setHours(0, 0, 0, 0)
                 return candidate < today
