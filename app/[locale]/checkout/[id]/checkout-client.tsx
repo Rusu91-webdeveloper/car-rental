@@ -38,7 +38,8 @@ import {
   type HandoverEvent,
   type HandoverKind,
 } from "@/lib/business-hours"
-import { businessDayOverlapsRanges, businessTodayLocalDate, parseDateOnlyLocal } from "@/lib/business-date"
+import { businessDayOverlapsRanges, businessTodayLocalDate } from "@/lib/business-date"
+import { checkoutDateTimeLocal, checkoutTimeParam } from "@/lib/checkout-date-time"
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear()
@@ -54,13 +55,6 @@ const formatDatetimeLocal = (date: Date) => {
   const hours = String(date.getHours()).padStart(2, "0")
   const minutes = String(date.getMinutes()).padStart(2, "0")
   return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
-const convertDateStringToDatetimeLocal = (dateString: string, defaultHour: number = 10) => {
-  const date = parseDateOnlyLocal(dateString)
-  if (!date) return ""
-  date.setHours(defaultHour, 0, 0, 0)
-  return formatDatetimeLocal(date)
 }
 
 const alignToNextOpenTime = (
@@ -140,11 +134,14 @@ export function CheckoutClient({
   const getInitialDates = () => {
     const pickupDateParam = searchParams.get("pickupDate")
     const dropoffDateParam = searchParams.get("dropoffDate")
+    const pickupTimeParam = searchParams.get("pickupTime")
+    const dropoffTimeParam = searchParams.get("dropoffTime")
 
     if (pickupDateParam && dropoffDateParam) {
-      // Convert YYYY-MM-DD from URL to datetime-local format
-      const pickup = formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(pickupDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone))
-      const dropoff = formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(dropoffDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone))
+      // Date-only search links still default to 10:00. Once the customer chooses
+      // a time, it is kept in the URL so route synchronization cannot reset it.
+      const pickup = formatDatetimeLocal(alignToNextOpenTime(new Date(checkoutDateTimeLocal(pickupDateParam, pickupTimeParam)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone))
+      const dropoff = formatDatetimeLocal(alignToNextOpenTime(new Date(checkoutDateTimeLocal(dropoffDateParam, dropoffTimeParam)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone))
       return { pickup, dropoff }
     }
 
@@ -199,9 +196,11 @@ export function CheckoutClient({
   useEffect(() => {
     const pickupDateParam = searchParams.get("pickupDate")
     const dropoffDateParam = searchParams.get("dropoffDate")
+    const pickupTimeParam = searchParams.get("pickupTime")
+    const dropoffTimeParam = searchParams.get("dropoffTime")
     if (pickupDateParam && dropoffDateParam) {
-      setPickupDate(formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(pickupDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone)))
-      setDropoffDate(formatDatetimeLocal(alignToNextOpenTime(new Date(convertDateStringToDatetimeLocal(dropoffDateParam, 10)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone)))
+      setPickupDate(formatDatetimeLocal(alignToNextOpenTime(new Date(checkoutDateTimeLocal(pickupDateParam, pickupTimeParam)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "PICKUP", bookingConfiguration.businessTimeZone)))
+      setDropoffDate(formatDatetimeLocal(alignToNextOpenTime(new Date(checkoutDateTimeLocal(dropoffDateParam, dropoffTimeParam)), bookingConfiguration.weeklyOpeningHours, bookingConfiguration.openingHoursExceptions, bookingConfiguration.handoverPolicy, "RETURN", bookingConfiguration.businessTimeZone)))
     }
   }, [bookingConfiguration.businessTimeZone, bookingConfiguration.handoverPolicy, bookingConfiguration.openingHoursExceptions, bookingConfiguration.weeklyOpeningHours, searchParams])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -518,7 +517,9 @@ export function CheckoutClient({
     setError(null)
     updateQueryParams({
       pickupDate: value.split("T")[0] || formatDateKey(nextPickup),
+      pickupTime: checkoutTimeParam(nextPickup),
       dropoffDate: formatDateKey(nextDropoff),
+      dropoffTime: checkoutTimeParam(nextDropoff),
     })
     return true
   }
@@ -559,7 +560,12 @@ export function CheckoutClient({
 
       setDropoffDate(formatDatetimeLocal(nextDropoff))
       setError(null)
-      updateQueryParams({ dropoffDate: formatDateKey(nextDropoff) })
+      updateQueryParams({
+        pickupDate: formatDateKey(currentPickup),
+        pickupTime: checkoutTimeParam(currentPickup),
+        dropoffDate: formatDateKey(nextDropoff),
+        dropoffTime: checkoutTimeParam(nextDropoff),
+      })
       return true
     }
 
@@ -567,6 +573,7 @@ export function CheckoutClient({
     setError(null)
     updateQueryParams({
       dropoffDate: value.split("T")[0] || formatDateKey(parsedDropoff),
+      dropoffTime: checkoutTimeParam(parsedDropoff),
     })
     return true
   }
