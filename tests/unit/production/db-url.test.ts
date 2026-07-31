@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { getDatabaseUrl, getMigrationDatabaseUrl } from "@/lib/db-url"
 
@@ -38,5 +40,14 @@ describe("database URL resolution", () => {
   it("preserves non-Neon database URLs", () => {
     const value = "postgresql://user:secret@database.example.com/app?sslmode=require"
     expect(getMigrationDatabaseUrl({ DATABASE_URL: value })).toBe(value)
+  })
+
+  it("forces Prisma migration commands through the direct endpoint", () => {
+    const wrapper = readFileSync(resolve(process.cwd(), "scripts/with-db-url.ts"), "utf8")
+
+    expect(wrapper).toContain('for (const file of [".env.local", ".env"])')
+    expect(wrapper).toContain("loadEnvFile(file)")
+    expect(wrapper).toContain('args[0] === "prisma" && args[1] === "migrate"')
+    expect(wrapper).toContain("process.env.DATABASE_URL = getMigrationDatabaseUrl()")
   })
 })
