@@ -1,6 +1,7 @@
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { prisma } from "@/lib/db"
 import { PrismaDocumentConfigurationRepository } from "@/lib/document-configuration/prisma-repository"
+import { privateDocumentHealthCodes } from "@/lib/private-documents/infrastructure/environment"
 import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { DocumentPolicyEditor } from "./policy-editor"
 
@@ -13,7 +14,7 @@ export default async function DocumentsConfigurationPage() {
   const environment = await readRuntimePrivateDocumentEnvironment()
   const data = await new PrismaDocumentConfigurationRepository(prisma).load(
     capabilities.canEdit,
-    environment.issues.length ? environment.issues : ["DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED"],
+    privateDocumentHealthCodes(environment),
   )
   return <DocumentPolicyEditor data={data} />
 }

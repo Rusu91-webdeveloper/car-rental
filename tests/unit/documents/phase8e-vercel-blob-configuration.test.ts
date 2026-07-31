@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { evaluateProductionDocumentHealth } from "@/lib/private-documents/application/health";
 import { PrivateDocumentError } from "@/lib/private-documents/domain/errors";
-import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment";
+import {
+  privateDocumentHealthCodes,
+  readPrivateDocumentEnvironment,
+} from "@/lib/private-documents/infrastructure/environment";
 import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment";
 import type { VercelBlobClient } from "@/lib/private-documents/infrastructure/vercel-blob-client";
 import { DeterministicFakeMalwareScanner } from "@/lib/private-documents/scanning/fake-scanner";
@@ -40,6 +43,20 @@ function client(): VercelBlobClient {
 }
 
 describe("Phase 8E-B environment and pathname boundary", () => {
+  it("does not invent a warning for a healthy production environment", () => {
+    expect(privateDocumentHealthCodes(productionEnvironment())).toEqual([]);
+  });
+
+  it("keeps the disabled-workflow notice outside production", () => {
+    const environment = readPrivateDocumentEnvironment({
+      PRIVATE_DOCUMENT_ENVIRONMENT: "local",
+    });
+    expect(environment.issues).toEqual([]);
+    expect(privateDocumentHealthCodes(environment)).toEqual([
+      "DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED",
+    ]);
+  });
+
   it("accepts only the approved production provider, store, region, and OIDC mode", () => {
     const environment = productionEnvironment();
     expect(environment.issues).toEqual([]);

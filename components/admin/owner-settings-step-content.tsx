@@ -27,6 +27,7 @@ import { PrismaDocumentConfigurationRepository } from "@/lib/document-configurat
 import { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 import { loadPricingConfigurationPage } from "@/lib/pricing-admin/service"
+import { privateDocumentHealthCodes } from "@/lib/private-documents/infrastructure/environment"
 import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 
 interface OwnerSettingsStepContentProps {
@@ -151,9 +152,7 @@ export async function OwnerSettingsStepContent({
     const environment = await readRuntimePrivateDocumentEnvironment()
     const data = await new PrismaDocumentConfigurationRepository(prisma).load(
       caps.canEdit,
-      environment.issues.length
-        ? environment.issues
-        : ["DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED"],
+      privateDocumentHealthCodes(environment),
     )
     return <DocumentPolicyEditor data={data} nextHref={nextHref} />
   }

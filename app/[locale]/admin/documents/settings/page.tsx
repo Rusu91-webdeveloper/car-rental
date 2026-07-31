@@ -1,6 +1,7 @@
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
 import { prisma } from "@/lib/db"
 import { PrismaDocumentConfigurationRepository } from "@/lib/document-configuration/prisma-repository"
+import { privateDocumentHealthCodes } from "@/lib/private-documents/infrastructure/environment"
 import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 import { AdminPageHeader } from "@/components/admin/admin-page-header"
 import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link"
@@ -26,7 +27,7 @@ export default async function DocumentSettingsPage({ searchParams }: { searchPar
   const environment = await readRuntimePrivateDocumentEnvironment()
   const data = await new PrismaDocumentConfigurationRepository(prisma).load(
     caps.canEdit,
-    environment.issues.length ? environment.issues : ["DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED"],
+    privateDocumentHealthCodes(environment),
   )
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
