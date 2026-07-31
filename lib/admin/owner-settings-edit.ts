@@ -45,7 +45,7 @@ export async function ownerSettingsPageMode(
   }
 }
 
-const PREPARATION_RETRY_LIMIT = 3
+const PREPARATION_RETRY_LIMIT = 6
 
 function retryablePreparationError(error: unknown) {
   if (error instanceof ConfigurationWorkflowError) {
@@ -60,7 +60,8 @@ async function prepareWithConflictRetry<T>(operation: () => Promise<T>) {
       return await operation()
     } catch (error) {
       if (!retryablePreparationError(error) || attempt === PREPARATION_RETRY_LIMIT) throw error
-      await new Promise((resolve) => setTimeout(resolve, attempt * 40))
+      const backoffMilliseconds = Math.min(75 * 2 ** (attempt - 1), 600)
+      await new Promise((resolve) => setTimeout(resolve, backoffMilliseconds))
     }
   }
   throw new Error("Owner settings preparation retry limit was exhausted.")

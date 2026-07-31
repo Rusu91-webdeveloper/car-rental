@@ -24,6 +24,6 @@ export async function completeOwnerSetupStep(
   }
   const result = await completeOwnerSetupStepAction(stepId)
   if ("error" in result) return result.error
-  router.push(nextHref)
+  router.push(nextHref === "/admin/settings" ? `/admin/settings?saved=${stepId}` : nextHref)
   return undefined
 }

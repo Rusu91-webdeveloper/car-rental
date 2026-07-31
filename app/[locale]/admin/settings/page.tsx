@@ -14,6 +14,7 @@ import { prisma } from "@/lib/db";
 interface BusinessSettingsSearchParams {
   step?: string;
   edit?: string;
+  saved?: string;
 }
 
 export default async function BusinessSettingsPage({
@@ -53,7 +54,8 @@ export default async function BusinessSettingsPage({
   const allStepsRecorded = guide.steps.every(({ id }) => completedStepIds.has(id));
   const hasSetup = Boolean(overview.activeRelease || overview.draftRelease);
   const requestedStep = guide.steps.find((step) => step.id === requested.step);
-  const currentStep = requestedStep ?? guide.nextStep;
+  const savedStep = guide.steps.find((step) => step.id === requested.saved);
+  const currentStep = savedStep ? undefined : requestedStep ?? guide.nextStep;
   const currentIndex = currentStep
     ? guide.steps.findIndex((step) => step.id === currentStep.id)
     : -1;
@@ -88,6 +90,22 @@ export default async function BusinessSettingsPage({
         </div>
       </div>
       {shouldRecoverActivation ? <OwnerSetupActivationRecovery /> : null}
+      {savedStep ? (
+        <section
+          className="mx-auto flex max-w-4xl items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"
+          role="status"
+        >
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+          <div>
+            <p className="font-medium">
+              {de ? `${savedStep.title} wurden gespeichert und veröffentlicht.` : `${savedStep.title} saved and published.`}
+            </p>
+            <p className="mt-1 text-sm text-emerald-800">
+              {de ? "Ihre Änderungen sind jetzt aktiv. Sie können eine weitere Einstellung auswählen." : "Your changes are now active. You can choose another setting to edit."}
+            </p>
+          </div>
+        </section>
+      ) : null}
       {!hasSetup ? (
         <StartBusinessSetup />
       ) : currentStep ? (
