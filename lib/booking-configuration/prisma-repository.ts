@@ -43,6 +43,7 @@ export interface ActivePhase6Record {
   handoverPolicy: HandoverPolicy
   currency: string
   minimumRentalMinutes: number
+  minimumChargeDays: number
   gracePeriodMinutes: number
   preparationBufferMinutes: number
   insuranceVersionId: string
@@ -117,6 +118,7 @@ export class PrismaBookingConfigurationRepository {
       handoverPolicy: normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy),
       currency: release.generalRentalConfig.currency,
       minimumRentalMinutes: release.pricingBillingConfig.minimumRentalMinutes,
+      minimumChargeDays: release.pricingBillingConfig.minimumChargeDays,
       gracePeriodMinutes: release.pricingBillingConfig.gracePeriodMinutes,
       preparationBufferMinutes: release.pricingBillingConfig.preparationBufferMinutes,
       insuranceVersionId: release.insuranceConfigVersionId,

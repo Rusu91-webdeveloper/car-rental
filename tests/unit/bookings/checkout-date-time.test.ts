@@ -37,4 +37,21 @@ describe("checkout date and time query state", () => {
     expect(checkout).toContain("pickupDate: pickup.toISOString()")
     expect(checkout).toContain("dropoffDate: dropoff.toISOString()")
   })
+
+  it("shows the billing floor without presenting it as a mandatory 48-hour rental", () => {
+    const checkout = readFileSync(
+      resolve(process.cwd(), "app/[locale]/checkout/[id]/checkout-client.tsx"),
+      "utf8",
+    )
+    const ownerRules = readFileSync(
+      resolve(process.cwd(), "components/business-configuration/billing-rule-form.tsx"),
+      "utf8",
+    )
+
+    expect(checkout).toContain("bookingConfiguration.minimumChargeDays")
+    expect(checkout).toContain("Earlier returns are allowed")
+    expect(ownerRules).toContain("Minimum charged days")
+    expect(ownerRules).toContain("minimumRentalMinutes: 1")
+    expect(ownerRules).not.toContain("minimumRentalMinutes: safeDays * 1_440")
+  })
 })

@@ -20,7 +20,6 @@ import type { BusinessHoursException, HandoverPolicy, WeeklyOpeningHours } from 
 import { LegalContent } from "@/components/legal/legal-content"
 import {
   isRentalDurationTooShort,
-  minimumRentalDays,
   minimumRentalPeriodMessage,
   minimumReturnAt,
 } from "@/lib/booking-configuration/minimum-rental"
@@ -276,7 +275,7 @@ export function CheckoutClient({
   >(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(true)
-  const configuredMinimumDays = minimumRentalDays(bookingConfiguration.minimumRentalMinutes)
+  const configuredMinimumDays = bookingConfiguration.minimumChargeDays
   const minimumDurationMessage = minimumRentalPeriodMessage(locale, bookingConfiguration.minimumRentalMinutes)
   const operationalBufferMinutes = totalOperationalBufferMinutes(bookingConfiguration.preparationBufferMinutes)
 
@@ -932,7 +931,7 @@ export function CheckoutClient({
             </p>
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground" role="status">
               <span className="font-medium">
-                {locale === "de" ? "Mindestmietdauer" : "Minimum rental period"}: {configuredMinimumDays}{" "}
+                {locale === "de" ? "Mindestberechnung" : "Minimum charge"}: {configuredMinimumDays}{" "}
                 {locale === "de"
                   ? configuredMinimumDays === 1
                     ? "Tag"
@@ -943,8 +942,8 @@ export function CheckoutClient({
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {locale === "de"
-                  ? "Frühere Rückgabetermine können nicht ausgewählt werden."
-                  : "Earlier drop-off times cannot be selected."}
+                  ? "Eine frühere Rückgabe ist möglich; berechnet werden trotzdem mindestens die oben genannten Tage."
+                  : "Earlier returns are allowed; the minimum number of days shown above is still charged."}
               </span>
             </div>
             {availabilityError && <p className="text-xs text-red-600">{availabilityError}</p>}

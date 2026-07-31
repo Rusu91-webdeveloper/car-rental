@@ -202,12 +202,14 @@ export function BillingRuleForm({ data, canManage, nextHref }: { data: PricingAd
     )
   const set = <K extends keyof PricingBillingConfiguration>(field: K, value: PricingBillingConfiguration[K]) => setConfiguration((current) => (current ? { ...current, [field]: value } : current))
   const openingHoursDisabled = !canManage || !data.draftRelease || pending
-  const minimumBookingDays = Math.max(1, Math.ceil(configuration.minimumRentalMinutes / 1_440))
-  const setMinimumBookingDays = (days: number) => {
+  const minimumChargedDays = Math.max(1, configuration.minimumChargeDays)
+  const setMinimumChargedDays = (days: number) => {
     const safeDays = Math.min(365, Math.max(1, Math.round(days) || 1))
     setConfiguration((current) => current ? {
       ...current,
-      minimumRentalMinutes: safeDays * 1_440,
+      // A minimum charge is a pricing floor, not a requirement to keep the
+      // vehicle for an exact number of 24-hour periods.
+      minimumRentalMinutes: 1,
       minimumChargeDays: safeDays,
     } : current)
   }
@@ -315,9 +317,9 @@ export function BillingRuleForm({ data, canManage, nextHref }: { data: PricingAd
         <h2 className="font-semibold">{de ? "Grundlegende Buchungsregeln" : "Essential booking rules"}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{de ? "Diese Regeln gelten automatisch für jedes Fahrzeug." : "These rules apply automatically to every car."}</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Field de={de} label={de ? "Mindestbuchungsdauer" : "Minimum booking length"} explanation={de ? "Kunden können mit einer kürzeren Buchung nicht fortfahren." : "Customers cannot continue with a shorter booking."} example={de ? "2 bedeutet mindestens zwei volle Tage." : "2 means at least two full days."} live={display(data.livePricing ? Math.ceil(data.livePricing.configuration.minimumRentalMinutes / 1_440) : undefined, de)}>
+          <Field de={de} label={de ? "Mindestens berechnete Tage" : "Minimum charged days"} explanation={de ? "Kunden dürfen das Fahrzeug früher zurückgeben, zahlen aber mindestens diese Anzahl an Tagen." : "Customers may return earlier, but are charged for at least this many days."} example={de ? "2 berechnet mindestens zwei Tage, auch bei einer früheren Rückgabe." : "2 charges at least two days even when the car is returned earlier."} live={display(data.livePricing?.configuration.minimumChargeDays, de)}>
             <div className="relative">
-              <Input type="number" min={1} max={365} value={minimumBookingDays} onChange={(event) => setMinimumBookingDays(Number(event.target.value))} disabled={!canManage || pending} />
+              <Input type="number" min={1} max={365} value={minimumChargedDays} onChange={(event) => setMinimumChargedDays(Number(event.target.value))} disabled={!canManage || pending} />
               <span className="pointer-events-none absolute right-3 top-2 text-sm text-muted-foreground">{de ? "Tage" : "days"}</span>
             </div>
           </Field>

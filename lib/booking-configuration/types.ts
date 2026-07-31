@@ -111,6 +111,7 @@ export interface PublicBookingConfiguration {
   openingHoursExceptions: BusinessHoursException[]
   handoverPolicy: HandoverPolicy
   minimumRentalMinutes: number
+  minimumChargeDays: number
   gracePeriodMinutes: number
   preparationBufferMinutes: number
   fields: EffectiveBookingField[]
