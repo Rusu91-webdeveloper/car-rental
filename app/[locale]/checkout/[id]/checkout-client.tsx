@@ -39,6 +39,8 @@ import {
 } from "@/lib/business-hours"
 import { businessDayOverlapsRanges, businessTodayLocalDate } from "@/lib/business-date"
 import { checkoutDateTimeLocal, checkoutTimeParam } from "@/lib/checkout-date-time"
+import { BANK_TRANSFER_MINIMUM_LEAD_HOURS } from "@/lib/constants"
+import { hasBankTransferLeadTime, requiresAdvanceBankTransfer } from "@/lib/booking-payment-timing"
 
 const formatDateKey = (date: Date) => {
   const year = date.getFullYear()
@@ -97,6 +99,7 @@ export function CheckoutClient({
   signInUrl,
   bookingConfiguration,
   pickupLocation,
+  checkoutOpenedAt,
   initialCustomer,
 }: {
   locale: string
@@ -118,6 +121,7 @@ export function CheckoutClient({
   }
   bookingConfiguration: PublicBookingConfiguration
   pickupLocation: string | null
+  checkoutOpenedAt: string
   initialCustomer: BookingCustomerDriverInput
 }) {
   const copy = useCallback((english: string, german: string) => (locale === "de" ? german : english), [locale])
@@ -249,8 +253,29 @@ export function CheckoutClient({
   const [error, setError] = useState<string | null>(null)
   const [pickupCalendarOpen, setPickupCalendarOpen] = useState(false)
   const [dropoffCalendarOpen, setDropoffCalendarOpen] = useState(false)
+  const configuredPaymentMethods = bookingConfiguration.payment?.methods ?? [
+    { method: "TRANSFER" as const, configuredMode: "BANK_TRANSFER" as const, label: copy("Bank transfer", "Banküberweisung"), description: copy("Full payment by bank transfer before confirmation.", "Gesamtbetrag per Banküberweisung vor der Bestätigung.") },
+    { method: "PAY_AT_PICKUP" as const, configuredMode: "CASH_ON_PICKUP" as const, label: copy("Pay at pickup", "Zahlung bei Abholung"), description: copy("Full payment when collecting the vehicle.", "Gesamtbetrag bei der Fahrzeugabholung.") },
+  ]
+  const methodRequiresAdvanceTransfer = (method: "TRANSFER" | "PAY_AT_PICKUP") =>
+    requiresAdvanceBankTransfer({
+      paymentMethod: method,
+      depositType: bookingConfiguration.payment?.depositEnabled ? "PERCENTAGE_BPS" : "NONE",
+    })
+  const checkoutOpened = new Date(checkoutOpenedAt)
+  const initialPickupInstant = parseBookingInstant(initialDates.pickup)
+  const configuredDefaultMethod = bookingConfiguration.payment?.defaultMethod ?? "TRANSFER"
+  const methodIsInitiallyEligible = ({ method }: (typeof configuredPaymentMethods)[number]) =>
+    !methodRequiresAdvanceTransfer(method) ||
+    Boolean(initialPickupInstant && hasBankTransferLeadTime(initialPickupInstant, checkoutOpened))
+  const defaultMethodIsInitiallyEligible = configuredPaymentMethods.some(
+    (method) => method.method === configuredDefaultMethod && methodIsInitiallyEligible(method),
+  )
+  const initiallyEligibleMethod = configuredPaymentMethods.find(
+    methodIsInitiallyEligible,
+  )?.method
   const [paymentMethod, setPaymentMethod] = useState<"TRANSFER" | "PAY_AT_PICKUP">(
-    bookingConfiguration.payment?.defaultMethod ?? "TRANSFER",
+    defaultMethodIsInitiallyEligible ? configuredDefaultMethod : initiallyEligibleMethod ?? configuredDefaultMethod,
   )
   const [customer, setCustomer] = useState<BookingCustomerDriverInput>(initialCustomer)
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true"
@@ -308,6 +333,10 @@ export function CheckoutClient({
       "Car is not available for the selected dates": copy("Those dates are unavailable. Please choose different dates.", "Diese Daten sind nicht verfügbar. Bitte wählen Sie andere Daten."),
       "Car is no longer available":
         copy("That car is no longer available for the selected period. Please choose different dates.", "Dieses Fahrzeug ist im gewählten Zeitraum nicht mehr verfügbar. Bitte wählen Sie andere Daten."),
+      "An advance bank transfer requires at least 48 hours before pick-up. Choose an available payment method or select a later pick-up time.":
+        copy("An advance bank transfer requires at least 48 hours before pick-up. Choose an available payment method or select a later pick-up time.", "Für eine Vorauszahlung per Banküberweisung müssen bis zur Abholung mindestens 48 Stunden verbleiben. Wählen Sie eine verfügbare Zahlungsart oder eine spätere Abholzeit."),
+      "There is no longer enough time to verify an advance bank transfer before pick-up. Start a new booking with an available payment method or a later pick-up time.":
+        copy("There is no longer enough time to verify an advance bank transfer before pick-up. Start a new booking with an available payment method or a later pick-up time.", "Es bleibt nicht mehr genügend Zeit, um eine Vorauszahlung per Banküberweisung vor der Abholung zu prüfen. Starten Sie eine neue Buchung mit einer verfügbaren Zahlungsart oder einer späteren Abholzeit."),
     }
 
     return messageMap[normalizedError] || normalizedError
@@ -502,6 +531,13 @@ export function CheckoutClient({
     if (nextPickupInstant <= new Date()) {
       setError(copy("Please select a pickup date and time in the future.", "Bitte wählen Sie ein Abholdatum und eine Uhrzeit in der Zukunft."))
       return false
+    }
+
+    if (methodRequiresAdvanceTransfer(paymentMethod) && !hasBankTransferLeadTime(nextPickupInstant)) {
+      const alternative = configuredPaymentMethods.find(
+        ({ method }) => !methodRequiresAdvanceTransfer(method),
+      )
+      if (alternative) setPaymentMethod(alternative.method)
     }
 
     const currentDropoff = new Date(dropoffDate)
@@ -709,6 +745,14 @@ export function CheckoutClient({
 
     if (dropoff <= pickup) {
       setError(copy("Drop-off must be after pickup.", "Die Rückgabe muss nach der Abholung liegen."))
+      return
+    }
+
+    if (methodRequiresAdvanceTransfer(paymentMethod) && !hasBankTransferLeadTime(pickup)) {
+      setError(copy(
+        `An advance bank transfer requires at least ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} hours before pick-up. Choose an available payment method or select a later pick-up time.`,
+        `Für eine Vorauszahlung per Banküberweisung müssen bis zur Abholung mindestens ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} Stunden verbleiben. Wählen Sie eine verfügbare Zahlungsart oder eine spätere Abholzeit.`,
+      ))
       return
     }
 
@@ -1180,29 +1224,46 @@ export function CheckoutClient({
           {/* Payment Method */}
           <div className="bg-background rounded-xl p-4 border border-border space-y-3">
             <h3 className="font-semibold text-lg">{locale === "de" ? "Zahlungsmethode" : "Payment method"}</h3>
-            {(bookingConfiguration.payment?.methods ?? [
-              { method: "TRANSFER" as const, configuredMode: "BANK_TRANSFER" as const, label: copy("Bank transfer", "Banküberweisung"), description: copy("Full payment by bank transfer before confirmation.", "Gesamtbetrag per Banküberweisung vor der Bestätigung.") },
-              { method: "PAY_AT_PICKUP" as const, configuredMode: "CASH_ON_PICKUP" as const, label: copy("Pay at pickup", "Zahlung bei Abholung"), description: copy("Full payment when collecting the vehicle.", "Gesamtbetrag bei der Fahrzeugabholung.") },
-            ]).map((method) => (
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              {copy(
+                `Advance bank payments are available only when pick-up is at least ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} hours away. After approval, you will have up to 24 hours to pay; the exact deadline will be shown in your email and My Trips.`,
+                `Vorauszahlungen per Banküberweisung sind nur möglich, wenn die Abholung mindestens ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} Stunden entfernt ist. Nach der Freigabe haben Sie bis zu 24 Stunden Zeit; die genaue Frist steht in Ihrer E-Mail und unter „Meine Fahrten“.`,
+              )}
+            </p>
+            {configuredPaymentMethods.map((method) => {
+              const pickupInstant = parseBookingInstant(pickupDate)
+              const unavailable = methodRequiresAdvanceTransfer(method.method) &&
+                (!pickupInstant || !hasBankTransferLeadTime(pickupInstant, checkoutOpened))
+              return (
               <button
                 key={method.method}
                 type="button"
+                disabled={unavailable}
                 onClick={() => setPaymentMethod(method.method)}
                 className={`w-full text-left rounded-lg border p-3 transition ${
                   paymentMethod === method.method
                     ? "border-primary bg-primary/5 ring-1 ring-primary/20"
                     : "border-border hover:bg-muted/50"
-                }`}
+                } ${unavailable ? "cursor-not-allowed opacity-60" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{method.label}</p>
                     <p className="text-sm text-muted-foreground">{method.description}</p>
+                    {unavailable ? (
+                      <p className="mt-2 text-sm font-medium text-amber-700">
+                        {copy(
+                          `Unavailable: less than ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} hours remain before pick-up.`,
+                          `Nicht verfügbar: Bis zur Abholung verbleiben weniger als ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} Stunden.`,
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <div className={`mt-1 h-4 w-4 rounded-full border ${paymentMethod === method.method ? "border-primary bg-primary" : "border-muted-foreground"}`} />
                 </div>
               </button>
-            ))}
+              )
+            })}
           </div>
 
           {/* Price Summary */}

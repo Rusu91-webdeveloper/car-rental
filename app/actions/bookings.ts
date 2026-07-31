@@ -33,6 +33,7 @@ import {
 } from "@/lib/business-hours"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 import { formatBookingDateTime } from "@/lib/booking-time-zone"
+import { hasBankTransferLeadTime, requiresAdvanceBankTransfer } from "@/lib/booking-payment-timing"
 
 const normalizeBookingLocale = (locale: string | null | undefined) => (locale === "de" ? "de" : "en")
 
@@ -136,10 +137,21 @@ export async function getBookingQuote(data: unknown) {
       return { error: "This vehicle is not currently available for booking.", code: "VEHICLE_UNAVAILABLE" }
     if (!release?.paymentConfig.methods.some((method) => method.enabled))
       return { error: "This payment method is not available.", code: "PAYMENT_METHOD_UNAVAILABLE" }
+    const pickupAt = new Date(validated.pickupDate)
+    if (
+      requiresAdvanceBankTransfer({
+        paymentMethod: validated.paymentMethod,
+        depositType: release.paymentConfig.depositType,
+      }) &&
+      !hasBankTransferLeadTime(pickupAt)
+    )
+      return {
+        error: "An advance bank transfer requires at least 48 hours before pick-up. Choose an available payment method or select a later pick-up time.",
+        code: "BANK_TRANSFER_CUTOFF",
+      }
     const weeklyOpeningHours = normalizeWeeklyOpeningHours(release.generalRentalConfig.weeklyOpeningHours)
     const openingHoursExceptions = normalizeOpeningHoursExceptions(release.generalRentalConfig.openingHoursExceptions)
     const handoverPolicy = normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy)
-    const pickupAt = new Date(validated.pickupDate)
     const returnAt = new Date(validated.dropoffDate)
     if (!isHandoverTimeAllowed(pickupAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "PICKUP"))
       return { error: "Pick-up must be during the rental company's opening hours.", code: "OUTSIDE_OPENING_HOURS" }

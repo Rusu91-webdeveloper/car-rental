@@ -1041,6 +1041,7 @@ export async function sendManualPaymentEmail(data: {
     const supportEmail = resolveSupportEmail(companySettings)
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"
+    const paymentDeadline = data.paymentDueAt?.trim()
     const advancePaymentAmount = data.advancePaymentAmount ?? data.depositAmount
     const isDeposit = data.depositAmount > 0 && data.depositAmount < data.totalPrice
     const depositPercent = data.totalPrice > 0 ? Math.round((data.depositAmount / data.totalPrice) * 100) : 0
@@ -1102,7 +1103,13 @@ export async function sendManualPaymentEmail(data: {
             <div class="container">
               <div class="header">
                 <h1>${isGerman ? "Reservierung ausstehend" : "Reservation pending"}</h1>
-                <p>${isGerman ? "Das Fahrzeug ist 24 Stunden für Sie reserviert" : "The vehicle is reserved for you for 24 hours"}</p>
+                <p>${paymentDeadline
+                  ? isGerman
+                    ? `Das Fahrzeug ist bis ${escapeHtml(paymentDeadline)} für Sie reserviert`
+                    : `The vehicle is reserved for you until ${escapeHtml(paymentDeadline)}`
+                  : isGerman
+                    ? `Das Fahrzeug ist bis zu ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden für Sie reserviert`
+                    : `The vehicle is reserved for you for up to ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</p>
               </div>
               <div class="content">
                 <!-- Booking Number -->
@@ -1146,7 +1153,13 @@ export async function sendManualPaymentEmail(data: {
                   <h4>⚠️ ${isGerman ? "Zahlung erforderlich" : "Payment Required"}</h4>
                   <p style="margin-bottom: 8px;">${isGerman ? "Bitte zahlen Sie per Banküberweisung:" : "Please complete payment via bank transfer:"}</p>
                   <p class="payment-warning">
-                    <strong>${isGerman ? `Bitte innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden bezahlen, sonst wird die Buchung storniert.` : `Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.`}</strong>
+                    <strong>${paymentDeadline
+                      ? isGerman
+                        ? `Bitte bis ${escapeHtml(paymentDeadline)} bezahlen, sonst wird die Buchung storniert.`
+                        : `Pay by ${escapeHtml(paymentDeadline)} or the booking will be cancelled.`
+                      : isGerman
+                        ? `Bitte innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden bezahlen, sonst wird die Buchung storniert.`
+                        : `Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.`}</strong>
                   </p>
                   
                   <div class="payment-amounts">
@@ -1220,7 +1233,13 @@ export async function sendManualPaymentEmail(data: {
                 <div class="next-steps">
                   <h4>📋 ${isGerman ? "Nächste Schritte" : "Next Steps"}</h4>
                   <ol>
-                    <li>${isGerman ? `Die Banküberweisung innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden abschließen` : `Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</li>
+                    <li>${paymentDeadline
+                      ? isGerman
+                        ? `Die Banküberweisung bis ${escapeHtml(paymentDeadline)} abschließen`
+                        : `Complete the bank transfer by ${escapeHtml(paymentDeadline)}`
+                      : isGerman
+                        ? `Die Banküberweisung innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden abschließen`
+                        : `Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</li>
                     <li>${isGerman ? "Sie erhalten diese Zahlungsanweisungen per E-Mail" : "Keep this email with your payment instructions"}</li>
                     <li>${isGerman ? "Sobald die Zahlung geprüft wurde, wird Ihre Buchung bestätigt" : "Once payment is verified, your booking will be confirmed"}</li>
                     <li>${isGerman ? "Danach erhalten Sie eine finale Bestätigung mit Abholdetails" : "You'll receive a final confirmation email with pickup details"}</li>

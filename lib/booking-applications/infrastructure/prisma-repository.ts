@@ -8,8 +8,12 @@ import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-el
 import { PrismaBookingConfigurationRepository } from "@/lib/booking-configuration/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
-import { BOOKING_PAYMENT_WINDOW_MS } from "@/lib/constants"
 import { enqueueInitialBookingNotifications } from "@/lib/booking-notifications"
+import {
+  hasBankTransferLeadTime,
+  requiresAdvanceBankTransfer,
+  resolveAdvancePaymentDueAt,
+} from "@/lib/booking-payment-timing"
 import {
   hasMinimumPickupLeadTime,
   isHandoverTimeAllowed,
@@ -440,6 +444,17 @@ export class PrismaBookingApplicationRepository
         const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
         if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))
           applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
+        if (
+          requiresAdvanceBankTransfer({
+            paymentMethod: input.paymentMethod,
+            depositType: release.paymentConfig.depositType,
+          }) &&
+          !hasBankTransferLeadTime(input.pickupAt)
+        )
+          applicationError(
+            "APPLICATION_PAYMENT_INVALID",
+            "An advance bank transfer requires at least 48 hours before pick-up. Choose an available payment method or select a later pick-up time.",
+          )
         const expiresAt = bookingApplicationExpiresAt({
           now: new Date(),
           pickupAt: input.pickupAt,
@@ -1221,6 +1236,14 @@ export class PrismaBookingApplicationRepository
             depositValue: payment.depositValue,
           })
           const { depositAmount, advancePaymentAmount, requiresAdvance, remainingBalanceRule } = policy
+          const paymentDueAt = requiresAdvance
+            ? resolveAdvancePaymentDueAt({ pickupAt: row.pickupAt })
+            : null
+          if (requiresAdvance && !paymentDueAt)
+            applicationError(
+              "APPLICATION_PAYMENT_INVALID",
+              "There is no longer enough time to verify an advance bank transfer before pick-up. Start a new booking with an available payment method or a later pick-up time.",
+            )
           const company = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
           if (requiresAdvance && (!company?.accountName.trim() || !company.iban?.trim()))
             applicationError(
@@ -1260,7 +1283,7 @@ export class PrismaBookingApplicationRepository
               paymentStatus: "PENDING",
               paymentMethod: row.paymentMethod,
               confirmedAt: requiresAdvance ? null : new Date(),
-              paymentDueAt: requiresAdvance ? new Date(Date.now() + BOOKING_PAYMENT_WINDOW_MS) : null,
+              paymentDueAt,
             },
           })
           await tx.bookingPaymentPolicySnapshot.create({

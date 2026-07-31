@@ -54,6 +54,7 @@ export default async function BookingApplicationPage({
       locale={locale}
       initialApplication={state.application}
       initialReadiness={state.readiness}
+      pageRenderedAt={new Date().toISOString()}
     />
   )
 }

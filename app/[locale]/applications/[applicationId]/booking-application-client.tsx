@@ -27,6 +27,8 @@ import {
 import { formatCents } from "@/lib/money"
 import { CheckCircle2, CircleX, LoaderCircle } from "lucide-react"
 import { formatBookingDateTime } from "@/lib/booking-time-zone"
+import { BANK_TRANSFER_MINIMUM_LEAD_HOURS } from "@/lib/constants"
+import { hasBankTransferLeadTime } from "@/lib/booking-payment-timing"
 
 const TERMINAL = new Set(["FINALIZED", "EXPIRED", "CANCELLED", "REJECTED"])
 
@@ -101,10 +103,12 @@ export function BookingApplicationClient({
   locale,
   initialApplication,
   initialReadiness,
+  pageRenderedAt,
 }: {
   locale: string
   initialApplication: BookingApplicationView
   initialReadiness: ApplicationReadiness
+  pageRenderedAt: string
 }) {
   const copy = (english: string, german: string) => locale === "de" ? german : english
   const router = useRouter()
@@ -116,6 +120,11 @@ export function BookingApplicationClient({
   const [terms, setTerms] = useState(false)
   const [privacy, setPrivacy] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const applicationRequiresAdvanceTransfer =
+    application.paymentMethod === "TRANSFER" || (application.quote?.depositAmount ?? 0) > 0
+  const advanceTransferCutoffPassed =
+    applicationRequiresAdvanceTransfer &&
+    !hasBankTransferLeadTime(new Date(application.pickupAt), new Date(pageRenderedAt))
 
   const reload = () => {
     router.refresh()
@@ -238,7 +247,12 @@ export function BookingApplicationClient({
         bookingId?: string
         submittedForReview?: boolean
       }
-      if (result.error) setMessage(result.error)
+      if (result.error) {
+        const localizedError = locale === "de" && result.error.includes("enough time to verify an advance bank transfer")
+          ? "Es bleibt nicht mehr genügend Zeit, um eine Vorauszahlung per Banküberweisung vor der Abholung zu prüfen. Starten Sie eine neue Buchung mit einer verfügbaren Zahlungsart oder einer späteren Abholzeit."
+          : result.error
+        setMessage(localizedError)
+      }
       else if (result.bookingId) router.push(`/bookings?booking_id=${result.bookingId}`)
       else if (result.submittedForReview && result.applicationId)
         router.push(`/bookings?application_id=${result.applicationId}`)
@@ -390,11 +404,11 @@ export function BookingApplicationClient({
           </h2>
           <p className="mt-1 text-sm">
             {locale === "de"
-              ? application.paymentMethod === "TRANSFER"
-                ? "Ihre Buchungsanfrage ist gespeichert. Nach der Dokumentenfreigabe wird das Fahrzeug 24 Stunden reserviert und Sie erhalten die Überweisungsdaten."
+              ? applicationRequiresAdvanceTransfer
+                ? `Ihre Buchungsanfrage ist gespeichert. Schließen Sie die Dokumentenprüfung zügig ab: Die Überweisung kann nur bestätigt werden, solange die Abholung noch mindestens ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} Stunden entfernt ist. Danach erhalten Sie eine genaue Zahlungsfrist von bis zu 24 Stunden.`
                 : "Ihre Buchungsanfrage ist gespeichert. Nach der Dokumentenfreigabe wird die Buchung mit Zahlung bei Abholung bestätigt."
-              : application.paymentMethod === "TRANSFER"
-                ? "Your request is saved. After document approval, the vehicle will be reserved for 24 hours and you will receive the bank-transfer details."
+              : applicationRequiresAdvanceTransfer
+                ? `Your request is saved. Complete document review promptly: bank transfer can be finalized only while pick-up is at least ${BANK_TRANSFER_MINIMUM_LEAD_HOURS} hours away. You will then receive an exact payment deadline of up to 24 hours.`
                 : "Your request is saved. After document approval, the pay-at-pickup booking will be confirmed."}
           </p>
           <Button className="mt-3" variant="outline" onClick={() => router.push("/bookings")}>
@@ -404,17 +418,25 @@ export function BookingApplicationClient({
       ) : null}
 
       {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+        <section className={`rounded-xl border p-4 ${advanceTransferCutoffPassed ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-200 bg-emerald-50 text-emerald-950"}`}>
           <h2 className="font-semibold">{locale === "de" ? "Dokumente freigegeben" : "Documents approved"}</h2>
           <p className="mt-1 text-sm">
-            {locale === "de"
-              ? application.paymentMethod === "TRANSFER"
-                ? "Ihre Dokumente sind freigegeben. Die Reservierung wird erstellt und wartet anschließend auf Ihre Anzahlung."
+            {advanceTransferCutoffPassed
+              ? copy(
+                  "The advance-transfer cutoff has passed. Start a new booking with an available payment method or choose a later pick-up time.",
+                  "Die Frist für Vorauszahlungen per Überweisung ist unterschritten. Starten Sie eine neue Buchung mit einer verfügbaren Zahlungsart oder wählen Sie eine spätere Abholzeit.",
+                )
+              : locale === "de"
+              ? applicationRequiresAdvanceTransfer
+                ? "Ihre Dokumente sind freigegeben. Nach dem Abschluss erhalten Sie die genaue Zahlungsfrist per E-Mail und unter „Meine Fahrten“."
                 : "Ihre Dokumente sind freigegeben. Die Buchung mit Zahlung bei Abholung wird automatisch bestätigt."
-              : application.paymentMethod === "TRANSFER"
-                ? "Your documents are approved. The reservation will be created and will then await your deposit."
+              : applicationRequiresAdvanceTransfer
+                ? "Your documents are approved. After finalization, the exact payment deadline will be sent by email and shown in My Trips."
                 : "Your documents are approved. The pay-at-pickup booking will be confirmed automatically."}
           </p>
+          {advanceTransferCutoffPassed ? (
+            <Button className="mt-3" variant="outline" onClick={() => router.push("/cars")}>{copy("Start a new booking", "Neue Buchung starten")}</Button>
+          ) : null}
         </section>
       ) : null}
 
@@ -436,7 +458,7 @@ export function BookingApplicationClient({
           <Button disabled={isPending} onClick={() => mutate(() => submitBookingApplicationForReview({ applicationId: application.id, expectedRevision: application.revision }))}>{copy("Submit uploaded files for review", "Hochgeladene Dateien zur Prüfung einreichen")}</Button>
         ) : null}
         {application.status === "READY_TO_FINALIZE" && readiness.ready ? (
-          <Button disabled={isPending} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>{locale === "de" ? "Bestätigung jetzt abschließen" : "Complete confirmation now"}</Button>
+          <Button disabled={isPending || advanceTransferCutoffPassed} onClick={() => mutate(() => finalizeSavedBookingApplication({ applicationId: application.id, expectedRevision: application.revision }))}>{locale === "de" ? "Bestätigung jetzt abschließen" : "Complete confirmation now"}</Button>
         ) : null}
         <AlertDialog>
           <AlertDialogTrigger asChild>

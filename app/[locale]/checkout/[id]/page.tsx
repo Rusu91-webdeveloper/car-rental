@@ -97,6 +97,7 @@ export default async function CheckoutPage({
       paymentDetails={paymentDetails}
       bookingConfiguration={bookingConfiguration}
       pickupLocation={pickupLocation}
+      checkoutOpenedAt={new Date().toISOString()}
       initialCustomer={{
         firstName: user!.name?.trim().split(/\s+/)[0] ?? "",
         lastName: user!.name?.trim().split(/\s+/).slice(1).join(" ") ?? "",

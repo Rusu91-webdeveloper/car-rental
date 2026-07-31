@@ -156,7 +156,9 @@ async function deliver(event: BookingNotificationEvent, bookingId: string, idemp
         depositAmount: booking.depositAmount,
         advancePaymentAmount: booking.advancePaymentAmount || (booking.paymentMethod === "TRANSFER" ? totalPrice : booking.depositAmount),
         selectedPaymentMethod: booking.paymentMethod,
-        paymentDueAt: booking.paymentDueAt?.toISOString(),
+        paymentDueAt: booking.paymentDueAt
+          ? formatBookingDateTime(booking.paymentDueAt, locale, booking.businessTimeZone)
+          : undefined,
         bankDetails: booking.paymentPolicySnapshot
           ? {
               bankName: booking.paymentPolicySnapshot.bankName,
