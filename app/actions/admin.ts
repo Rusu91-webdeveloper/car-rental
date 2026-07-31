@@ -472,7 +472,7 @@ export async function createManualReservation(data: unknown) {
           throw new Error("Car is not available for the selected date range")
         }
 
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(2026072821)`
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(2026072821)`
         const capacity = await evaluateRentalHandoverCapacity({ db: tx, pickupAt: pickupDate, returnAt: dropoffDate, policy: handoverPolicy })
         if (!capacity.pickupAvailable) throw new Error("The selected pick-up slot has reached its handover capacity")
         if (!capacity.returnAvailable) throw new Error("The selected return slot has reached its handover capacity")

@@ -411,7 +411,9 @@ export class PrismaBookingApplicationRepository
           )
         // Capacity is shared across the fleet, so serialize the final check for
         // concurrent applications involving different cars.
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(2026072821)`
+        // `$queryRaw` attempts to deserialize PostgreSQL's `void` return value
+        // and fails with Prisma P2010. We only need the lock side effect.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(2026072821)`
         const capacity = await evaluateRentalHandoverCapacity({
           db: tx,
           pickupAt: input.pickupAt,

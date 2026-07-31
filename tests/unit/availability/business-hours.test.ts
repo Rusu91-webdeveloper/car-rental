@@ -98,6 +98,33 @@ describe("weekly business opening hours", () => {
     expect(handoverSlotHasCapacity(new Date("2026-07-27T10:00:00.000Z"), "RETURN", events, policy)).toBe(false)
   })
 
+  it("rejects past pickup slots but permits every configured return slot", () => {
+    const now = new Date("2026-07-31T09:30:00.000Z")
+    const noAdditionalNotice = { ...DEFAULT_HANDOVER_POLICY, minimumLeadTimeMinutes: 0 }
+
+    expect(hasMinimumPickupLeadTime(new Date("2026-07-31T09:00:00.000Z"), noAdditionalNotice, now)).toBe(false)
+    expect(hasMinimumPickupLeadTime(new Date("2026-07-31T09:30:00.000Z"), noAdditionalNotice, now)).toBe(true)
+    expect(hasMinimumPickupLeadTime(new Date("2026-07-31T10:00:00.000Z"), noAdditionalNotice, now)).toBe(true)
+
+    expect(handoverTimeOptions({
+      isOpen: true,
+      pickupWindows: [{ opensAt: "10:00", closesAt: "16:00" }],
+      returnWindows: [{ opensAt: "08:00", closesAt: "18:00" }],
+    }, "RETURN", 60)).toEqual([
+      "08:00",
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+    ])
+  })
+
   it("normalizes legacy data to the backwards-compatible all-day schedule", () => {
     expect(normalizeWeeklyOpeningHours(undefined)).toEqual(DEFAULT_WEEKLY_OPENING_HOURS)
   })
