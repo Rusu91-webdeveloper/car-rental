@@ -27,7 +27,7 @@ import { PrismaDocumentConfigurationRepository } from "@/lib/document-configurat
 import { loadNotificationConfigurationPage } from "@/lib/notification-configuration/service"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
 import { loadPricingConfigurationPage } from "@/lib/pricing-admin/service"
-import { readPrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/environment"
+import { readRuntimePrivateDocumentEnvironment } from "@/lib/private-documents/infrastructure/runtime-environment"
 
 interface OwnerSettingsStepContentProps {
   step: OwnerSettingsStep
@@ -148,7 +148,7 @@ export async function OwnerSettingsStepContent({
 
   if (step.id === "documents") {
     if (editing) await ensureOwnerDraftRelease(adminId)
-    const environment = readPrivateDocumentEnvironment()
+    const environment = await readRuntimePrivateDocumentEnvironment()
     const data = await new PrismaDocumentConfigurationRepository(prisma).load(
       caps.canEdit,
       environment.issues.length

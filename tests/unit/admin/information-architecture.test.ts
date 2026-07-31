@@ -154,6 +154,12 @@ describe("owner-facing admin information architecture", () => {
     expect(ownerStepContent).toContain("<DocumentPolicyEditor")
   })
 
+  it("uses request-scoped Vercel OIDC when the owner configures documents", () => {
+    const ownerStepContent = source("components/admin/owner-settings-step-content.tsx")
+    expect(ownerStepContent).toContain("await readRuntimePrivateDocumentEnvironment()")
+    expect(ownerStepContent).not.toContain("readPrivateDocumentEnvironment()")
+  })
+
   it("gives each owner destination one plain business question", () => {
     const pages = {
       "app/[locale]/admin/bookings/settings/flow/page.tsx": "What steps do customers complete?",
