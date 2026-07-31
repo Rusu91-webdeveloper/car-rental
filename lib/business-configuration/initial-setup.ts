@@ -137,7 +137,7 @@ export async function initializeBusinessConfiguration(
               billableDayMethod: "STARTED_24_HOUR_PERIODS",
               gracePeriodMinutes: 0,
               preparationBufferMinutes: 120,
-              minimumRentalMinutes: 1_440,
+              minimumRentalMinutes: 1,
               minimumChargeDays: 1,
               priceTaxTreatment: settings?.taxIncluded ? "TAX_INCLUDED" : "TAX_EXCLUDED",
               taxRateBps,

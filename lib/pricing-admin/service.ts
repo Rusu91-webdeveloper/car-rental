@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import { PricingError, publicPricingErrorMessage } from "@/lib/pricing/errors"
 import { money } from "@/lib/pricing/money"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
@@ -366,7 +367,10 @@ export async function generatePricingPreview(input: {
       persistentStrategy: configuration.mixedDurationStrategy,
       monthDefinition: configuration.rentalMonthDefinition,
       billableDayMethod: configuration.billableDayRule,
-      minimumRentalMinutes: configuration.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        configuration.minimumRentalMinutes,
+        configuration.minimumChargeDays,
+      ),
       minimumChargeDays: configuration.minimumChargeDays,
       gracePeriodMinutes: configuration.gracePeriodMinutes,
       taxTreatment: configuration.pricesIncludeTax ? "TAX_INCLUDED" : "TAX_EXCLUDED",

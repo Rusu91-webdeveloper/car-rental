@@ -16,7 +16,10 @@ import {
 } from "@/lib/business-hours"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 import { isCarLifecycleBookable } from "@/lib/booking-applications/domain"
-import { isRentalDurationTooShort } from "@/lib/booking-configuration/minimum-rental"
+import {
+  effectiveMinimumRentalMinutes,
+  isRentalDurationTooShort,
+} from "@/lib/booking-configuration/minimum-rental"
 
 const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
 
@@ -429,7 +432,9 @@ export async function createManualReservation(data: unknown) {
             openingHoursExceptions: true,
             handoverPolicy: true,
           } },
-          pricingBillingConfig: { select: { minimumRentalMinutes: true } },
+          pricingBillingConfig: {
+            select: { minimumRentalMinutes: true, minimumChargeDays: true },
+          },
         },
       }),
     ])
@@ -447,7 +452,11 @@ export async function createManualReservation(data: unknown) {
       return { error: "Return must be during the configured return windows" }
     if (!hasMinimumPickupLeadTime(pickupDate, handoverPolicy))
       return { error: "Pick-up does not meet the configured minimum booking notice" }
-    if (isRentalDurationTooShort(pickupDate, dropoffDate, activeRelease.pricingBillingConfig.minimumRentalMinutes))
+    const minimumRentalMinutes = effectiveMinimumRentalMinutes(
+      activeRelease.pricingBillingConfig.minimumRentalMinutes,
+      activeRelease.pricingBillingConfig.minimumChargeDays,
+    )
+    if (isRentalDurationTooShort(pickupDate, dropoffDate, minimumRentalMinutes))
       return { error: "The reservation is shorter than the configured minimum rental period" }
 
     const reservationReason = encodeManualReservationReason({

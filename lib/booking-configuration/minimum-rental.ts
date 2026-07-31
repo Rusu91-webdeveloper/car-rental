@@ -1,6 +1,18 @@
 const MINUTES_PER_DAY = 1_440
 const MILLISECONDS_PER_MINUTE = 60_000
 
+export function effectiveMinimumRentalMinutes(
+  minimumRentalMinutes: number,
+  minimumChargeDays: number,
+): number {
+  // Older settings saved the charge floor as an identical minimum-duration
+  // rule. Preserve genuinely separate duration rules while uncoupling records
+  // created by that legacy UI.
+  return minimumRentalMinutes === minimumChargeDays * MINUTES_PER_DAY
+    ? 1
+    : minimumRentalMinutes
+}
+
 export function minimumRentalDays(minimumRentalMinutes: number): number {
   return Math.max(1, Math.ceil(minimumRentalMinutes / MINUTES_PER_DAY))
 }

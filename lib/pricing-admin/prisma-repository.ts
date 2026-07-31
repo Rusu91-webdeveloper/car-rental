@@ -3,6 +3,7 @@ import { CAPABILITIES } from "@/lib/authorization/capabilities"
 import { databaseUserHasCapability } from "@/lib/authorization/database-capabilities"
 import { PrismaBusinessConfigurationRepository, type ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import type {
   BusinessHoursException,
   HandoverPolicy,
@@ -56,7 +57,10 @@ function mapPricingDraft(
       billableDayRule: row.pricingBilling.billableDayMethod,
       gracePeriodMinutes: row.pricingBilling.gracePeriodMinutes,
       preparationBufferMinutes: row.pricingBilling.preparationBufferMinutes,
-      minimumRentalMinutes: row.pricingBilling.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        row.pricingBilling.minimumRentalMinutes,
+        row.pricingBilling.minimumChargeDays,
+      ),
       minimumChargeDays: row.pricingBilling.minimumChargeDays,
       pricesIncludeTax: row.pricingBilling.priceTaxTreatment === "TAX_INCLUDED",
       taxRateBps: row.pricingBilling.taxRateBps,
@@ -98,7 +102,10 @@ function pricingData(configuration: PricingBillingConfiguration) {
     billableDayMethod: configuration.billableDayRule,
     gracePeriodMinutes: configuration.gracePeriodMinutes,
     preparationBufferMinutes: configuration.preparationBufferMinutes,
-    minimumRentalMinutes: configuration.minimumRentalMinutes,
+    minimumRentalMinutes: effectiveMinimumRentalMinutes(
+      configuration.minimumRentalMinutes,
+      configuration.minimumChargeDays,
+    ),
     minimumChargeDays: configuration.minimumChargeDays,
     priceTaxTreatment: configuration.pricesIncludeTax ? "TAX_INCLUDED" as const : "TAX_EXCLUDED" as const,
     taxRateBps: configuration.taxRateBps,

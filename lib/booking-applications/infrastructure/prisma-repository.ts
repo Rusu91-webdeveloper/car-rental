@@ -17,7 +17,10 @@ import {
   normalizeOpeningHoursExceptions,
   normalizeWeeklyOpeningHours,
 } from "@/lib/business-hours"
-import { isRentalDurationTooShort } from "@/lib/booking-configuration/minimum-rental"
+import {
+  effectiveMinimumRentalMinutes,
+  isRentalDurationTooShort,
+} from "@/lib/booking-configuration/minimum-rental"
 import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
 import { calculateConfiguredDeposit, resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
@@ -389,7 +392,11 @@ export class PrismaBookingApplicationRepository
             "APPLICATION_INSUFFICIENT_LEAD_TIME",
             "Pick-up does not meet the rental company's minimum advance-booking time.",
           )
-        if (isRentalDurationTooShort(input.pickupAt, input.returnAt, release.pricingBillingConfig.minimumRentalMinutes))
+        const minimumRentalMinutes = effectiveMinimumRentalMinutes(
+          release.pricingBillingConfig.minimumRentalMinutes,
+          release.pricingBillingConfig.minimumChargeDays,
+        )
+        if (isRentalDurationTooShort(input.pickupAt, input.returnAt, minimumRentalMinutes))
           applicationError(
             "APPLICATION_NOT_READY",
             "The selected rental is shorter than the configured minimum rental period.",

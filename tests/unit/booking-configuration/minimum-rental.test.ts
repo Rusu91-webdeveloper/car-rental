@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  effectiveMinimumRentalMinutes,
   isRentalDurationTooShort,
   minimumRentalDays,
   minimumRentalPeriodMessage,
@@ -7,6 +8,12 @@ import {
 } from "@/lib/booking-configuration/minimum-rental"
 
 describe("minimum rental customer rules", () => {
+  it("uncouples legacy charge-floor values without removing genuine duration rules", () => {
+    expect(effectiveMinimumRentalMinutes(2_880, 2)).toBe(1)
+    expect(effectiveMinimumRentalMinutes(1_440, 1)).toBe(1)
+    expect(effectiveMinimumRentalMinutes(60, 2)).toBe(60)
+  })
+
   it("converts the configured minute threshold to customer-facing days", () => {
     expect(minimumRentalDays(1_440)).toBe(1)
     expect(minimumRentalDays(2_880)).toBe(2)

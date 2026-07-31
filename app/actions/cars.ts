@@ -27,6 +27,7 @@ import {
   dateOnlySearchHandoverWindows,
   hasAvailableSearchWindow,
 } from "@/lib/date-only-search-availability"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 
 const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
@@ -572,7 +573,9 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
               handoverPolicy: true,
             },
           },
-          pricingBillingConfig: { select: { minimumRentalMinutes: true } },
+          pricingBillingConfig: {
+            select: { minimumRentalMinutes: true, minimumChargeDays: true },
+          },
           fleetRateSet: {
             select: {
               rates: {
@@ -594,7 +597,10 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
       weeklyOpeningHours: normalizeWeeklyOpeningHours(activeRelease.generalRentalConfig.weeklyOpeningHours),
       openingHoursExceptions: normalizeOpeningHoursExceptions(activeRelease.generalRentalConfig.openingHoursExceptions),
       handoverPolicy: normalizeHandoverPolicy(activeRelease.generalRentalConfig.handoverPolicy),
-      minimumRentalMinutes: activeRelease.pricingBillingConfig.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        activeRelease.pricingBillingConfig.minimumRentalMinutes,
+        activeRelease.pricingBillingConfig.minimumChargeDays,
+      ),
     }
     const dayAfterReturn = addDateOnlyDays(dropoffDate, 1)
     const horizonStart = businessLocalDateTimeToInstant(

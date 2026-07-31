@@ -1,5 +1,6 @@
 import { PricingError } from "@/lib/pricing/errors"
 import { money } from "@/lib/pricing/money"
+import { effectiveMinimumRentalMinutes } from "./minimum-rental"
 import type { PublicBookingConfiguration } from "./types"
 import { resolveEffectiveBookingFields } from "./field-resolver"
 import { resolveEffectiveBookingFlow, validateBookingWorkflow } from "./workflow"
@@ -177,7 +178,10 @@ export async function resolvePublicBookingConfiguration(input: {
     weeklyOpeningHours: record.weeklyOpeningHours,
     openingHoursExceptions: record.openingHoursExceptions,
     handoverPolicy: record.handoverPolicy,
-    minimumRentalMinutes: record.minimumRentalMinutes,
+    minimumRentalMinutes: effectiveMinimumRentalMinutes(
+      record.minimumRentalMinutes,
+      record.minimumChargeDays,
+    ),
     minimumChargeDays: record.minimumChargeDays,
     gracePeriodMinutes: record.gracePeriodMinutes,
     preparationBufferMinutes: record.preparationBufferMinutes,

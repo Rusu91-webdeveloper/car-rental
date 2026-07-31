@@ -1,4 +1,5 @@
 import { PricingError } from "./errors"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import { fractionToBasisPoints, money, normalizeCurrency } from "./money"
 import type { ActiveReleasePricingRecord, PricingContextRepository } from "./repositories"
 import type { PricingRequest, PricingStrategy } from "./types"
@@ -73,7 +74,10 @@ function resolveActive(record: ActiveReleasePricingRecord, request: PricingConte
       persistentStrategy: record.strategy,
       monthDefinition: record.monthDefinition,
       billableDayMethod: record.billableDayMethod,
-      minimumRentalMinutes: record.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        record.minimumRentalMinutes,
+        record.minimumChargeDays,
+      ),
       minimumChargeDays: record.minimumChargeDays,
       gracePeriodMinutes: record.gracePeriodMinutes,
       taxTreatment: record.taxTreatment,

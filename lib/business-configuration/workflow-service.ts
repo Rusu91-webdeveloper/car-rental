@@ -1,7 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
-import { minimumRentalDays } from "@/lib/booking-configuration/minimum-rental"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import { money } from "@/lib/pricing/money"
 import {
   CONFIGURATION_DOMAIN_IDS,
@@ -619,7 +619,7 @@ function pricingExamples(release: ReleaseAggregate) {
       : config.mixedDurationStrategy === "LOWEST_VALID_TOTAL"
         ? "LOWEST_VALID_PRICE"
         : "DAILY_ONLY"
-  const configuredMinimumDays = minimumRentalDays(config.minimumRentalMinutes)
+  const configuredMinimumDays = config.minimumChargeDays
   const exampleDays = [...new Set([configuredMinimumDays, 7, 10, 30])].filter(
     (days) => days >= configuredMinimumDays,
   )
@@ -642,7 +642,10 @@ function pricingExamples(release: ReleaseAggregate) {
       persistentStrategy: config.mixedDurationStrategy,
       monthDefinition: config.rentalMonthDefinition,
       billableDayMethod: config.billableDayRule,
-      minimumRentalMinutes: config.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        config.minimumRentalMinutes,
+        config.minimumChargeDays,
+      ),
       minimumChargeDays: config.minimumChargeDays,
       gracePeriodMinutes: config.gracePeriodMinutes,
       taxTreatment: config.pricesIncludeTax ? "TAX_INCLUDED" : "TAX_EXCLUDED",
