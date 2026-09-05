@@ -36,6 +36,15 @@ describe("checkout date and time query state", () => {
     expect(checkout).toContain("dropoffTime: checkoutTimeParam(nextDropoff)")
     expect(checkout).toContain("pickupDate: pickup.toISOString()")
     expect(checkout).toContain("dropoffDate: dropoff.toISOString()")
+    expect(checkout).toContain('locale: locale === "de" ? "de" : "en"')
+
+    const bookingActions = readFileSync(
+      resolve(process.cwd(), "app/actions/bookings.ts"),
+      "utf8",
+    )
+    expect(bookingActions).toContain('locale: z.enum(["en", "de"]).default("en")')
+    expect(bookingActions).toContain("locale: validated.locale")
+    expect(bookingActions).not.toContain('locale: "en",\n      insuranceSelected: validated.insuranceSelected')
   })
 
   it("shows the billing floor without presenting it as a mandatory 48-hour rental", () => {

@@ -685,6 +685,7 @@ export function CheckoutClient({
       carId: car.id,
       pickupDate: pickup.toISOString(),
       dropoffDate: dropoff.toISOString(),
+      locale: locale === "de" ? "de" : "en",
       paymentMethod,
       insuranceSelected,
     }).then((result) => {
@@ -705,6 +706,7 @@ export function CheckoutClient({
     car.id,
     dropoffDate,
     insuranceSelected,
+    locale,
     minimumDurationMessage,
     paymentMethod,
     pickupDate,

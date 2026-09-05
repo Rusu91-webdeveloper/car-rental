@@ -42,6 +42,7 @@ const bookingQuoteSchema = z
     carId: z.string().min(1),
     pickupDate: z.string().datetime(),
     dropoffDate: z.string().datetime(),
+    locale: z.enum(["en", "de"]).default("en"),
     paymentMethod: z.enum(["TRANSFER", "PAY_AT_PICKUP"]).default("TRANSFER"),
     insuranceSelected: z.boolean().optional().default(false),
   })
@@ -167,7 +168,7 @@ export async function getBookingQuote(data: unknown) {
     const configured = await quoteConfiguredVehicleRental({
       db: prisma,
       pricingRepository: new PrismaPricingContextRepository(prisma),
-      locale: "en",
+      locale: validated.locale,
       insuranceSelected: validated.insuranceSelected,
       request: {
         vehicleId: validated.carId,

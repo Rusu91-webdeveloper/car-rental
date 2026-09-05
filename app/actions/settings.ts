@@ -44,12 +44,13 @@ const notificationContactsSchema = z.object({
 })
 
 async function recordSettingsAudit(
+  db: Prisma.TransactionClient,
   adminId: string,
   existingSettings: unknown,
   newValue: unknown,
   reason: string,
 ) {
-  await prisma.adminAuditLog.create({
+  await db.adminAuditLog.create({
     data: {
       adminId,
       action: "SETTINGS_UPDATED",
@@ -79,13 +80,16 @@ export async function updateBusinessProfile(data: unknown) {
   try {
     const admin = await requireAdmin()
     const validated = businessProfileSchema.parse(data)
-    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
-    const settings = await prisma.companySettings.upsert({
-      where: { id: "company-settings" },
-      update: validated,
-      create: { id: "company-settings", ...validated },
+    const settings = await prisma.$transaction(async (tx) => {
+      const existing = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
+      const updated = await tx.companySettings.upsert({
+        where: { id: "company-settings" },
+        update: validated,
+        create: { id: "company-settings", ...validated },
+      })
+      await recordSettingsAudit(tx, admin.id, existing, validated, "business_profile_updated")
+      return updated
     })
-    await recordSettingsAudit(admin.id, existing, validated, "business_profile_updated")
     revalidateOwnerSettings()
     return { success: true as const, settings }
   } catch (error) {
@@ -99,13 +103,16 @@ export async function updatePaymentDetails(data: unknown) {
   try {
     const admin = await requireAdmin()
     const validated = paymentDetailsSchema.parse(data)
-    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
-    const settings = await prisma.companySettings.upsert({
-      where: { id: "company-settings" },
-      update: validated,
-      create: { id: "company-settings", ...validated },
+    const settings = await prisma.$transaction(async (tx) => {
+      const existing = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
+      const updated = await tx.companySettings.upsert({
+        where: { id: "company-settings" },
+        update: validated,
+        create: { id: "company-settings", ...validated },
+      })
+      await recordSettingsAudit(tx, admin.id, existing, validated, "payment_details_updated")
+      return updated
     })
-    await recordSettingsAudit(admin.id, existing, validated, "payment_details_updated")
     revalidateOwnerSettings()
     return { success: true as const, settings }
   } catch (error) {
@@ -119,13 +126,16 @@ export async function updateNotificationContacts(data: unknown) {
   try {
     const admin = await requireAdmin()
     const validated = notificationContactsSchema.parse(data)
-    const existing = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
-    const settings = await prisma.companySettings.upsert({
-      where: { id: "company-settings" },
-      update: validated,
-      create: { id: "company-settings", ...validated },
+    const settings = await prisma.$transaction(async (tx) => {
+      const existing = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
+      const updated = await tx.companySettings.upsert({
+        where: { id: "company-settings" },
+        update: validated,
+        create: { id: "company-settings", ...validated },
+      })
+      await recordSettingsAudit(tx, admin.id, existing, validated, "notification_contacts_updated")
+      return updated
     })
-    await recordSettingsAudit(admin.id, existing, validated, "notification_contacts_updated")
     revalidateOwnerSettings()
     return { success: true as const, settings }
   } catch (error) {
