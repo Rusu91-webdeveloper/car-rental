@@ -22,6 +22,7 @@ export class PrismaPricingContextRepository
       include: {
         generalRentalConfig: true,
         pricingBillingConfig: { include: { version: true } },
+        paymentConfig: true,
         fleetRateSet: {
           include: {
             rates: { where: { carId: vehicleId }, take: 1 },
@@ -33,7 +34,7 @@ export class PrismaPricingContextRepository
 
     const paymentSettings = await this.db.companySettings.findUnique({
       where: { id: "company-settings" },
-      select: { depositPercentage: true, guaranteePercentage: true },
+      select: { guaranteePercentage: true },
     })
     const rate = release.fleetRateSet.rates[0]
     return {
@@ -67,7 +68,10 @@ export class PrismaPricingContextRepository
       minimumChargeDays: release.pricingBillingConfig.minimumChargeDays,
       taxTreatment: release.pricingBillingConfig.priceTaxTreatment,
       taxRateBps: release.pricingBillingConfig.taxRateBps,
-      depositFraction: paymentSettings?.depositPercentage ?? 0.2,
+      depositFraction:
+        release.paymentConfig.depositType === "PERCENTAGE_BPS"
+          ? release.paymentConfig.depositValue / 10_000
+          : 0,
       guaranteeFraction: paymentSettings?.guaranteePercentage ?? 0,
     }
   }

@@ -26,14 +26,19 @@ type GrantState = {
   grant: ShortLivedAccessGrant;
   redeemed: boolean;
 };
+type LocalStorageState = {
+  targets: Map<string, TargetState>;
+  grants: Map<string, GrantState>;
+};
+const stateByRoot = new Map<string, LocalStorageState>();
 const OPAQUE_KEY = /^[a-f0-9]{48}$/;
 
 /** Local private storage is for disposable development and automated tests only. */
 export class LocalPrivateDocumentStorage implements PrivateDocumentStorage {
   readonly providerKey = "local-private";
   private readonly root: string;
-  private targets = new Map<string, TargetState>();
-  private grants = new Map<string, GrantState>();
+  private readonly targets: Map<string, TargetState>;
+  private readonly grants: Map<string, GrantState>;
   constructor(
     rootDirectory: string,
     private readonly now: () => Date = () => new Date(),
@@ -43,6 +48,13 @@ export class LocalPrivateDocumentStorage implements PrivateDocumentStorage {
         "Local private storage is for disposable development and automated tests only.",
       );
     this.root = resolve(rootDirectory);
+    const state = stateByRoot.get(this.root) ?? {
+      targets: new Map<string, TargetState>(),
+      grants: new Map<string, GrantState>(),
+    };
+    stateByRoot.set(this.root, state);
+    this.targets = state.targets;
+    this.grants = state.grants;
     const publicRoot = resolve(process.cwd(), "public");
     if (this.root === publicRoot || this.root.startsWith(`${publicRoot}${sep}`))
       throw new Error("Local private storage cannot use public/.");
@@ -103,16 +115,37 @@ export class LocalPrivateDocumentStorage implements PrivateDocumentStorage {
       );
     if (input.existing) {
       const state = this.targets.get(input.existing.targetId);
+      if (state) {
+        if (
+          state.target.object.objectKey !== input.existing.object.objectKey ||
+          state.target.expectedChecksumSha256 !== input.expectedChecksumSha256
+        )
+          documentError(
+            "DOCUMENT_IDEMPOTENCY_CONFLICT",
+            "Existing local upload target is inconsistent.",
+          );
+        return state.target;
+      }
       if (
-        !state ||
-        state.target.object.objectKey !== input.existing.object.objectKey ||
-        state.target.expectedChecksumSha256 !== input.expectedChecksumSha256
+        input.existing.object.providerKey !== this.providerKey ||
+        input.existing.object.containerId !== "disposable-private-documents" ||
+        input.existing.object.namespace !== "quarantine" ||
+        !OPAQUE_KEY.test(input.existing.object.objectKey)
       )
         documentError(
           "DOCUMENT_IDEMPOTENCY_CONFLICT",
           "Existing local upload target is inconsistent.",
         );
-      return state.target;
+      const restored: UploadTarget = {
+        targetId: input.existing.targetId,
+        object: input.existing.object,
+        expiresAt: input.expiresAt,
+        maximumBytes: input.maximumBytes,
+        expectedChecksumSha256: input.expectedChecksumSha256,
+        delivery: { kind: "LOCAL_STAGED" },
+      };
+      this.targets.set(restored.targetId, { target: restored, completed: false });
+      return restored;
     }
     const target: UploadTarget = {
       targetId: randomUUID(),
@@ -325,6 +358,7 @@ export class LocalPrivateDocumentStorage implements PrivateDocumentStorage {
   async dispose() {
     this.targets.clear();
     this.grants.clear();
+    stateByRoot.delete(this.root);
     await rm(this.root, { recursive: true, force: true });
   }
 }

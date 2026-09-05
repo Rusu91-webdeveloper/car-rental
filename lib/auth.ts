@@ -7,6 +7,7 @@ import { config } from "./config"
 import type { Adapter } from "next-auth/adapters"
 import type { JWT } from "next-auth/jwt"
 import type { Role } from "@prisma/client"
+import { cache } from "react"
 
 type ApplicationJwt = JWT & {
   googleAuthenticatedAt?: number
@@ -122,7 +123,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
 })
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   if (!config.features.authEnabled) {
     return null
   }
@@ -138,7 +139,7 @@ export async function getCurrentUser() {
   })
 
   return user
-}
+})
 
 export async function getServerVerifiedGoogleAuthenticationEvidence() {
   const session = await auth()

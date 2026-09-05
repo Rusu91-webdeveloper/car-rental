@@ -17,6 +17,7 @@ import type { Phase6AdminPageData } from "./types"
 import { calculatePricing } from "@/lib/pricing/engine"
 import { money } from "@/lib/pricing/money"
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
+import type { ReleaseAggregate } from "@/lib/business-configuration/repositories"
 
 async function mutation<T>(operation: Promise<T>) {
   try {
@@ -93,8 +94,15 @@ function phase6Issues(page: Phase6AdminPageData) {
   return issues
 }
 
-export async function loadPhase6ConfigurationPage(db: ConfigurationDbClient = prisma) {
-  const page = await new PrismaPhase6AdminRepository(db).loadPageData()
+export async function loadPhase6ConfigurationPage(
+  db: ConfigurationDbClient = prisma,
+  preloaded?: {
+    activeRelease?: ReleaseAggregate | null
+    draftRelease?: ReleaseAggregate | null
+    bookableVehicles?: Array<{ id: string; name: string }>
+  },
+) {
+  const page = await new PrismaPhase6AdminRepository(db).loadPageData(preloaded)
   page.issues = phase6Issues(page)
   const insurance = page.draftInsurance?.configuration ?? page.liveInsurance?.configuration
   if (insurance?.enabled) {

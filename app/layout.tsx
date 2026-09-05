@@ -1,29 +1,29 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Fira_Mono, Noto_Sans } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
+import { Geist, Geist_Mono } from "next/font/google"
 import { getLocale } from "next-intl/server"
 import { Providers } from "@/components/providers"
 import "./globals.css"
 
-const notoSans = Noto_Sans({
+const geist = Geist({
   subsets: ["latin"],
-  variable: "--font-noto-sans",
+  variable: "--font-geist-sans",
   display: "swap",
 })
 
-const firaMono = Fira_Mono({
+const geistMono = Geist_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-fira-mono",
+  variable: "--font-geist-mono",
   display: "swap",
 })
 
 export const metadata: Metadata = {
-  title: "RentCar - Book Your Perfect Ride",
-  description:
-    "Find and rent the perfect car for your next trip. Choose from luxury, electric, SUV, and sedan options.",
-  generator: "v0.app",
+  title: {
+    default: "Qujo Autovermietung GmbH",
+    template: "%s | Qujo Autovermietung",
+  },
+  description: "Zuverlässige Mietwagen, transparente Preise und persönlicher Service – einfach online bei Qujo buchen.",
+  applicationName: "Qujo Autovermietung",
   icons: {
     icon: [
       {
@@ -51,11 +51,10 @@ export default async function RootLayout({
   const locale = await getLocale()
 
   return (
-    <html lang={locale}>
-      <body className={`${notoSans.variable} ${firaMono.variable} font-sans antialiased`}>
+    <html lang={locale} className={`${geist.variable} ${geistMono.variable}`}>
+      <body className="font-sans antialiased">
         <Providers>
           {children}
-          <Analytics />
         </Providers>
       </body>
     </html>

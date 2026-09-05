@@ -5,16 +5,26 @@ import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+import { validIban } from "@/lib/iban"
+
+const optionalText = (max: number) => z.string().trim().max(max).transform((value) => value || null)
+const requiredText = (max: number, label: string) =>
+  z.string().trim().min(1, `${label} is required`).max(max)
 
 const businessProfileSchema = z.object({
-  companyName: z.string().trim().min(1, "Business name is required").max(160),
+  companyName: z.literal("Qujo Autovermietung GmbH", { errorMap: () => ({ message: "The registered business name must remain Qujo Autovermietung GmbH" }) }),
   companyEmail: z.string().trim().email("Enter a valid business email"),
-  companyPhone: z.string().trim().max(40).optional(),
-  companyAddress: z.string().trim().max(200).optional(),
-  companyCity: z.string().trim().max(120).optional(),
-  companyState: z.string().trim().max(120).optional(),
-  companyZipCode: z.string().trim().max(30).optional(),
-  companyCountry: z.string().trim().max(120).optional(),
+  companyPhone: requiredText(40, "Phone number"),
+  companyAddress: requiredText(200, "Street address"),
+  companyCity: requiredText(120, "City"),
+  companyState: optionalText(120),
+  companyZipCode: requiredText(30, "Postal code"),
+  companyCountry: requiredText(120, "Country"),
+  managingDirector: requiredText(160, "Managing director"),
+  commercialRegister: requiredText(100, "Commercial register number"),
+  registerCourt: requiredText(160, "Register court"),
+  vatId: optionalText(40),
+  responsiblePerson: optionalText(300),
   currency: z.string().trim().length(3, "Use a three-letter currency code").transform((value) => value.toUpperCase()),
   currencySymbol: z.string().trim().min(1).max(5),
 })
@@ -24,8 +34,7 @@ const paymentDetailsSchema = z.object({
   accountName: z.string().trim().min(1, "Account holder is required").max(160),
   accountNumber: z.string().trim().min(1, "Account number is required").max(80),
   swiftCode: z.string().trim().min(1, "SWIFT/BIC is required").max(30),
-  iban: z.string().trim().max(50).optional(),
-  depositPercentage: z.number().min(0).max(1),
+  iban: z.string().trim().min(1, "IBAN is required").max(50).refine(validIban, "Enter a valid IBAN").transform((value) => value.replace(/\s+/g, "").toUpperCase()),
   guaranteePercentage: z.number().min(0).max(1),
 })
 
@@ -96,34 +105,6 @@ export async function updatePaymentDetails(data: unknown) {
       update: validated,
       create: { id: "company-settings", ...validated },
     })
-    const paymentDraft = await prisma.configurationVersion.findFirst({
-      where: { domain: "PAYMENTS", status: { in: ["DRAFT", "VALIDATED"] } },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
-    })
-    if (paymentDraft) {
-      const depositValue = Math.round(validated.depositPercentage * 10_000)
-      await prisma.$transaction([
-        prisma.paymentConfigVersion.update({
-          where: { configurationVersionId: paymentDraft.id },
-          data: {
-            depositType: depositValue > 0 ? "PERCENTAGE_BPS" : "NONE",
-            depositValue,
-            remainingBalanceRule: depositValue > 0 ? "ON_PICKUP" : "NOT_APPLICABLE",
-          },
-        }),
-        prisma.configurationVersion.update({
-          where: { id: paymentDraft.id },
-          data: {
-            revision: { increment: 1 },
-            status: "DRAFT",
-            validationStatus: "NOT_VALIDATED",
-            validationSnapshot: Prisma.JsonNull,
-            updatedById: admin.id,
-          },
-        }),
-      ])
-    }
     await recordSettingsAudit(admin.id, existing, validated, "payment_details_updated")
     revalidateOwnerSettings()
     return { success: true as const, settings }
@@ -156,6 +137,7 @@ export async function updateNotificationContacts(data: unknown) {
 
 export async function getCompanySettings() {
   try {
+    await requireAdmin()
     let settings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
     })

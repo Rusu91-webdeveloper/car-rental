@@ -1,138 +1,19 @@
 import Link from "@/navigation"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { ClientOnly } from "@/components/client-only"
-import { getTranslations } from "next-intl/server"
+import { PublicLegalPage, type PublicLegalSection } from "@/components/legal/public-legal-page"
 import { getBusinessInfo } from "@/lib/business-info"
 
-export default async function WiderrufPage() {
-  const t = await getTranslations("widerruf")
-  const businessInfo = await getBusinessInfo()
-
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </Link>
-            <h1 className="text-xl font-bold">{t("title")}</h1>
-          </div>
-          <ClientOnly>
-            <LanguageSwitcher />
-          </ClientOnly>
-        </div>
-      </header>
-
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="space-y-8">
-          <section>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("intro")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("lastUpdated")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("right.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("right.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("right.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("period.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("period.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("period.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("procedure.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("procedure.intro")}</p>
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <p className="font-medium text-foreground">{t("procedure.recipient")}</p>
-              <p className="text-muted-foreground">{businessInfo.companyName}</p>
-              {businessInfo.companyAddress && <p className="text-muted-foreground">{businessInfo.companyAddress}</p>}
-              {businessInfo.companyCity && (
-                <p className="text-muted-foreground">
-                  {businessInfo.companyCity}
-                  {businessInfo.companyCountry ? `, ${businessInfo.companyCountry}` : ""}
-                </p>
-              )}
-              <p className="text-muted-foreground mt-2">
-                <span className="font-medium text-foreground">{t("procedure.email")}:</span>{" "}
-                <a
-                  href={`mailto:${businessInfo.companyEmail}`}
-                  className="hover:text-primary transition-colors"
-                >
-                  {businessInfo.companyEmail}
-                </a>
-              </p>
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("consequences.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("consequences.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("consequences.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("exceptions.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("exceptions.intro")}</p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>{t("exceptions.items.perishable")}</li>
-              <li>{t("exceptions.items.custom")}</li>
-              <li>{t("exceptions.items.urgent")}</li>
-              <li>{t("exceptions.items.sealed")}</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("modelForm.title")}</h2>
-            <div className="bg-muted p-4 rounded-lg space-y-4">
-              <p className="text-muted-foreground leading-relaxed">{t("modelForm.intro")}</p>
-              <div className="border-t border-border pt-4">
-                <p className="text-muted-foreground mb-2">
-                  <span className="font-medium text-foreground">{t("modelForm.to")}</span>
-                </p>
-                <p className="text-muted-foreground">{businessInfo.companyName}</p>
-                {businessInfo.companyAddress && (
-                  <p className="text-muted-foreground">{businessInfo.companyAddress}</p>
-                )}
-                {businessInfo.companyCity && (
-                  <p className="text-muted-foreground">
-                    {businessInfo.companyCity}
-                    {businessInfo.companyCountry ? `, ${businessInfo.companyCountry}` : ""}
-                  </p>
-                )}
-                <p className="text-muted-foreground mt-2">
-                  <span className="font-medium text-foreground">{t("procedure.email")}:</span>{" "}
-                  <a
-                    href={`mailto:${businessInfo.companyEmail}`}
-                    className="hover:text-primary transition-colors"
-                  >
-                    {businessInfo.companyEmail}
-                  </a>
-                </p>
-              </div>
-              <div className="border-t border-border pt-4">
-                <p className="text-muted-foreground mb-4">{t("modelForm.content")}</p>
-                <div className="space-y-2 text-muted-foreground">
-                  <p>{t("modelForm.bookingNumber")}</p>
-                  <p>{t("modelForm.customerName")}</p>
-                  <p>{t("modelForm.customerAddress")}</p>
-                  <p>{t("modelForm.customerEmail")}</p>
-                  <p>{t("modelForm.customerPhone")}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-  )
+export default async function WiderrufPage({ params }: { params: Promise<{ locale: string }> }) {
+  const [{ locale }, info] = await Promise.all([params, getBusinessInfo()])
+  const de = locale !== "en"
+  const contact = info.supportEmail ?? info.companyEmail
+  const sections: PublicLegalSection[] = de ? [
+    { title: "Kein gesetzliches Widerrufsrecht bei termingebundener Fahrzeugmiete", paragraphs: ["Bei Verträgen zur Erbringung von Dienstleistungen im Zusammenhang mit einer Kraftfahrzeugvermietung besteht nach § 312g Abs. 2 Nr. 9 BGB kein gesetzliches Widerrufsrecht, wenn der Vertrag für die Erbringung einen spezifischen Termin oder Zeitraum vorsieht.", "Da jede Fahrzeugbuchung bei Qujo für einen konkret ausgewählten Mietzeitraum erfolgt, können Sie die Buchung nicht innerhalb von 14 Tagen ohne Grund nach den gesetzlichen Widerrufsvorschriften widerrufen."] },
+    { title: "Vertragliche Stornierung bleibt möglich", paragraphs: ["Ein fehlendes gesetzliches Widerrufsrecht schließt vertraglich vereinbarte Stornierungsrechte nicht aus. Ob, bis wann und zu welchen Kosten Sie stornieren können, ergibt sich ausschließlich aus den vor dem Absenden angezeigten Buchungsbedingungen und Ihrer Buchungsbestätigung."], content: <p><Link href="/agb" className="font-medium text-foreground underline underline-offset-2">Allgemeine Mietbedingungen lesen</Link></p> },
+    { title: "Kontakt", paragraphs: ["Wenn Sie eine Buchungsanfrage ändern oder stornieren möchten, kontaktieren Sie uns bitte so früh wie möglich und nennen Sie Ihre Buchungsnummer."], content: contact ? <p>E-Mail: <a className="font-medium text-foreground underline underline-offset-2" href={`mailto:${contact}`}>{contact}</a></p> : <p><Link href="/contact" className="font-medium text-foreground underline underline-offset-2">Kontaktformular öffnen</Link></p> },
+  ] : [
+    { title: "No statutory withdrawal right for date-specific vehicle rental", paragraphs: ["Under section 312g(2)(9) BGB, contracts for services connected with vehicle rental do not carry a statutory withdrawal right where the contract provides a specific date or period for performance.", "Because every Qujo vehicle booking is made for a specifically selected rental period, it cannot be withdrawn without reason within 14 days under the statutory withdrawal rules."] },
+    { title: "Contractual cancellation may still be available", paragraphs: ["The absence of a statutory withdrawal right does not prevent contractual cancellation rights. Whether, when and at what cost cancellation is possible is governed solely by the conditions shown before submission and your booking confirmation."], content: <p><Link href="/agb" className="font-medium text-foreground underline underline-offset-2">Read the General Rental Terms</Link></p> },
+    { title: "Contact", paragraphs: ["To change or cancel a booking request, contact us as early as possible and include the booking number."], content: contact ? <p>Email: <a className="font-medium text-foreground underline underline-offset-2" href={`mailto:${contact}`}>{contact}</a></p> : <p><Link href="/contact" className="font-medium text-foreground underline underline-offset-2">Open the contact form</Link></p> },
+  ]
+  return <PublicLegalPage title={de ? "Hinweis zum Widerrufsrecht" : "Withdrawal-right notice"} intro={de ? "Pflichtinformation für termingebundene Fahrzeugmietverträge." : "Mandatory information for date-specific vehicle rental contracts."} updated={de ? "Stand: 20. Juli 2026" : "Last updated: 20 July 2026"} sections={sections} />
 }
-

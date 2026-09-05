@@ -1,8 +1,14 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
   "crons": [
     {
       "path": "/api/cron/cancel-expired-bookings",
-      "schedule": "15 2 * * *"
+      "schedule": "5 2 * * *"
+    },
+    {
+      "path": "/api/cron/booking-notifications",
+      "schedule": "25 2 * * *"
     },
     {
       "path": "/api/cron/phase8fb-maintenance",

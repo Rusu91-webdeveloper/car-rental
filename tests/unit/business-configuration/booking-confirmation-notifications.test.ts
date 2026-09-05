@@ -6,18 +6,24 @@ import { paymentConfigurationSchema } from "@/lib/business-configuration/schema"
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8")
 
 describe("booking confirmation and offline payment instructions", () => {
-  it("keeps one existing email sender and enriches the confirmed-status transition", () => {
+  it("routes lifecycle delivery through the durable Gmail notification outbox", () => {
     const action = read("app/actions/bookings.ts")
     const email = read("lib/email.tsx")
+    const outbox = read("lib/booking-notifications.ts")
     const packageJson = read("package.json")
-    expect(action).toContain("sendBookingConfirmationEmail")
-    expect(action).toContain("loadBookingConfirmationConfiguration")
-    expect(action).toContain('validated.status === "CONFIRMED" && booking.status !== "CONFIRMED"')
-    expect(action.match(/sendBookingConfirmationEmail\(/g)).toHaveLength(1)
-    expect(email).toContain('from "resend"')
-    expect(email).not.toContain("nodemailer")
-    expect(email).not.toContain("EMAIL_HOST")
-    expect(packageJson).not.toContain('"nodemailer"')
+    expect(action).toContain("recordAdvancePaymentTransition")
+    expect(action).toContain("retryBookingNotification")
+    expect(action).not.toContain("sendBookingConfirmationEmail(")
+    expect(outbox).toContain("dispatchBookingNotification")
+    expect(outbox).toContain("CUSTOMER_TRANSFER_INSTRUCTIONS")
+    expect(outbox).toContain("CUSTOMER_TRANSFER_CONFIRMED")
+    expect(outbox).toContain("CUSTOMER_ADVANCE_INSTRUCTIONS")
+    expect(outbox).toContain("CUSTOMER_REFUND_CONFIRMED")
+    expect(email).toContain('from "nodemailer"')
+    expect(email).not.toContain('from "resend"')
+    expect(email).toContain("GMAIL_SMTP_USER")
+    expect(packageJson).toContain('"nodemailer"')
+    expect(packageJson).not.toContain('"resend"')
   })
 
   it("uses versioned application snapshots for payment and confirmation content", () => {
@@ -28,13 +34,23 @@ describe("booking confirmation and offline payment instructions", () => {
     expect(resolver).toContain('sectionDefinition.key === "PAYMENT"')
   })
 
-  it("limits the editor to the three required offline instruction modes", () => {
+  it("limits the editor to bank transfer and payment at pickup", () => {
     const service = read("lib/notification-configuration/service.ts")
     const form = read("components/business-configuration/notification-configuration-form.tsx")
-    expect(service).toContain('["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"]')
+    expect(service).toContain('["BANK_TRANSFER", "CASH_ON_PICKUP"]')
+    expect(form).not.toContain('method: "BOOKING_REQUEST"')
     expect(form).not.toContain("ONLINE_DEPOSIT")
     expect(form).not.toContain("ONLINE_FULL")
     expect(form).not.toContain("CARD_ON_PICKUP")
+  })
+
+  it("allows zero percent to disable the booking deposit", () => {
+    const action = read("app/actions/notification-configuration.ts")
+    const form = read("components/business-configuration/notification-configuration-form.tsx")
+    const service = read("lib/notification-configuration/service.ts")
+    expect(action).toContain("depositPercentage: z.number().int().min(0).max(100)")
+    expect(form).toContain("Set this to 0% to disable the booking deposit.")
+    expect(service).toContain("resolveOwnerDepositPolicy(input)")
   })
 
   it("requires method-specific instructions for every enabled method", () => {
@@ -49,12 +65,15 @@ describe("booking confirmation and offline payment instructions", () => {
         { method: "CASH_ON_PICKUP", enabled: true },
       ],
       instructions: [
-        { method: "BANK_TRANSFER", locale: "en", instructions: "Use the reference." },
+        {
+          method: "BANK_TRANSFER",
+          locale: "en",
+          instructions: "Use the reference.",
+        },
       ],
     })
     expect(parsed.success).toBe(false)
-    if (!parsed.success)
-      expect(parsed.error.issues.some(({ message }) => message.includes("payments.instructions_required"))).toBe(true)
+    if (!parsed.success) expect(parsed.error.issues.some(({ message }) => message.includes("payments.instructions_required"))).toBe(true)
   })
 
   it("migrates legacy instructions to their version default method", () => {

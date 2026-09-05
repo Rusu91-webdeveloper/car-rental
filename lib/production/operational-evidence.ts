@@ -139,11 +139,15 @@ export async function verifyAlertDelivery(input: {
   const repository = input.repository ?? new PrismaOperationalEvidenceRepository()
   const now = input.now ?? (() => new Date())
   const requestedAt = now()
+  const recipientFingerprint = createHash("sha256")
+    .update(input.recipient.trim().toLowerCase())
+    .digest("hex")
+    .slice(0, 16)
   const created = await repository.create({
     type: "ALERT_DELIVERY",
     environment: input.environment,
     operatorId: input.operatorId,
-    deduplicationKey: `alert:${input.environment}:${alertWindow(requestedAt)}`,
+    deduplicationKey: `alert:${input.environment}:${alertWindow(requestedAt)}:${recipientFingerprint}`,
     requestedAt,
   })
   if (created === "DUPLICATE") return { status: "RATE_LIMITED" as const }

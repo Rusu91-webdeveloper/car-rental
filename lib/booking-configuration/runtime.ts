@@ -1,5 +1,6 @@
 import { PricingError } from "@/lib/pricing/errors"
 import { money } from "@/lib/pricing/money"
+import { effectiveMinimumRentalMinutes } from "./minimum-rental"
 import type { PublicBookingConfiguration } from "./types"
 import { resolveEffectiveBookingFields } from "./field-resolver"
 import { resolveEffectiveBookingFlow, validateBookingWorkflow } from "./workflow"
@@ -7,6 +8,11 @@ import { PrismaBookingConfigurationRepository, type ActivePhase6Record } from ".
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import { legalContentHash, renderLegalPlainText } from "@/lib/legal/content"
 import type { BookingLegalDocumentRequirement, BookingLegalRequirements } from "@/lib/legal/types"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 function valid(value: string) {
   return value === "VALID" || value === "WARNING"
@@ -15,10 +21,10 @@ function valid(value: string) {
 export function assertActivePhase6Configuration(record: ActivePhase6Record) {
   if (
     !valid(record.releaseValidationStatus) ||
-    [record.insuranceVersionStatus, record.customerDriverVersionStatus, record.workflowVersionStatus, record.legalVersionStatus].some(
+    [record.insuranceVersionStatus, record.customerDriverVersionStatus, record.workflowVersionStatus, record.paymentVersionStatus, record.legalVersionStatus].some(
       (status) => status !== "RELEASED",
     ) ||
-    [record.insuranceValidationStatus, record.customerDriverValidationStatus, record.workflowValidationStatus, record.legalValidationStatus].some(
+    [record.insuranceValidationStatus, record.customerDriverValidationStatus, record.workflowValidationStatus, record.paymentValidationStatus, record.legalValidationStatus].some(
       (status) => !valid(status),
     )
   )
@@ -117,11 +123,51 @@ export async function resolvePublicBookingConfiguration(input: {
     input.vehicleId,
     input.locale,
   )
-  if (!record) return { mode: "LEGACY", businessTimeZone: "UTC", fields: [], steps: [] }
+  if (!record)
+    return {
+      mode: "LEGACY",
+      businessTimeZone: "UTC",
+      weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS,
+      openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS,
+      handoverPolicy: DEFAULT_HANDOVER_POLICY,
+      minimumRentalMinutes: 1,
+      minimumChargeDays: 1,
+      gracePeriodMinutes: 0,
+      preparationBufferMinutes: 120,
+      fields: [],
+      steps: [],
+    }
   assertActivePhase6Configuration(record)
   const legal = resolveLegalRequirements(record, input.locale)
   const availableForVehicle =
     record.insurance.availabilityScope === "ALL_VEHICLES" || record.insurance.vehicleIds.includes(input.vehicleId)
+  const paymentMethods = record.payment.methods.flatMap(({ method, enabled }) => {
+    if (!enabled || (method !== "BANK_TRANSFER" && method !== "CASH_ON_PICKUP")) return []
+    const bookingMethod = method === "BANK_TRANSFER" ? "TRANSFER" : "PAY_AT_PICKUP"
+    const instruction =
+      record.payment.instructions.find((value) => value.method === method && value.locale === input.locale) ??
+      record.payment.instructions.find((value) => value.method === method && value.locale === "en")
+    const depositPercentage = record.payment.depositMode === "PERCENTAGE_BPS" ? record.payment.depositValue / 100 : 0
+    return [{
+      method: bookingMethod as "TRANSFER" | "PAY_AT_PICKUP",
+      configuredMode: method,
+      label: input.locale === "de" ? (method === "BANK_TRANSFER" ? "Banküberweisung" : "Zahlung bei Abholung") : (method === "BANK_TRANSFER" ? "Bank transfer" : "Pay at pickup"),
+      description: input.locale === "de"
+        ? record.payment.depositMode !== "NONE"
+          ? `${depositPercentage}% Anzahlung per Überweisung; Restbetrag bei Abholung.`
+          : method === "BANK_TRANSFER" ? "Gesamtbetrag per Überweisung vor der Bestätigung." : "Gesamtbetrag bei der Fahrzeugabholung."
+        : record.payment.depositMode !== "NONE"
+          ? `${depositPercentage}% deposit by bank transfer; remaining balance at pickup.`
+          : method === "BANK_TRANSFER" ? "Full payment by bank transfer before confirmation." : "Full payment when collecting the vehicle.",
+      instructions: instruction?.instructions,
+    }]
+  })
+  if (paymentMethods.length === 0)
+    throw new PricingError("ACTIVE_CONFIGURATION_INVALID", "No supported payment method is enabled.", "OPERATIONAL")
+  const configuredDefault = record.payment.defaultMethod === "CASH_ON_PICKUP" ? "PAY_AT_PICKUP" : "TRANSFER"
+  const defaultMethod = paymentMethods.some((value) => value.method === configuredDefault)
+    ? configuredDefault
+    : paymentMethods[0].method
   return {
     mode: "ACTIVE_RELEASE",
     releaseId: record.releaseId,
@@ -129,7 +175,17 @@ export async function resolvePublicBookingConfiguration(input: {
     customerDriverConfigVersionId: record.customerDriverVersionId,
     bookingWorkflowConfigVersionId: record.workflowVersionId,
     businessTimeZone: record.businessTimeZone,
-    fields: resolveEffectiveBookingFields(record.customerDriver),
+    weeklyOpeningHours: record.weeklyOpeningHours,
+    openingHoursExceptions: record.openingHoursExceptions,
+    handoverPolicy: record.handoverPolicy,
+    minimumRentalMinutes: effectiveMinimumRentalMinutes(
+      record.minimumRentalMinutes,
+      record.minimumChargeDays,
+    ),
+    minimumChargeDays: record.minimumChargeDays,
+    gracePeriodMinutes: record.gracePeriodMinutes,
+    preparationBufferMinutes: record.preparationBufferMinutes,
+    fields: resolveEffectiveBookingFields(record.customerDriver, input.locale),
     steps: resolveEffectiveBookingFlow(record.workflow, record.legal),
     insurance: {
       configurationVersionId: record.insuranceVersionId,
@@ -147,6 +203,13 @@ export async function resolvePublicBookingConfiguration(input: {
       showInConfirmation: record.insurance.showInConfirmation,
       showCustomerSelection: record.insurance.showCustomerSelection,
       preselectedByDefault: record.insurance.preselectedByDefault,
+    },
+    payment: {
+      configurationVersionId: record.paymentVersionId,
+      methods: paymentMethods,
+      defaultMethod,
+      depositEnabled: record.payment.depositMode !== "NONE",
+      depositPercentage: record.payment.depositMode === "PERCENTAGE_BPS" ? record.payment.depositValue / 100 : 0,
     },
     legal,
   }

@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "@/navigation"
 import { useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
@@ -10,6 +9,7 @@ import { FilterBar } from "@/components/filter-bar"
 import { CategoryFilter } from "@/components/category-filter"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { ClientOnly } from "@/components/client-only"
+import { BrandMark } from "@/components/brand-mark"
 import { filterCarsByAvailability } from "@/app/actions/cars"
 
 interface Car {
@@ -17,7 +17,8 @@ interface Car {
   name: string
   nameDe?: string | null
   category: string
-  price: number
+  price: number | null
+  pricingPublished: boolean
   image: string
   status: string
   subtitle?: string | null
@@ -61,6 +62,9 @@ export function CarsClient({
 
   const pickupDateParam = searchParams.get("pickupDate")
   const dropoffDateParam = searchParams.get("dropoffDate")
+  const availableCarCount = filteredCars.filter(
+    (car) => car.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK"),
+  ).length
 
   useEffect(() => {
     const filterCars = async () => {
@@ -80,7 +84,7 @@ export function CarsClient({
 
         if (result.error) {
           console.error(result.error)
-          setFilteredCars(filtered)
+          setFilteredCars([])
           return
         }
 
@@ -94,23 +98,17 @@ export function CarsClient({
   }, [cars, selectedCategory, selectedYear, pickupDateParam, dropoffDateParam])
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.96)_100%)] pb-24">
+    <div className="qujo-page pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background shadow-sm transition-colors hover:bg-muted"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
+      <header className="sticky top-0 z-30 border-b border-black/[0.06] bg-[#f8f7f2]/90 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-5">
+              <BrandMark />
+              <span className="hidden h-9 w-px bg-black/10 sm:block" />
               <div>
-                <h1 className="text-xl font-bold sm:text-2xl">{t("cars.title")}</h1>
-                <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: filteredCars.length })}</p>
+                <h1 className="text-lg font-bold sm:text-xl">{t("cars.title")}</h1>
+                <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: availableCarCount })}</p>
               </div>
             </div>
             <ClientOnly>
@@ -118,7 +116,7 @@ export function CarsClient({
             </ClientOnly>
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm">
+          <div className="rounded-2xl border border-black/[0.07] bg-white p-3 shadow-sm">
             <ClientOnly>
               <FilterBar selectedYear={selectedYear} onYearChange={setSelectedYear} startYear={startYear} />
             </ClientOnly>
@@ -128,7 +126,7 @@ export function CarsClient({
 
       {/* Category Filter */}
       <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6">
-        <div className="rounded-2xl border border-border/70 bg-background/85 p-2 shadow-sm">
+        <div className="rounded-2xl border border-black/[0.07] bg-white p-2 shadow-sm">
           <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
         </div>
       </div>

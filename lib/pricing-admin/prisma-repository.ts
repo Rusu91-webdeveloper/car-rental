@@ -3,7 +3,18 @@ import { CAPABILITIES } from "@/lib/authorization/capabilities"
 import { databaseUserHasCapability } from "@/lib/authorization/database-capabilities"
 import { PrismaBusinessConfigurationRepository, type ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
-import type { PricingBillingConfiguration } from "@/lib/business-configuration/domains"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
+import type {
+  BusinessHoursException,
+  HandoverPolicy,
+  PricingBillingConfiguration,
+  WeeklyOpeningHours,
+} from "@/lib/business-configuration/domains"
+import {
+  handoverPoliciesEqual,
+  openingHoursExceptionsEqual,
+  weeklyOpeningHoursEqual,
+} from "@/lib/business-hours"
 import type {
   FleetDraftRecord,
   PricingAdminRepository,
@@ -45,7 +56,11 @@ function mapPricingDraft(
       rentalMonthDefinition: row.pricingBilling.rentalMonthDefinition,
       billableDayRule: row.pricingBilling.billableDayMethod,
       gracePeriodMinutes: row.pricingBilling.gracePeriodMinutes,
-      minimumRentalMinutes: row.pricingBilling.minimumRentalMinutes,
+      preparationBufferMinutes: row.pricingBilling.preparationBufferMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        row.pricingBilling.minimumRentalMinutes,
+        row.pricingBilling.minimumChargeDays,
+      ),
       minimumChargeDays: row.pricingBilling.minimumChargeDays,
       pricesIncludeTax: row.pricingBilling.priceTaxTreatment === "TAX_INCLUDED",
       taxRateBps: row.pricingBilling.taxRateBps,
@@ -86,7 +101,11 @@ function pricingData(configuration: PricingBillingConfiguration) {
     rentalMonthDefinition: configuration.rentalMonthDefinition,
     billableDayMethod: configuration.billableDayRule,
     gracePeriodMinutes: configuration.gracePeriodMinutes,
-    minimumRentalMinutes: configuration.minimumRentalMinutes,
+    preparationBufferMinutes: configuration.preparationBufferMinutes,
+    minimumRentalMinutes: effectiveMinimumRentalMinutes(
+      configuration.minimumRentalMinutes,
+      configuration.minimumChargeDays,
+    ),
     minimumChargeDays: configuration.minimumChargeDays,
     priceTaxTreatment: configuration.pricesIncludeTax ? "TAX_INCLUDED" as const : "TAX_EXCLUDED" as const,
     taxRateBps: configuration.taxRateBps,
@@ -194,6 +213,7 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
         rentalMonthDefinition: "FIXED_30_DAYS",
         billableDayRule: "STARTED_24_HOUR_PERIODS",
         gracePeriodMinutes: 0,
+        preparationBufferMinutes: 120,
         minimumRentalMinutes: 1,
         minimumChargeDays: 1,
         pricesIncludeTax: false,
@@ -406,6 +426,9 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
     configuration: PricingBillingConfiguration
     changeSummary: string
     businessTimeZone?: string
+    weeklyOpeningHours?: WeeklyOpeningHours
+    openingHoursExceptions?: BusinessHoursException[]
+    handoverPolicy?: HandoverPolicy
     client: PrismaClient
   }) {
     return input.client.$transaction(async (tx) => {
@@ -423,16 +446,36 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
       await tx.pricingBillingConfigVersion.update({ where: { configurationVersionId: input.pricingVersionId }, data: pricingData(input.configuration) })
 
       const draftRelease = await tx.businessConfigurationRelease.findFirst({ where: { status: { in: ["DRAFT", "VALIDATED"] } }, include: { generalRentalConfig: { include: { version: true } } }, orderBy: { updatedAt: "desc" } })
-      if (input.businessTimeZone && !draftRelease) {
-        const activeTimeZone = (await tx.businessConfigurationRelease.findFirst({
+      const activeGeneral = await tx.businessConfigurationRelease.findFirst({
           where: { status: "ACTIVE" },
-          select: { generalRentalConfig: { select: { businessTimeZone: true } } },
-        }))?.generalRentalConfig.businessTimeZone ?? "UTC"
-        if (input.businessTimeZone !== activeTimeZone) {
-          throw new ConfigurationWorkflowError("RELEASE_INCOMPLETE", "Attach the pricing drafts to a release before changing its timezone.", "VALIDATION")
+          select: { generalRentalConfig: { select: {
+            businessTimeZone: true,
+            weeklyOpeningHours: true,
+            openingHoursExceptions: true,
+            handoverPolicy: true,
+          } } },
+        })
+      const activeTimeZone = activeGeneral?.generalRentalConfig.businessTimeZone ?? "UTC"
+      const activeOpeningHours = activeGeneral?.generalRentalConfig.weeklyOpeningHours
+      const openingHoursChanged = input.weeklyOpeningHours !== undefined &&
+        !weeklyOpeningHoursEqual(input.weeklyOpeningHours, activeOpeningHours)
+      const exceptionsChanged = input.openingHoursExceptions !== undefined &&
+        !openingHoursExceptionsEqual(input.openingHoursExceptions, activeGeneral?.generalRentalConfig.openingHoursExceptions)
+      const handoverPolicyChanged = input.handoverPolicy !== undefined &&
+        !handoverPoliciesEqual(input.handoverPolicy, activeGeneral?.generalRentalConfig.handoverPolicy)
+      if (!draftRelease) {
+        if ((input.businessTimeZone && input.businessTimeZone !== activeTimeZone) || openingHoursChanged || exceptionsChanged || handoverPolicyChanged) {
+          throw new ConfigurationWorkflowError("RELEASE_INCOMPLETE", "Attach the pricing drafts to a release before changing its timezone or handover schedule.", "VALIDATION")
         }
       }
-      if (input.businessTimeZone && draftRelease && input.businessTimeZone !== draftRelease.generalRentalConfig.businessTimeZone) {
+      const draftOpeningHoursChanged = input.weeklyOpeningHours !== undefined && draftRelease &&
+        !weeklyOpeningHoursEqual(input.weeklyOpeningHours, draftRelease.generalRentalConfig.weeklyOpeningHours)
+      const draftTimeZoneChanged = Boolean(input.businessTimeZone && draftRelease && input.businessTimeZone !== draftRelease.generalRentalConfig.businessTimeZone)
+      const draftExceptionsChanged = input.openingHoursExceptions !== undefined && draftRelease &&
+        !openingHoursExceptionsEqual(input.openingHoursExceptions, draftRelease.generalRentalConfig.openingHoursExceptions)
+      const draftHandoverPolicyChanged = input.handoverPolicy !== undefined && draftRelease &&
+        !handoverPoliciesEqual(input.handoverPolicy, draftRelease.generalRentalConfig.handoverPolicy)
+      if (draftRelease && (draftTimeZoneChanged || draftOpeningHoursChanged || draftExceptionsChanged || draftHandoverPolicyChanged)) {
         let generalVersionId = draftRelease.generalRentalConfigVersionId
         if (["RELEASED", "ARCHIVED"].includes(draftRelease.generalRentalConfig.version.status)) {
           const next = (await tx.configurationVersion.aggregate({ where: { domain: "GENERAL_RENTAL" }, _max: { versionNumber: true } }))._max.versionNumber ?? 0
@@ -440,15 +483,30 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
             data: {
               domain: "GENERAL_RENTAL",
               versionNumber: next + 1,
-              changeSummary: "Billing timezone update",
+              changeSummary: "Business hours or timezone update",
               createdById: input.actorId,
               updatedById: input.actorId,
-              generalRental: { create: { businessTimeZone: input.businessTimeZone, currency: draftRelease.generalRentalConfig.currency, supportedLocales: draftRelease.generalRentalConfig.supportedLocales } },
+              generalRental: { create: {
+                businessTimeZone: input.businessTimeZone ?? draftRelease.generalRentalConfig.businessTimeZone,
+                currency: draftRelease.generalRentalConfig.currency,
+                supportedLocales: draftRelease.generalRentalConfig.supportedLocales,
+                weeklyOpeningHours: (input.weeklyOpeningHours ?? draftRelease.generalRentalConfig.weeklyOpeningHours) as unknown as Prisma.InputJsonValue,
+                openingHoursExceptions: (input.openingHoursExceptions ?? draftRelease.generalRentalConfig.openingHoursExceptions) as unknown as Prisma.InputJsonValue,
+                handoverPolicy: (input.handoverPolicy ?? draftRelease.generalRentalConfig.handoverPolicy) as unknown as Prisma.InputJsonValue,
+              } },
             },
           })
           generalVersionId = created.id
         } else {
-          await tx.generalRentalConfigVersion.update({ where: { configurationVersionId: generalVersionId }, data: { businessTimeZone: input.businessTimeZone } })
+          await tx.generalRentalConfigVersion.update({
+            where: { configurationVersionId: generalVersionId },
+            data: {
+              businessTimeZone: input.businessTimeZone,
+              weeklyOpeningHours: input.weeklyOpeningHours as unknown as Prisma.InputJsonValue | undefined,
+              openingHoursExceptions: input.openingHoursExceptions as unknown as Prisma.InputJsonValue | undefined,
+              handoverPolicy: input.handoverPolicy as unknown as Prisma.InputJsonValue | undefined,
+            },
+          })
           await tx.configurationVersion.update({ where: { id: generalVersionId }, data: { revision: { increment: 1 }, status: "DRAFT", validationStatus: "NOT_VALIDATED", updatedById: input.actorId } })
         }
         await tx.businessConfigurationRelease.update({ where: { id: draftRelease.id }, data: { generalRentalConfigVersionId: generalVersionId, status: "DRAFT", validationStatus: "NOT_VALIDATED", validationSnapshot: Prisma.JsonNull, revision: { increment: 1 }, updatedById: input.actorId } })
@@ -460,11 +518,20 @@ export class PrismaPricingAdminRepository implements PricingAdminRepository {
       })
       await audit(tx, {
         actorId: input.actorId,
-        action: changedFields.some((field) => ["billableDayMethod", "gracePeriodMinutes", "minimumRentalMinutes", "minimumChargeDays"].includes(field)) ? "pricing.billing_rules_changed" : "pricing.strategy_changed",
+        action: changedFields.some((field) => ["billableDayMethod", "gracePeriodMinutes", "preparationBufferMinutes", "minimumRentalMinutes", "minimumChargeDays"].includes(field)) ? "pricing.billing_rules_changed" : "pricing.strategy_changed",
         targetType: "ConfigurationVersion",
         targetId: input.pricingVersionId,
         before: { revision: input.expectedRevision, strategy: current.pricingBilling.mixedDurationStrategy },
-        after: { revision: input.expectedRevision + 1, strategy: input.configuration.mixedDurationStrategy, changedFields, changeSummary: input.changeSummary },
+        after: {
+          revision: input.expectedRevision + 1,
+          strategy: input.configuration.mixedDurationStrategy,
+          changedFields,
+          businessTimeZoneChanged: draftTimeZoneChanged,
+          weeklyOpeningHoursChanged: draftOpeningHoursChanged,
+          openingHoursExceptionsChanged: draftExceptionsChanged,
+          handoverPolicyChanged: draftHandoverPolicyChanged,
+          changeSummary: input.changeSummary,
+        },
       })
       return { revision: input.expectedRevision + 1 }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })

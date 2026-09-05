@@ -5,6 +5,7 @@ import { Phase6DraftControls } from "@/components/business-configuration/phase6-
 import { InsuranceConfigurationForm } from "@/components/business-configuration/insurance-configuration-form";
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 
 export default async function CarRentalRulesPage() {
   const caps = await getBusinessConfigurationCapabilities();
@@ -16,6 +17,7 @@ export default async function CarRentalRulesPage() {
         eyebrow="Cars"
         title="Should customers be offered insurance?"
         description="Choose the price, whether it is optional, and which cars offer it."
+        action={<ConfigurationReturnLink />}
       />
       <Phase6DraftControls
         data={data}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useToast } from '@/hooks/use-toast'
+import { useTranslations } from 'next-intl'
 import {
   Toast,
   ToastClose,
@@ -11,10 +12,11 @@ import {
 } from '@/components/ui/toast'
 
 export function Toaster() {
+  const t = useTranslations('common')
   const { toasts } = useToast()
 
   return (
-    <ToastProvider>
+    <ToastProvider label={t('notification')}>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
@@ -25,11 +27,11 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose aria-label={t('close')} />
           </Toast>
         )
       })}
-      <ToastViewport />
+      <ToastViewport label={t('notificationsHotkey')} />
     </ToastProvider>
   )
 }

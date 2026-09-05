@@ -22,8 +22,8 @@ export default async function RentalDurationSettingsPage({ searchParams }: { sea
     <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
       <AdminPageHeader
         eyebrow={editing ? "Edit settings" : "Business setup"}
-        title="Set your booking length and tax"
-        description="Enter the minimum number of days and your tax once. These rules apply automatically to every car."
+        title="Set your booking schedule, length and tax"
+        description="Configure pickup and return windows, holiday exceptions, handover capacity, minimum notice, rental length and tax. These rules apply automatically to every car."
       />
       <BillingRuleForm
         key={`${data.draftPricing?.id ?? "none"}-${data.draftPricing?.revision ?? 0}`}

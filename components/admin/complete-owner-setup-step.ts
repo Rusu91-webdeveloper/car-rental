@@ -7,9 +7,10 @@ interface SetupRouter {
   refresh(): void
 }
 
-export function ownerSetupSaveLabel(nextHref: string | undefined, continueLabel = "Save and continue") {
-  if (nextHref === "/admin/settings") return "Save changes"
-  return nextHref ? continueLabel : "Save changes"
+export function ownerSetupSaveLabel(nextHref: string | undefined, isGerman = false, continueLabel?: string) {
+  if (nextHref === "/admin/settings") return isGerman ? "Speichern und veröffentlichen" : "Save and publish"
+  if (nextHref) return continueLabel ?? (isGerman ? "Speichern und weiter" : "Save and continue")
+  return isGerman ? "Änderungen speichern" : "Save changes"
 }
 
 export async function completeOwnerSetupStep(
@@ -23,6 +24,6 @@ export async function completeOwnerSetupStep(
   }
   const result = await completeOwnerSetupStepAction(stepId)
   if ("error" in result) return result.error
-  router.push(nextHref)
+  router.push(nextHref === "/admin/settings" ? `/admin/settings?saved=${stepId}` : nextHref)
   return undefined
 }

@@ -59,6 +59,7 @@ model User {
   applicationLegalAcceptances    BookingApplicationLegalAcceptance[] @relation("BookingApplicationLegalAcceptanceCustomer")
   accessRoleAssignments          UserAccessRole[]
   auditEvents                    AuditEvent[]                        @relation("AuditEventActor")
+  paymentsRecorded               Payment[]                           @relation("PaymentRecordedBy")
 
   @@index([providerId])
   @@index([email])
@@ -191,32 +192,36 @@ model Booking {
   car   Car    @relation(fields: [carId], references: [id])
 
   // Dates stored in UTC
-  pickupDate  DateTime
-  dropoffDate DateTime
-  location    String
+  pickupDate       DateTime
+  dropoffDate      DateTime
+  businessTimeZone String   @default("UTC")
+  location         String
 
   // Pricing
-  pricePerDay     Int // in cents, locked at booking time
-  totalDays       Int
-  totalPrice      Int // in cents
-  depositAmount   Int // in cents
-  guaranteeAmount Int @default(0) // in cents, refundable security hold
+  pricePerDay          Int // in cents, locked at booking time
+  totalDays            Int
+  totalPrice           Int // in cents
+  depositAmount        Int // in cents
+  advancePaymentAmount Int @default(0) // exact amount required before confirmation
+  guaranteeAmount      Int @default(0) // in cents, refundable security hold
 
   // Status
-  status        BookingStatus        @default(PENDING)
-  paymentStatus PaymentStatus        @default(PENDING)
-  paymentMethod BookingPaymentMethod @default(TRANSFER)
+  status             BookingStatus        @default(PENDING)
+  paymentStatus      PaymentStatus        @default(PENDING)
+  paymentMethod      BookingPaymentMethod @default(TRANSFER)
+  refundReviewStatus RefundReviewStatus   @default(NOT_REQUIRED)
 
   // Stripe
   stripeSessionId       String? @unique
   stripePaymentIntentId String? @unique
 
   // Timestamps
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  confirmedAt DateTime?
-  cancelledAt DateTime?
-  completedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
+  completedAt  DateTime?
+  paymentDueAt DateTime?
 
   // Relations
   payments               Payment[]
@@ -229,12 +234,16 @@ model Booking {
   customerDocuments      CustomerDocument[]
   documentUploadSession  DocumentUploadSession?
   sourceApplication      BookingApplication?
+  notifications          BookingNotification[]
+  paymentPolicySnapshot  BookingPaymentPolicySnapshot?
 
   @@unique([carId, pickupDate, dropoffDate]) // Prevent exact duplicate bookings
   @@index([userId])
   @@index([carId])
   @@index([status])
   @@index([paymentMethod])
+  @@index([status, paymentStatus, paymentDueAt])
+  @@index([refundReviewStatus])
   @@index([pickupDate, dropoffDate])
   @@index([transferCode])
 }
@@ -250,6 +259,7 @@ enum BookingStatus {
 
 enum PaymentStatus {
   PENDING
+  DEPOSIT_PAID
   PAID
   FAILED
   REFUNDED
@@ -259,6 +269,49 @@ enum PaymentStatus {
 enum BookingPaymentMethod {
   TRANSFER
   PAY_AT_PICKUP
+}
+
+enum PaymentPurpose {
+  DEPOSIT
+  BALANCE
+  FULL
+}
+
+enum PaymentKind {
+  RECEIPT
+  REFUND
+}
+
+enum RefundReviewStatus {
+  NOT_REQUIRED
+  PENDING
+  RESOLVED
+}
+
+enum BookingNotificationEvent {
+  CUSTOMER_TRANSFER_INSTRUCTIONS
+  CUSTOMER_CASH_CONFIRMATION
+  CUSTOMER_TRANSFER_CONFIRMED
+  CUSTOMER_TRANSFER_EXPIRED
+  CUSTOMER_ADVANCE_INSTRUCTIONS
+  CUSTOMER_BOOKING_CONFIRMED
+  CUSTOMER_BALANCE_RECEIPT
+  CUSTOMER_BOOKING_CANCELLED
+  CUSTOMER_REFUND_CONFIRMED
+  CUSTOMER_PAYMENT_EXPIRED
+  ADMIN_BOOKING_CREATED
+}
+
+enum BookingNotificationRecipient {
+  CUSTOMER
+  ADMIN
+}
+
+enum BookingNotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
 }
 
 enum BookingApplicationStatus {
@@ -309,20 +362,88 @@ model Payment {
   bookingId String
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  amount   Int // in cents
-  currency String        @default("usd")
-  status   PaymentStatus
+  amount       Int // in cents
+  currency     String                @default("usd")
+  status       PaymentStatus
+  kind         PaymentKind           @default(RECEIPT)
+  purpose      PaymentPurpose?
+  method       BookingPaymentMethod?
+  receivedAt   DateTime?
+  recordedById String?
+  recordedBy   User?                 @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
 
   stripePaymentIntentId String?
   stripeChargeId        String?
 
   metadata Json?
+  reason   String? @db.Text
+
+  relatedPaymentId String?
+  relatedPayment   Payment?  @relation("PaymentRefunds", fields: [relatedPaymentId], references: [id], onDelete: SetNull)
+  refunds          Payment[] @relation("PaymentRefunds")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([bookingId])
   @@index([stripePaymentIntentId])
+  @@index([recordedById, receivedAt])
+  @@index([bookingId, kind, status])
+  @@index([relatedPaymentId])
+}
+
+model BookingNotification {
+  id                String                       @id @default(cuid())
+  bookingId         String
+  booking           Booking                      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  event             BookingNotificationEvent
+  recipient         BookingNotificationRecipient
+  eventKey          String                       @unique @db.VarChar(160)
+  status            BookingNotificationStatus    @default(PENDING)
+  attemptCount      Int                          @default(0)
+  nextAttemptAt     DateTime                     @default(now())
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  providerMessageId String?                      @db.VarChar(255)
+  lastErrorCode     String?                      @db.VarChar(64)
+  payloadSnapshot   Json?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([bookingId, createdAt])
+}
+
+model BookingPaymentPolicySnapshot {
+  id                     String                @id @default(cuid())
+  bookingId              String                @unique
+  booking                Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  paymentConfigVersionId String?
+  configuredPaymentMode  ConfiguredPaymentMode
+  bookingPaymentMethod   BookingPaymentMethod
+  depositType            DepositType
+  depositValue           Int
+  depositRateBps         Int?
+  depositAmount          Int
+  advancePaymentAmount   Int
+  remainingBalanceRule   RemainingBalanceRule
+  instructionLocale      String                @db.VarChar(10)
+  instructionText        String?               @db.Text
+  accountName            String?
+  iban                   String?
+  bic                    String?
+  bankName               String?
+  companyName            String?
+  companyEmail           String?
+  companyPhone           String?
+  companyAddress         String?
+  companyPostalCode      String?
+  companyCity            String?
+  companyCountry         String?
+  capturedAt             DateTime              @default(now())
+
+  @@index([paymentConfigVersionId])
+  @@index([configuredPaymentMode])
 }
 
 // Blocked dates for maintenance or other reasons
@@ -383,9 +504,15 @@ model AdminAuditLog {
 }
 
 enum AdminAction {
+  BOOKING_CREATED
   BOOKING_CONFIRMED
+  BOOKING_STATUS_CHANGED
   BOOKING_CANCELLED
   BOOKING_REJECTED
+  PAYMENT_RECEIVED
+  PAYMENT_REFUNDED
+  REFUND_REVIEW_RESOLVED
+  NOTIFICATION_RETRIED
   CAR_CREATED
   CAR_UPDATED
   CAR_DELETED
@@ -393,6 +520,7 @@ enum AdminAction {
   BLOCKED_DATE_ADDED
   BLOCKED_DATE_REMOVED
   SETTINGS_UPDATED
+  MAINTENANCE_CLEANUP
 }
 
 // Company settings - single record to store all company configuration
@@ -400,27 +528,27 @@ model CompanySettings {
   id String @id @default("company-settings")
 
   // Company Information
-  companyName    String  @default("RentCar GmbH")
-  companyEmail   String  @default("info@rentcar.de")
-  companyPhone   String? @default("+49 (0) 30 12345678")
-  companyAddress String? @default("Musterstraße 123")
-  companyCity    String? @default("10115 Berlin")
+  companyName    String  @default("Qujo Autovermietung GmbH")
+  companyEmail   String  @default("")
+  companyPhone   String?
+  companyAddress String?
+  companyCity    String?
   companyState   String?
   companyZipCode String?
   companyCountry String? @default("Deutschland")
 
   // Legal Information (for Impressum/Imprint)
-  managingDirector   String? @default("Max Mustermann")
-  commercialRegister String? @default("HRB 123456 B")
-  registerCourt      String? @default("Amtsgericht Berlin-Charlottenburg")
-  vatId              String? @default("DE123456789")
-  responsiblePerson  String? @default("Max Mustermann, Musterstraße 123, 10115 Berlin, Deutschland")
+  managingDirector   String?
+  commercialRegister String?
+  registerCourt      String?
+  vatId              String?
+  responsiblePerson  String?
 
   // Bank/Payment Details
-  bankName      String  @default("Your Bank Name")
-  accountName   String  @default("Car Rental Company")
-  accountNumber String  @default("1234567890")
-  swiftCode     String  @default("YOURSWIFT")
+  bankName      String  @default("")
+  accountName   String  @default("")
+  accountNumber String  @default("")
+  swiftCode     String  @default("")
   iban          String?
 
   // Tax Configuration
@@ -430,8 +558,8 @@ model CompanySettings {
   guaranteePercentage Float   @default(0.0) // Refundable security hold percentage (e.g., 0.3 for 30%)
 
   // Email Configuration
-  supportEmail String @default("support@rentcar.com")
-  adminEmail   String @default("admin@rentcar.com")
+  supportEmail String @default("")
+  adminEmail   String @default("")
 
   // Additional Settings
   currency       String @default("EUR")
@@ -955,6 +1083,9 @@ model GeneralRentalConfigVersion {
   businessTimeZone       String
   currency               String   @db.VarChar(3)
   supportedLocales       String[]
+  weeklyOpeningHours     Json
+  openingHoursExceptions Json
+  handoverPolicy         Json
 
   version             ConfigurationVersion           @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
   releases            BusinessConfigurationRelease[]
@@ -962,17 +1093,18 @@ model GeneralRentalConfigVersion {
 }
 
 model PricingBillingConfigVersion {
-  configurationVersionId String                       @id
-  weeklyPricingEnabled   Boolean                      @default(false)
-  monthlyPricingEnabled  Boolean                      @default(false)
-  mixedDurationStrategy  MixedDurationPricingStrategy @default(DAILY_ONLY)
-  rentalMonthDefinition  RentalMonthDefinition        @default(FIXED_30_DAYS)
-  billableDayMethod      BillableDayMethod            @default(STARTED_24_HOUR_PERIODS)
-  gracePeriodMinutes     Int                          @default(0)
-  minimumRentalMinutes   Int                          @default(1)
-  minimumChargeDays      Int                          @default(1)
-  priceTaxTreatment      PriceTaxTreatment            @default(TAX_EXCLUDED)
-  taxRateBps             Int                          @default(0)
+  configurationVersionId   String                       @id
+  weeklyPricingEnabled     Boolean                      @default(false)
+  monthlyPricingEnabled    Boolean                      @default(false)
+  mixedDurationStrategy    MixedDurationPricingStrategy @default(DAILY_ONLY)
+  rentalMonthDefinition    RentalMonthDefinition        @default(FIXED_30_DAYS)
+  billableDayMethod        BillableDayMethod            @default(STARTED_24_HOUR_PERIODS)
+  gracePeriodMinutes       Int                          @default(0)
+  preparationBufferMinutes Int                          @default(120)
+  minimumRentalMinutes     Int                          @default(1)
+  minimumChargeDays        Int                          @default(1)
+  priceTaxTreatment        PriceTaxTreatment            @default(TAX_EXCLUDED)
+  taxRateBps               Int                          @default(0)
 
   version             ConfigurationVersion             @relation(fields: [configurationVersionId], references: [id], onDelete: Restrict)
   releases            BusinessConfigurationRelease[]
@@ -1166,11 +1298,11 @@ model PaymentMethodRule {
 }
 
 model PaymentInstructionTranslation {
-  id                     String @id @default(cuid())
+  id                     String                @id @default(cuid())
   paymentConfigVersionId String
   method                 ConfiguredPaymentMode
-  locale                 String @db.VarChar(10)
-  instructions           String @db.Text
+  locale                 String                @db.VarChar(10)
+  instructions           String                @db.Text
 
   paymentConfig         PaymentConfigVersion                 @relation(fields: [paymentConfigVersionId], references: [configurationVersionId], onDelete: Cascade)
   applicationSelections BookingApplicationPaymentSelection[]
@@ -1659,6 +1791,9 @@ model BookingApplicationPaymentSelection {
   depositValue                    Int
   quotedDepositAmount             Int
   quotedDepositRateBps            Int?
+  remainingBalanceRule            RemainingBalanceRule  @default(NOT_APPLICABLE)
+  instructionLocale               String?               @db.VarChar(10)
+  instructionText                 String?               @db.Text
   currency                        String                @db.VarChar(3)
   selectedAt                      DateTime
   revision                        Int                   @default(1)
@@ -1836,12 +1971,14 @@ model DocumentUploadIntent {
   completedAt                   DateTime?
   abortedAt                     DateTime?
   failureCode                   String?                    @db.VarChar(64)
+  replacesDocumentId            String?
   createdAt                     DateTime                   @default(now())
   updatedAt                     DateTime                   @updatedAt
 
   uploadSession       DocumentUploadSession   @relation(fields: [uploadSessionId], references: [id], onDelete: Restrict)
   documentRequirement DocumentRequirementRule @relation(fields: [documentPolicyConfigVersionId, documentTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
   customerDocument    CustomerDocument?
+  replacesDocument    CustomerDocument?       @relation("DocumentUploadIntentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
 
   @@unique([uploadSessionId, documentTypeId, side, slotNumber, attemptNumber])
   @@unique([storageProviderId, storageContainerId, storageKey])
@@ -1850,6 +1987,7 @@ model DocumentUploadIntent {
   @@index([status, expiresAt])
   @@index([status, cleanupEligibleAt])
   @@index([documentPolicyConfigVersionId, documentTypeId])
+  @@index([replacesDocumentId])
 }
 
 model CustomerDocument {
@@ -1927,6 +2065,7 @@ model CustomerDocument {
   documentRequirement  DocumentRequirementRule?         @relation(fields: [documentPolicyConfigVersionId, documentRequirementTypeId], references: [documentPolicyConfigVersionId, documentTypeId], onDelete: Restrict)
   replacesDocument     CustomerDocument?                @relation("CustomerDocumentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
   replacementDocuments CustomerDocument[]               @relation("CustomerDocumentReplacement")
+  replacementIntents   DocumentUploadIntent[]           @relation("DocumentUploadIntentReplacement")
   reviewedBy           User?                            @relation("CustomerDocumentReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
   reviewDecisions      CustomerDocumentReviewDecision[]
   scanAttempts         DocumentMalwareScanAttempt[]
@@ -1935,7 +2074,6 @@ model CustomerDocument {
   auditEvents          AuditEvent[]
 
   @@unique([storageProviderId, storageKey])
-  @@unique([bookingId, documentTypeId, side, sequence])
   @@index([bookingId, documentTypeId])
   @@index([customerUserId, documentTypeId])
   @@index([retentionUntil, legalHold, deletionStatus])

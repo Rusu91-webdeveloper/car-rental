@@ -37,7 +37,7 @@ export default async function BusinessConfigurationLayout({
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div><p className="text-sm font-semibold">RentCar Admin</p><p className="text-xs text-muted-foreground">Business Configuration</p></div>
+          <div><p className="text-sm font-semibold">Qujo Admin</p><p className="text-xs text-muted-foreground">Business Configuration</p></div>
           <div className="flex gap-4 text-sm"><Link href="/admin" className="text-muted-foreground hover:text-foreground">Admin dashboard</Link><Link href="/" className="text-muted-foreground hover:text-foreground">Customer site</Link></div>
         </div>
       </header>

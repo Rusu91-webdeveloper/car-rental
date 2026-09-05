@@ -1,4 +1,5 @@
-import { Resend } from "resend"
+import { createHash } from "node:crypto"
+import nodemailer, { type Transporter } from "nodemailer"
 import { formatCents } from "@/lib/money"
 import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
 import { getPaymentDetails } from "@/lib/payment-details"
@@ -6,33 +7,81 @@ import { prisma } from "@/lib/db"
 import { logger } from "@/lib/logger"
 
 const safeEmailConsole = {
-  log(message: string, ...discarded: unknown[]) { void message; void discarded; logger.info("email.operation_succeeded") },
-  warn(message: string, ...discarded: unknown[]) { void message; void discarded; logger.warn("email.operation_skipped") },
-  error(message: string, ...discarded: unknown[]) { void message; void discarded; logger.error("email.operation_failed") },
+  log(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.info("email.operation_succeeded")
+  },
+  warn(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.warn("email.operation_skipped")
+  },
+  error(message: string, ...discarded: unknown[]) {
+    void message
+    void discarded
+    logger.error("email.operation_failed")
+  },
 }
-const emailFrom = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "RentCar <noreply@rentcar.com>"
-let resend: Resend | undefined
+const gmailUser = (process.env.GMAIL_SMTP_USER || process.env.EMAIL_USER)?.trim()
+const gmailAppPassword = (process.env.GMAIL_SMTP_APP_PASSWORD || process.env.EMAIL_PASS)?.replace(/\s+/g, "")
+const emailFrom = process.env.EMAIL_FROM || (gmailUser ? `Qujo Autovermietung <${gmailUser}>` : "Qujo Autovermietung <noreply@qujo.de>")
+let smtpTransport: Transporter | undefined
 
-function getResend() {
-  resend ??= new Resend(process.env.RESEND_API_KEY)
-  return resend
+function getSmtpTransport() {
+  if (!gmailUser || !gmailAppPassword) {
+    throw new Error("Gmail SMTP is not configured")
+  }
+  smtpTransport ??= nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: gmailUser,
+      pass: gmailAppPassword,
+    },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  })
+  return smtpTransport
 }
 
 type SendEmailInput = {
   to: string | string[]
   subject: string
   html: string
+  replyTo?: string
+  idempotencyKey?: string
+}
+
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<div\b[^>]*data-email-preview[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, "")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 /**
  * Validates email configuration and returns status information
  */
 export function getEmailConfigStatus() {
-  const hasResend = Boolean(process.env.RESEND_API_KEY)
+  const hasGmailSmtp = Boolean(gmailUser && gmailAppPassword)
 
   return {
-    enabled: hasResend,
-    provider: hasResend ? "Resend" : "None",
+    enabled: hasGmailSmtp,
+    provider: hasGmailSmtp ? "Gmail SMTP" : "None",
     from: emailFrom,
   }
 }
@@ -61,10 +110,7 @@ type LegalAcceptanceEmailReference = {
   acceptedAt: Date
 }
 
-function legalAcceptanceReferencesHtml(
-  references: LegalAcceptanceEmailReference[] | undefined,
-  locale: EmailLocale,
-) {
+function legalAcceptanceReferencesHtml(references: LegalAcceptanceEmailReference[] | undefined, locale: EmailLocale) {
   if (!references?.length) return ""
   const language = locale === "de" ? "de-DE" : "en-US"
   return references
@@ -83,16 +129,67 @@ function normalizeEmailLocale(locale: string | undefined | null): EmailLocale {
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 }
 
 function configuredTextHtml(value: string | undefined) {
   return value ? escapeHtml(value).replace(/\r?\n/g, "<br>") : ""
+}
+
+function professionalEmailHtml(input: {
+  locale: EmailLocale
+  companyName: string
+  supportEmail?: string
+  preview: string
+  heading: string
+  greetingName?: string
+  bodyHtml: string
+  footerNote?: string
+}) {
+  const isGerman = input.locale === "de"
+  const supportLine = input.supportEmail
+    ? `${isGerman ? "Fragen? Schreiben Sie uns an" : "Questions? Email us at"} <a href="mailto:${escapeHtml(input.supportEmail)}" style="color:#315b49">${escapeHtml(input.supportEmail)}</a>.`
+    : isGerman
+      ? "Antworten Sie auf diese E-Mail, wenn Sie Unterstützung benötigen."
+      : "Reply to this email if you need assistance."
+
+  return `<!doctype html>
+    <html lang="${input.locale}">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>${escapeHtml(input.heading)}</title>
+      </head>
+      <body style="margin:0;background:#f3f5f3;color:#17231d;font-family:Arial,Helvetica,sans-serif;line-height:1.6">
+        <div data-email-preview style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(input.preview)}</div>
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px">
+          <div style="background:#123c2d;color:#fff;padding:22px 28px;border-radius:14px 14px 0 0">
+            <p style="margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase">${escapeHtml(input.companyName)}</p>
+          </div>
+          <div style="background:#fff;border:1px solid #dfe5e1;border-top:0;border-radius:0 0 14px 14px;padding:30px 28px">
+            <h1 style="margin:0 0 18px;font-size:26px;line-height:1.25;color:#17231d">${escapeHtml(input.heading)}</h1>
+            ${input.greetingName ? `<p style="margin:0 0 16px">${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(input.greetingName)},</p>` : ""}
+            ${input.bodyHtml}
+          </div>
+          <div style="padding:20px 16px;text-align:center;color:#637068;font-size:13px">
+            <p style="margin:0 0 6px">${supportLine}</p>
+            ${input.footerNote ? `<p style="margin:0 0 6px">${escapeHtml(input.footerNote)}</p>` : ""}
+            <p style="margin:0">&copy; ${new Date().getFullYear()} ${escapeHtml(input.companyName)}</p>
+          </div>
+        </div>
+      </body>
+    </html>`
+}
+
+function emailDetailsHtml(rows: Array<{ label: string; value: string }>) {
+  return `<div style="margin:22px 0;padding:6px 18px;border:1px solid #dfe5e1;border-radius:10px;background:#f8faf8">
+    ${rows
+      .map(
+        ({ label, value }) =>
+          `<div style="padding:11px 0;border-bottom:1px solid #e5e9e6"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`,
+      )
+      .join("")}
+  </div>`
 }
 
 function resolveSupportEmail(
@@ -101,22 +198,15 @@ function resolveSupportEmail(
     companyEmail?: string | null
   } | null,
 ): string {
-  return (
-    settings?.supportEmail ||
-    settings?.companyEmail ||
-    process.env.SUPPORT_EMAIL ||
-    process.env.ADMIN_EMAIL ||
-    extractEmailAddress(emailFrom)
-  )
+  return settings?.supportEmail || settings?.companyEmail || process.env.SUPPORT_EMAIL || process.env.ADMIN_EMAIL || extractEmailAddress(emailFrom)
 }
 
-async function sendEmail({ to, subject, html }: SendEmailInput) {
+async function sendEmail({ to, subject, html, replyTo, idempotencyKey }: SendEmailInput) {
   const configStatus = getEmailConfigStatus()
 
   // Validate email configuration
   if (!configStatus.enabled) {
-    const errorMsg =
-      "Email provider not configured. Please set RESEND_API_KEY"
+    const errorMsg = "Email provider not configured. Please set GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD"
     safeEmailConsole.error("[EMAIL_ERROR] Configuration:", configStatus)
     safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
     return { error: errorMsg }
@@ -134,33 +224,29 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
   // Log email configuration status
   safeEmailConsole.log(`[EMAIL] Sending via ${configStatus.provider} to:`, recipients.join(", "))
 
-  if (!process.env.RESEND_API_KEY) {
-    const errorMsg = "Email provider not configured. Resend API key is missing"
-    safeEmailConsole.error("[EMAIL_ERROR]", errorMsg)
-    return { error: errorMsg }
-  }
-
   try {
-    const { data, error } = await getResend().emails.send({
+    const messageIdDomain = gmailUser?.split("@")[1] || "qujo-email.local"
+    const messageId = idempotencyKey
+      ? `<${createHash("sha256").update(idempotencyKey).digest("hex")}@${messageIdDomain}>`
+      : undefined
+    const result = await getSmtpTransport().sendMail({
       from: emailFrom,
       to,
-      subject,
+      subject: subject
+        .replace(/[\r\n]+/g, " ")
+        .trim()
+        .slice(0, 255),
       html,
+      text: htmlToPlainText(html),
+      ...(replyTo ? { replyTo } : {}),
+      ...(messageId ? { messageId } : {}),
     })
 
-    if (error) {
-      safeEmailConsole.error("[EMAIL_ERROR] Resend send failed:", {
-        error: error.message || "Unknown Resend error",
-        to: recipients,
-      })
-      return { error: "Email delivery failed" }
-    }
-
-    safeEmailConsole.log(`[EMAIL] Resend email sent successfully (id: ${data?.id})`)
-    return { id: data?.id }
+    safeEmailConsole.log(`[EMAIL] Gmail SMTP email accepted (id: ${result.messageId})`)
+    return { id: result.messageId }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown Resend error"
-    safeEmailConsole.error("[EMAIL_ERROR] Resend exception:", {
+    const errorMessage = error instanceof Error ? error.message : "Unknown Gmail SMTP error"
+    safeEmailConsole.error("[EMAIL_ERROR] Gmail SMTP exception:", {
       error: errorMessage,
       to: recipients,
     })
@@ -168,11 +254,244 @@ async function sendEmail({ to, subject, html }: SendEmailInput) {
   }
 }
 
-export async function sendProductionAlertTest(input: {
-  to: string
-  requestedAt: Date
-  environment: string
+export async function sendContactMessageEmail(input: {
+  to: string[]
+  name: string
+  email: string
+  subject: string
+  message: string
+  locale: "de" | "en"
+  idempotencyKey?: string
 }) {
+  const labels =
+    input.locale === "de"
+      ? {
+          heading: "Neue Nachricht über das Kontaktformular",
+          name: "Name",
+          email: "E-Mail",
+          subject: "Betreff",
+          message: "Nachricht",
+        }
+      : {
+          heading: "New contact form message",
+          name: "Name",
+          email: "Email",
+          subject: "Subject",
+          message: "Message",
+        }
+
+  return sendEmail({
+    to: input.to,
+    replyTo: input.email,
+    idempotencyKey: input.idempotencyKey,
+    subject: `[${input.locale === "de" ? "Kontakt" : "Contact"}] ${input.subject}`,
+    html: `
+      <!doctype html>
+      <html lang="${input.locale}">
+        <body style="margin:0;background:#f5f6f3;color:#17231d;font-family:Arial,sans-serif;line-height:1.6">
+          <div style="max-width:640px;margin:0 auto;padding:32px 20px">
+            <div style="background:#fff;border:1px solid #e2e7e3;border-radius:16px;padding:28px">
+              <p style="margin:0 0 8px;color:#5f6d65;font-size:13px;text-transform:uppercase;letter-spacing:.08em">Qujo Autovermietung GmbH</p>
+              <h1 style="margin:0 0 24px;font-size:24px">${labels.heading}</h1>
+              <p><strong>${labels.name}:</strong> ${escapeHtml(input.name)}</p>
+              <p><strong>${labels.email}:</strong> <a href="mailto:${escapeHtml(input.email)}">${escapeHtml(input.email)}</a></p>
+              <p><strong>${labels.subject}:</strong> ${escapeHtml(input.subject)}</p>
+              <div style="margin-top:24px;padding-top:20px;border-top:1px solid #e2e7e3">
+                <p style="margin:0 0 8px"><strong>${labels.message}</strong></p>
+                <p style="margin:0;white-space:pre-wrap">${escapeHtml(input.message)}</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  })
+}
+
+export async function sendContactAcknowledgementEmail(input: { to: string; name: string; subject: string; locale: "de" | "en"; idempotencyKey: string }) {
+  const isGerman = input.locale === "de"
+  const companySettings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: { companyName: true, companyEmail: true, supportEmail: true },
+  })
+  const companyName = companySettings?.companyName || "Qujo Autovermietung GmbH"
+  const supportEmail = resolveSupportEmail(companySettings)
+  return sendEmail({
+    to: input.to,
+    replyTo: supportEmail || undefined,
+    idempotencyKey: input.idempotencyKey,
+    subject: isGerman ? `Wir haben Ihre Nachricht erhalten: ${input.subject}` : `We received your message: ${input.subject}`,
+    html: professionalEmailHtml({
+      locale: input.locale,
+      companyName,
+      supportEmail,
+      preview: isGerman ? "Wir haben Ihre Anfrage erhalten." : "We have received your enquiry.",
+      heading: isGerman ? "Vielen Dank für Ihre Nachricht" : "Thank you for contacting us",
+      greetingName: input.name,
+      bodyHtml: `
+        <p style="margin:0 0 16px">${isGerman ? "Wir haben Ihre Anfrage erhalten. Unser Team prüft Ihre Nachricht und meldet sich so bald wie möglich bei Ihnen." : "We have received your enquiry. Our team will review your message and respond as soon as possible."}</p>
+        ${emailDetailsHtml([{ label: isGerman ? "Betreff" : "Subject", value: input.subject }])}
+        <p style="margin:0;color:#637068;font-size:14px">${isGerman ? "Bitte bewahren Sie diese E-Mail als Eingangsbestätigung auf." : "Please keep this email as confirmation that your enquiry was received."}</p>`,
+    }),
+  })
+}
+
+type BookingApplicationEmailData = {
+  applicationId: string
+  to: string
+  userName: string
+  carName: string
+  pickupDate: string
+  returnDate: string
+  location: string
+  locale: "de" | "en"
+  idempotencyKey: string
+}
+
+function applicationDetailsHtml(data: Omit<BookingApplicationEmailData, "to">, isGerman: boolean) {
+  return `
+    <div style="margin:22px 0;padding:18px;border:1px solid #e2e7e3;border-radius:12px;background:#f8faf8">
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${escapeHtml(data.carName)}</p>
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong> ${escapeHtml(data.pickupDate)}</p>
+      <p style="margin:0 0 8px"><strong>${isGerman ? "Rückgabe" : "Return"}:</strong> ${escapeHtml(data.returnDate)}</p>
+      <p style="margin:0"><strong>${isGerman ? "Ort" : "Location"}:</strong> ${escapeHtml(data.location)}</p>
+    </div>
+  `
+}
+
+function applicationEmailHtml(input: {
+  locale: "de" | "en"
+  userName: string
+  heading: string
+  body: string
+  details: string
+  actionUrl?: string
+  actionLabel?: string
+}) {
+  const isGerman = input.locale === "de"
+  return professionalEmailHtml({
+    locale: input.locale,
+    companyName: "Qujo Autovermietung GmbH",
+    preview: input.heading,
+    heading: input.heading,
+    greetingName: input.userName,
+    bodyHtml: `
+      <p style="margin:0 0 16px">${input.body}</p>
+      ${input.details}
+      ${
+        input.actionUrl && input.actionLabel
+          ? `<p style="margin:26px 0 4px"><a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background:#123c2d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:9px;font-weight:700">${escapeHtml(input.actionLabel)}</a></p>
+             <p style="margin:12px 0 0;color:#637068;font-size:13px">${isGerman ? "Falls die Schaltfläche nicht funktioniert, öffnen Sie diesen Link:" : "If the button does not work, open this link:"}<br><a href="${escapeHtml(input.actionUrl)}" style="color:#315b49;word-break:break-all">${escapeHtml(input.actionUrl)}</a></p>`
+          : ""
+      }`,
+  })
+}
+
+export async function sendBookingApplicationSubmittedEmail(data: BookingApplicationEmailData) {
+  const isGerman = data.locale === "de"
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Ihre Unterlagen werden geprüft – ${data.carName}` : `Your documents are being reviewed – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Unterlagen erfolgreich eingereicht" : "Documents submitted successfully",
+      body: isGerman
+        ? "Wir haben Ihre Unterlagen erhalten. Unser Team prüft sie jetzt. Sie erhalten eine weitere E-Mail, sobald die Prüfung abgeschlossen ist oder wir ein neues Dokument benötigen."
+        : "We received your documents and our team is reviewing them now. We will email you again when the review is complete or if a replacement document is required.",
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/applications/${data.applicationId}`,
+      actionLabel: isGerman ? "Antrag ansehen" : "View application",
+    }),
+  })
+}
+
+export async function sendAdminBookingApplicationNotification(
+  data: Omit<BookingApplicationEmailData, "to"> & {
+    to: string[]
+    customerEmail: string
+  },
+) {
+  const isGerman = data.locale === "de"
+  return sendEmail({
+    to: data.to,
+    replyTo: data.customerEmail,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Neue Dokumentenprüfung – ${data.carName}` : `New document review – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: isGerman ? "Team" : "Team",
+      heading: isGerman ? "Ein neuer Antrag wartet auf Prüfung" : "A new application is ready for review",
+      body: `${isGerman ? "Kunde" : "Customer"}: ${escapeHtml(data.userName)} (${escapeHtml(data.customerEmail)})`,
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/admin/documents/applications/${data.applicationId}`,
+      actionLabel: isGerman ? "Unterlagen prüfen" : "Review documents",
+    }),
+  })
+}
+
+export async function sendDocumentReviewDecisionEmail(
+  data: BookingApplicationEmailData & {
+    decision: "REJECTED" | "REPLACEMENT_REQUIRED"
+    documentName: string
+    reason?: string
+  },
+) {
+  const isGerman = data.locale === "de"
+  const replacement = data.decision === "REPLACEMENT_REQUIRED"
+  const reason = data.reason?.trim()
+  const reasonHtml = reason ? `<br><strong>${isGerman ? "Hinweis des Prüfteams" : "Reviewer note"}:</strong> ${escapeHtml(reason)}` : ""
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Aktion erforderlich – ${data.documentName}` : `Action required – ${data.documentName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Ein Dokument benötigt Ihre Aufmerksamkeit" : "A document needs your attention",
+      body: replacement
+        ? isGerman
+          ? `Bitte laden Sie eine neue Version von „${escapeHtml(data.documentName)}“ hoch.${reasonHtml}`
+          : `Please upload a new version of “${escapeHtml(data.documentName)}”.${reasonHtml}`
+        : isGerman
+          ? `„${escapeHtml(data.documentName)}“ konnte nicht freigegeben werden. Bitte öffnen Sie Ihren Antrag und folgen Sie den angezeigten Schritten.${reasonHtml}`
+          : `“${escapeHtml(data.documentName)}” could not be approved. Open your application and follow the steps shown.${reasonHtml}`,
+      details: applicationDetailsHtml(data, isGerman),
+      actionUrl: `${configAppUrl()}/${data.locale}/applications/${data.applicationId}`,
+      actionLabel: replacement
+        ? isGerman
+          ? "Dokument ersetzen"
+          : "Replace document"
+        : isGerman
+          ? "Antrag ansehen"
+          : "View application",
+    }),
+  })
+}
+
+export async function sendBookingApplicationCancelledEmail(data: BookingApplicationEmailData & { reason?: string }) {
+  const isGerman = data.locale === "de"
+  const reasonHtml = data.reason?.trim() ? `<br><strong>${isGerman ? "Grund" : "Reason"}:</strong> ${escapeHtml(data.reason)}` : ""
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey,
+    subject: isGerman ? `Antrag storniert – ${data.carName}` : `Application cancelled – ${data.carName}`,
+    html: applicationEmailHtml({
+      locale: data.locale,
+      userName: data.userName,
+      heading: isGerman ? "Ihr Buchungsantrag wurde storniert" : "Your booking application was cancelled",
+      body: `${isGerman ? "Der Buchungsantrag wurde storniert. Bei Fragen antworten Sie bitte auf diese E-Mail." : "The booking application was cancelled. Reply to this email if you have questions."}${reasonHtml}`,
+      details: applicationDetailsHtml(data, isGerman),
+    }),
+  })
+}
+
+function configAppUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "http://localhost:3000").replace(/\/$/, "")
+}
+
+export async function sendProductionAlertTest(input: { to: string; requestedAt: Date; environment: string }) {
   return sendEmail({
     to: input.to,
     subject: "[TEST ONLY] Car Rental production alert delivery verification",
@@ -213,6 +532,7 @@ interface BookingEmailData {
   paymentMode?: "BOOKING_REQUEST" | "BANK_TRANSFER" | "CASH_ON_PICKUP"
   paymentInstructions?: string
   showPaymentInstructions?: boolean
+  idempotencyKey?: string
 }
 
 export async function sendBookingConfirmationEmail(data: BookingEmailData) {
@@ -244,29 +564,38 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
         supportEmail: true,
       },
     })
-    const companyName = companySettings?.companyName || "RentCar"
+    const companyName = companySettings?.companyName || "Qujo Autovermietung"
     const supportEmail = resolveSupportEmail(companySettings)
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"
 
     const paymentMode = data.paymentMode
-    const isTransfer = paymentMode
-      ? paymentMode === "BANK_TRANSFER"
-      : (data.paymentMethod || "TRANSFER") === "TRANSFER"
+    const isTransfer = paymentMode ? paymentMode === "BANK_TRANSFER" : (data.paymentMethod || "TRANSFER") === "TRANSFER"
     const paymentMethodLabel =
       paymentMode === "BOOKING_REQUEST"
-        ? isGerman ? "Rechnung" : "Invoice"
+        ? isGerman
+          ? "Rechnung"
+          : "Invoice"
         : paymentMode === "BANK_TRANSFER"
-          ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+          ? isGerman
+            ? "Banküberweisung"
+            : "Bank Transfer"
           : paymentMode === "CASH_ON_PICKUP"
-            ? isGerman ? "Barzahlung bei Abholung" : "Cash at Pickup"
+            ? isGerman
+              ? "Barzahlung bei Abholung"
+              : "Cash at Pickup"
             : isTransfer
-              ? isGerman ? "Bankuberweisung" : "Bank Transfer"
+              ? isGerman
+                ? "Banküberweisung"
+                : "Bank Transfer"
               : data.paymentMethod === "CARD"
-                ? isGerman ? "Karte" : "Card"
-                : isGerman ? "Zahlung bei Abholung" : "Pay at Pickup"
-    const confirmationHeading =
-      data.confirmationHeading?.trim() || (isGerman ? "Buchung bestatigt!" : "Booking Confirmed!")
+                ? isGerman
+                  ? "Karte"
+                  : "Card"
+                : isGerman
+                  ? "Zahlung bei Abholung"
+                  : "Pay at Pickup"
+    const confirmationHeading = data.confirmationHeading?.trim() || (isGerman ? "Buchung bestätigt" : "Booking confirmed")
     const subjectHeading = confirmationHeading.replace(/[\r\n]+/g, " ")
     const configuredContentHtml = configuredTextHtml(data.confirmationContent)
     const paymentInstructionsHtml =
@@ -287,7 +616,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
       isTransfer && !paymentMode && data.transferCode
         ? `
                 <div class="transfer-code">
-                  ${isGerman ? "Uberweisungscode" : "Transfer Code"}: ${data.transferCode}
+                  ${isGerman ? "Überweisungscode" : "Transfer Code"}: ${escapeHtml(data.transferCode)}
                 </div>
                 <p style="text-align: center; color: #666; font-size: 14px;">${isGerman ? "Bitte diesen Code bei der Fahrzeugabholung vorzeigen." : "Please show this code when picking up your vehicle"}</p>
           `
@@ -295,24 +624,25 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
     const nextStepsHtml = paymentMode
       ? `
                   <li>${isGerman ? "Folgen Sie den oben angegebenen Zahlungsanweisungen" : "Follow the payment instructions shown above"}</li>
-                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+                  <li>${isGerman ? "Bitte einen gültigen Führerschein mitbringen" : "Bring a valid driver's license"}</li>
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
         `
       : isTransfer
-      ? `
-                  <li>${isGerman ? "Speichern Sie Ihren Uberweisungscode" : "Save your transfer code"} (${data.transferCode || "-"})</li>
-                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+        ? `
+                  <li>${isGerman ? "Speichern Sie Ihren Überweisungscode" : "Save your transfer code"} (${data.transferCode || "-"})</li>
+                  <li>${isGerman ? "Bitte einen gültigen Führerschein mitbringen" : "Bring a valid driver's license"}</li>
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
         `
-      : `
-                  <li>${isGerman ? "Bitte einen gultigen Fuhrerschein mitbringen" : "Bring a valid driver's license"}</li>
+        : `
+                  <li>${isGerman ? "Bitte einen gültigen Führerschein mitbringen" : "Bring a valid driver's license"}</li>
                   <li>${isGerman ? "Bitte 15 Minuten vor der Abholung am Standort sein" : "Arrive at the pickup location 15 minutes early"}</li>
-                  <li>${isGerman ? "Die Zahlung bei Abholung mit der gewahlten Methode abschliessen" : "Complete payment using your selected method at pickup"}</li>
+                  <li>${isGerman ? "Die Zahlung bei Abholung mit der gewählten Methode abschließen" : "Complete payment using your selected method at pickup"}</li>
         `
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${subjectHeading} - ${data.carName}`,
+      subject: `${subjectHeading} – ${data.carName}`,
+      idempotencyKey: data.idempotencyKey || `booking-confirmation-${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -336,31 +666,31 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 <h1>🚗 ${escapeHtml(confirmationHeading)}</h1>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
-                <p>${isGerman ? "Gute Nachrichten! Ihre Buchung wurde bestatigt. Hier sind Ihre Buchungsdetails:" : "Great news! Your booking has been confirmed. Here are your booking details:"}</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
+                <p>${isGerman ? "Gute Nachrichten! Ihre Buchung wurde bestätigt. Hier sind Ihre Buchungsdetails:" : "Great news! Your booking has been confirmed. Here are your booking details:"}</p>
                 ${configuredContentHtml ? `<p>${configuredContentHtml}</p>` : ""}
                 ${transferCodeHtml}
                 
                 <div class="details">
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
-                    <span><strong>${isGerman ? "Ruckgabe" : "Drop-off"}:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span><strong>${isGerman ? "Rückgabe" : "Drop-off"}:</strong></span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Standort" : "Location"}:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>${isGerman ? "Zahlungsmethode" : "Payment Method"}:</strong></span>
@@ -376,12 +706,12 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
                 ${
                   guaranteeAmount > 0
                     ? `<p style="font-size: 13px; color: #4b5563; margin-top: 10px;">
-                    ${isGerman ? "Die Garantie ist eine vorubergehende Sicherheitsreservierung und keine zusatzliche Mietgebuhr. Sie wird nach der Ruckgabe freigegeben, wenn keine Schaden, Bussgelder oder Verstosse vorliegen." : "The guarantee is a temporary security hold and not an extra rental fee. It is released after return if there are no damages, fines, or policy violations."}
+                    ${isGerman ? "Die Garantie ist eine vorübergehende Sicherheitsreservierung und keine zusätzliche Mietgebühr. Sie wird nach der Rückgabe freigegeben, wenn keine Schäden, Bußgelder oder Verstöße vorliegen." : "The guarantee is a temporary security hold and not an extra rental fee. It is released after return if there are no damages, fines, or policy violations."}
                   </p>`
                     : ""
                 }
                 
-                <p><strong>${isGerman ? "Nachste Schritte" : "Next Steps"}:</strong></p>
+                <p><strong>${isGerman ? "Nächste Schritte" : "Next Steps"}:</strong></p>
                 <ul>
                   ${nextStepsHtml}
                 </ul>
@@ -422,14 +752,7 @@ export async function sendBookingConfirmationEmail(data: BookingEmailData) {
   }
 }
 
-export async function sendBookingStatusEmail(
-  to: string,
-  userName: string,
-  carName: string,
-  status: string,
-  bookingNumber: string,
-  locale?: "de" | "en",
-) {
+export async function sendBookingStatusEmail(to: string, userName: string, carName: string, status: string, bookingNumber: string, locale?: "de" | "en") {
   try {
     const configStatus = getEmailConfigStatus()
     safeEmailConsole.log("[EMAIL] Attempting to send booking status email:", {
@@ -458,10 +781,8 @@ export async function sendBookingStatusEmail(
 
     switch (status) {
       case "CONFIRMED":
-        subject = `${isGerman ? "Buchung bestatigt" : "Booking Confirmed"} - ${carName}`
-        message = isGerman
-          ? "Ihre Buchung wurde von unserem Team bestatigt. Alles ist bereit."
-          : "Your booking has been confirmed by our team. You're all set!"
+        subject = `${isGerman ? "Buchung bestätigt" : "Booking Confirmed"} - ${carName}`
+        message = isGerman ? "Ihre Buchung wurde von unserem Team bestätigt. Alles ist bereit." : "Your booking has been confirmed by our team. You're all set!"
         break
       case "CANCELLED":
         subject = `${isGerman ? "Buchung storniert" : "Booking Cancelled"} - ${carName}`
@@ -472,7 +793,7 @@ export async function sendBookingStatusEmail(
       case "REJECTED":
         subject = `${isGerman ? "Buchungsupdate" : "Booking Update"} - ${carName}`
         message = isGerman
-          ? "Leider konnen wir Ihre Buchung derzeit nicht bearbeiten. Bitte kontaktieren Sie den Support fur weitere Informationen."
+          ? "Leider können wir Ihre Buchung derzeit nicht bearbeiten. Bitte kontaktieren Sie den Support für weitere Informationen."
           : "Unfortunately, we cannot process your booking at this time. Please contact support for more information."
         break
       default:
@@ -483,31 +804,30 @@ export async function sendBookingStatusEmail(
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
       select: {
+        companyName: true,
         companyEmail: true,
         supportEmail: true,
       },
     })
+    const companyName = companySettings?.companyName || "Qujo Autovermietung GmbH"
     const supportEmail = resolveSupportEmail(companySettings)
 
     const { id, error } = await sendEmail({
       to,
       subject,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2>${isGerman ? "Buchungsstatus-Update" : "Booking Status Update"}</h2>
-              <p>${isGerman ? "Hallo" : "Hi"} ${userName},</p>
-              <p>${message}</p>
-              <p><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}:</strong> ${bookingNumber}</p>
-              <p><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${carName}</p>
-              <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-              <p style="color: #666; font-size: 14px;">${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
-            </div>
-          </body>
-        </html>
-      `,
+      idempotencyKey: `booking-status-${bookingNumber}-${status.toLowerCase()}`,
+      html: professionalEmailHtml({
+        locale: emailLocale,
+        companyName,
+        supportEmail,
+        preview: message,
+        heading: isGerman ? "Aktualisierung Ihrer Buchung" : "Your booking has been updated",
+        greetingName: userName,
+        bodyHtml: `<p style="margin:0 0 16px">${escapeHtml(message)}</p>${emailDetailsHtml([
+          { label: isGerman ? "Buchungsnummer" : "Booking number", value: bookingNumber },
+          { label: isGerman ? "Fahrzeug" : "Vehicle", value: carName },
+        ])}`,
+      }),
     })
 
     if (error) {
@@ -579,7 +899,8 @@ export async function sendBookingCompletionReviewEmail(data: {
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for choosing us"} - ${data.carName}`,
+      idempotencyKey: `booking-completion-${data.bookingNumber}`,
+      subject: `${isGerman ? "Vielen Dank für Ihre Buchung" : "Thank you for choosing us"} – ${data.carName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -601,24 +922,25 @@ export async function sendBookingCompletionReviewEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1 style="margin:0 0 8px 0;">${isGerman ? "Vielen Dank fur Ihre Buchung" : "Thank you for your booking"}</h1>
+                <h1 style="margin:0 0 8px 0;">${isGerman ? "Vielen Dank für Ihre Buchung" : "Thank you for your booking"}</h1>
                 <p style="margin:0; opacity:0.95;">${isGerman ? "Wir hoffen, Sie hatten eine gute Mieterfahrung." : "We hope you enjoyed your rental experience."}</p>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
-                <p>${isGerman ? "Ihre Buchung wurde erfolgreich abgeschlossen. Vielen Dank fur Ihr Vertrauen." : "Your booking has been completed successfully. We appreciate your trust."}</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
+                <p>${isGerman ? "Ihre Buchung wurde erfolgreich abgeschlossen. Vielen Dank für Ihr Vertrauen." : "Your booking has been completed successfully. We appreciate your trust."}</p>
 
                 <div class="card">
-                  <div class="row"><span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}</strong></span><span>${data.bookingNumber}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}</strong></span><span>${data.carName}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Abholung" : "Pick-up"}</strong></span><span>${data.pickupDate}</span></div>
-                  <div class="row"><span><strong>${isGerman ? "Ruckgabe" : "Drop-off"}</strong></span><span>${data.dropoffDate}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Buchungsnummer" : "Booking Number"}</strong></span><span>${escapeHtml(data.bookingNumber)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Fahrzeug" : "Vehicle"}</strong></span><span>${escapeHtml(data.carName)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Abholung" : "Pick-up"}</strong></span><span>${escapeHtml(data.pickupDate)}</span></div>
+                  <div class="row"><span><strong>${isGerman ? "Rückgabe" : "Drop-off"}</strong></span><span>${escapeHtml(data.dropoffDate)}</span></div>
                 </div>
 
-                <p>${isGerman ? "Nehmen Sie sich eine Minute Zeit fur eine Bewertung? Ihr Feedback hilft uns, besser zu werden." : "Would you take a minute to rate your experience? Your feedback helps us improve."}</p>
+                <p>${isGerman ? "Möchten Sie sich eine Minute Zeit für eine Bewertung nehmen? Ihr Feedback hilft uns, unseren Service weiter zu verbessern." : "Would you take a minute to rate your experience? Your feedback helps us improve."}</p>
                 <div class="button-wrap">
-                  <a class="button" href="${data.reviewUrl}">${isGerman ? "Bewertung abgeben" : "Leave a Review"}</a>
+                  <a class="button" href="${escapeHtml(data.reviewUrl)}">${isGerman ? "Bewertung abgeben" : "Leave a review"}</a>
                 </div>
+                <p style="color:#6b7280;font-size:13px;word-break:break-all">${isGerman ? "Falls die Schaltfläche nicht funktioniert:" : "If the button does not work:"}<br><a href="${escapeHtml(data.reviewUrl)}">${escapeHtml(data.reviewUrl)}</a></p>
               </div>
               <div class="footer">
                 <p>${isGerman ? "Fragen? Kontaktieren Sie uns unter" : "Questions? Contact us at"} ${supportEmail}</p>
@@ -666,6 +988,16 @@ export async function sendManualPaymentEmail(data: {
   totalPrice: number
   currency?: string
   depositAmount: number
+  advancePaymentAmount?: number
+  paymentDueAt?: string
+  selectedPaymentMethod?: "TRANSFER" | "PAY_AT_PICKUP"
+  bankDetails?: {
+    bankName?: string | null
+    accountName?: string | null
+    accountNumber?: string | null
+    swiftCode?: string | null
+    iban?: string | null
+  }
   guaranteeAmount: number
   insuranceName?: string
   insuranceSubtotal?: number
@@ -673,6 +1005,7 @@ export async function sendManualPaymentEmail(data: {
   transferCode: string
   bookingNumber: string
   locale?: "de" | "en"
+  idempotencyKey?: string
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -695,24 +1028,31 @@ export async function sendManualPaymentEmail(data: {
     }
 
     // Get payment details and company settings from database
-    const paymentDetails = await getPaymentDetails()
+    const currentPaymentDetails = await getPaymentDetails()
+    const paymentDetails = data.bankDetails ?? currentPaymentDetails
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
     })
+    if (!paymentDetails.accountName || !paymentDetails.iban) {
+      return { error: "Bank transfer details are incomplete" }
+    }
 
     const companyName = companySettings?.companyName || "Car Rental Company"
     const supportEmail = resolveSupportEmail(companySettings)
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"
-    const depositPercentage = companySettings?.depositPercentage ?? 0.2
-    const depositPercent = Math.round(depositPercentage * 100)
+    const paymentDeadline = data.paymentDueAt?.trim()
+    const advancePaymentAmount = data.advancePaymentAmount ?? data.depositAmount
+    const isDeposit = data.depositAmount > 0 && data.depositAmount < data.totalPrice
+    const depositPercent = data.totalPrice > 0 ? Math.round((data.depositAmount / data.totalPrice) * 100) : 0
     const guaranteePercentage = companySettings?.guaranteePercentage ?? 0
     const guaranteePercent = Math.round(guaranteePercentage * 100)
-    const remainingRentalAtPickup = Math.max(data.totalPrice - data.depositAmount, 0)
+    const remainingRentalAtPickup = Math.max(data.totalPrice - advancePaymentAmount, 0)
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"} - ${data.bookingNumber}`,
+      idempotencyKey: data.idempotencyKey || `booking-transfer-instructions-${data.bookingNumber}`,
+      subject: `${isGerman ? "Reservierung ausstehend – Zahlung erforderlich" : "Reservation pending – payment required"} – ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -762,20 +1102,26 @@ export async function sendManualPaymentEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
-                <p>${isGerman ? "Ihre Reservierung wurde erfolgreich erstellt" : "Your reservation has been created successfully"}</p>
+                <h1>${isGerman ? "Reservierung ausstehend" : "Reservation pending"}</h1>
+                <p>${paymentDeadline
+                  ? isGerman
+                    ? `Das Fahrzeug ist bis ${escapeHtml(paymentDeadline)} für Sie reserviert`
+                    : `The vehicle is reserved for you until ${escapeHtml(paymentDeadline)}`
+                  : isGerman
+                    ? `Das Fahrzeug ist bis zu ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden für Sie reserviert`
+                    : `The vehicle is reserved for you for up to ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</p>
               </div>
               <div class="content">
                 <!-- Booking Number -->
                 <div class="booking-number-box">
                   <div class="booking-number-label">${isGerman ? "Buchungsnummer" : "Booking Number"}</div>
-                  <div class="booking-number-value">${data.bookingNumber}</div>
+                  <div class="booking-number-value">${escapeHtml(data.bookingNumber)}</div>
                 </div>
 
                 <!-- Transfer Reference Code -->
                 <div class="transfer-code-box">
-                  <div class="transfer-code-label">${isGerman ? "Uberweisungsreferenzcode" : "Transfer Reference Code"}</div>
-                  <div class="transfer-code-value">${data.transferCode}</div>
+                  <div class="transfer-code-label">${isGerman ? "Überweisungsreferenzcode" : "Transfer Reference Code"}</div>
+                  <div class="transfer-code-value">${escapeHtml(data.transferCode)}</div>
                   <div class="transfer-code-hint">${isGerman ? "Bitte diesen Code als Verwendungszweck bei der Zahlung nutzen" : "Use this code as reference when making payment"}</div>
                 </div>
 
@@ -784,40 +1130,46 @@ export async function sendManualPaymentEmail(data: {
                   <h3>${isGerman ? "Buchungsdetails" : "Booking Details"}</h3>
                   <div class="detail-row">
                     <span class="detail-label">${isGerman ? "Fahrzeug:" : "Car:"}</span>
-                    <span class="detail-value">${data.carName}</span>
+                    <span class="detail-value">${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">${isGerman ? "Abholung:" : "Pick-up:"}</span>
-                    <span class="detail-value">${data.pickupDate}</span>
+                    <span class="detail-value">${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
-                    <span class="detail-label">${isGerman ? "Ruckgabe:" : "Drop-off:"}</span>
-                    <span class="detail-value">${data.dropoffDate}</span>
+                    <span class="detail-label">${isGerman ? "Rückgabe:" : "Drop-off:"}</span>
+                    <span class="detail-value">${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">${isGerman ? "Standort:" : "Location:"}</span>
-                    <span class="detail-value">${data.location}</span>
+                    <span class="detail-value">${escapeHtml(data.location)}</span>
                   </div>
-                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span class="detail-label">${isGerman ? "Versicherung:" : "Insurance:"}</span><span class="detail-value">${escapeHtml(data.insuranceName)} · ${formatCents(data.insuranceSubtotal, data.currency)}</span></div>` : ""}
                   ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
                 </div>
 
                 <!-- Payment Required -->
                 <div class="payment-box">
                   <h4>⚠️ ${isGerman ? "Zahlung erforderlich" : "Payment Required"}</h4>
-                  <p style="margin-bottom: 8px;">${isGerman ? "Bitte zahlen Sie per Bankuberweisung:" : "Please complete payment via bank transfer:"}</p>
+                  <p style="margin-bottom: 8px;">${isGerman ? "Bitte zahlen Sie per Banküberweisung:" : "Please complete payment via bank transfer:"}</p>
                   <p class="payment-warning">
-                    <strong>${isGerman ? `Bitte innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden bezahlen, sonst wird die Buchung storniert.` : `Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.`}</strong>
+                    <strong>${paymentDeadline
+                      ? isGerman
+                        ? `Bitte bis ${escapeHtml(paymentDeadline)} bezahlen, sonst wird die Buchung storniert.`
+                        : `Pay by ${escapeHtml(paymentDeadline)} or the booking will be cancelled.`
+                      : isGerman
+                        ? `Bitte innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden bezahlen, sonst wird die Buchung storniert.`
+                        : `Pay within ${BOOKING_PAYMENT_WINDOW_HOURS} hours or the booking will be cancelled.`}</strong>
                   </p>
                   
                   <div class="payment-amounts">
                     <div class="payment-row">
-                      <span>${isGerman ? "Anzahlung" : "Deposit"} (${depositPercent}%):</span>
-                      <strong>${formatCents(data.depositAmount, data.currency)}</strong>
+                      <span>${isDeposit ? `${isGerman ? "Anzahlung" : "Deposit"} (${depositPercent}%)` : (isGerman ? "Erforderliche Vorauszahlung" : "Required advance payment")}:</span>
+                      <strong>${formatCents(advancePaymentAmount, data.currency)}</strong>
                     </div>
                     <div class="payment-row">
-                      <span>${isGerman ? "Restbetrag bei Abholung:" : "Remaining rental at pickup:"}</span>
-                      <strong>${formatCents(remainingRentalAtPickup)}</strong>
+                      <span>${isGerman ? "Restbetrag bei Abholung:" : "Remaining balance at pickup:"}</span>
+                      <strong>${formatCents(remainingRentalAtPickup, data.currency)}</strong>
                     </div>
                     <div class="payment-row total">
                       <span>${isGerman ? "Gesamtbetrag" : "Total Amount"}:</span>
@@ -837,54 +1189,60 @@ export async function sendManualPaymentEmail(data: {
                     <h5>${isGerman ? "Bankdaten" : "Bank Details"}</h5>
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "Bankname:" : "Bank Name:"}</span>
-                      <span class="bank-detail-value">${paymentDetails.bankName}</span>
+                      <span class="bank-detail-value">${escapeHtml(paymentDetails.bankName || "-")}</span>
                     </div>
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "Kontoinhaber:" : "Account Name:"}</span>
-                      <span class="bank-detail-value">${paymentDetails.accountName}</span>
+                      <span class="bank-detail-value">${escapeHtml(paymentDetails.accountName || "-")}</span>
                     </div>
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "Kontonummer:" : "Account Number:"}</span>
-                      <span class="bank-detail-value">${paymentDetails.accountNumber}</span>
+                      <span class="bank-detail-value">${escapeHtml(paymentDetails.accountNumber || "-")}</span>
                     </div>
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "SWIFT-Code:" : "Swift Code:"}</span>
-                      <span class="bank-detail-value">${paymentDetails.swiftCode}</span>
+                      <span class="bank-detail-value">${escapeHtml(paymentDetails.swiftCode || "-")}</span>
                     </div>
                     ${
                       paymentDetails.iban
                         ? `
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">IBAN:</span>
-                      <span class="bank-detail-value">${paymentDetails.iban}</span>
+                      <span class="bank-detail-value">${escapeHtml(paymentDetails.iban)}</span>
                     </div>
                     `
                         : ""
                     }
                     <div class="bank-detail-row">
                       <span class="bank-detail-label">${isGerman ? "Verwendungszweck:" : "Reference:"}</span>
-                      <span class="reference-code">${data.transferCode}</span>
+                      <span class="reference-code">${escapeHtml(data.transferCode)}</span>
                     </div>
                   </div>
 
                   <p class="important-note">
-                    <strong>${isGerman ? "Wichtig:" : "Important:"}</strong> ${isGerman ? `Bitte den Uberweisungscode <strong>${data.transferCode}</strong> im Verwendungszweck angeben, damit wir Ihre Buchung zuordnen konnen.` : `Include the transfer code <strong>${data.transferCode}</strong> in your payment reference so we can process your booking.`}
+                    <strong>${isGerman ? "Wichtig:" : "Important:"}</strong> ${isGerman ? `Bitte den Überweisungscode <strong>${escapeHtml(data.transferCode)}</strong> im Verwendungszweck angeben, damit wir Ihre Buchung zuordnen können.` : `Include the transfer code <strong>${escapeHtml(data.transferCode)}</strong> in your payment reference so we can process your booking.`}
                   </p>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<p class="important-note"><strong>${isGerman ? "Garantie:" : "Guarantee:"}</strong> ${isGerman ? "Dies ist eine vorubergehende Sicherheitsreservierung und wird nach der Ruckgabe freigegeben, wenn keine Probleme vorliegen." : "This is a temporary security hold and is released after vehicle return if no issues are found."}</p>`
+                      ? `<p class="important-note"><strong>${isGerman ? "Garantie:" : "Guarantee:"}</strong> ${isGerman ? "Dies ist eine vorübergehende Sicherheitsreservierung und wird nach der Rückgabe freigegeben, wenn keine Probleme vorliegen." : "This is a temporary security hold and is released after vehicle return if no issues are found."}</p>`
                       : ""
                   }
                 </div>
 
                 <!-- Next Steps -->
                 <div class="next-steps">
-                  <h4>📋 ${isGerman ? "Nachste Schritte" : "Next Steps"}</h4>
+                  <h4>📋 ${isGerman ? "Nächste Schritte" : "Next Steps"}</h4>
                   <ol>
-                    <li>${isGerman ? `Die Bankuberweisung innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden abschliessen` : `Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</li>
-                    <li>${isGerman ? "Sie erhalten eine Bestatigungsmail mit Zahlungsanweisungen" : "You will receive a confirmation email with payment instructions"}</li>
-                    <li>${isGerman ? "Sobald die Zahlung gepruft wurde, wird Ihre Buchung bestatigt" : "Once payment is verified, your booking will be confirmed"}</li>
-                    <li>${isGerman ? "Danach erhalten Sie eine finale Bestatigung mit Abholdetails" : "You'll receive a final confirmation email with pickup details"}</li>
+                    <li>${paymentDeadline
+                      ? isGerman
+                        ? `Die Banküberweisung bis ${escapeHtml(paymentDeadline)} abschließen`
+                        : `Complete the bank transfer by ${escapeHtml(paymentDeadline)}`
+                      : isGerman
+                        ? `Die Banküberweisung innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden abschließen`
+                        : `Complete the bank transfer within ${BOOKING_PAYMENT_WINDOW_HOURS} hours`}</li>
+                    <li>${isGerman ? "Sie erhalten diese Zahlungsanweisungen per E-Mail" : "Keep this email with your payment instructions"}</li>
+                    <li>${isGerman ? "Sobald die Zahlung geprüft wurde, wird Ihre Buchung bestätigt" : "Once payment is verified, your booking will be confirmed"}</li>
+                    <li>${isGerman ? "Danach erhalten Sie eine finale Bestätigung mit Abholdetails" : "You'll receive a final confirmation email with pickup details"}</li>
                   </ol>
                 </div>
               </div>
@@ -932,6 +1290,17 @@ export async function sendPayAtPickupEmail(data: {
   dropoffDate: string
   location: string
   totalPrice: number
+  amountDueAtPickup?: number
+  advanceReceived?: boolean
+  companyDetails?: {
+    companyName?: string | null
+    companyEmail?: string | null
+    companyPhone?: string | null
+    companyAddress?: string | null
+    companyPostalCode?: string | null
+    companyCity?: string | null
+    companyCountry?: string | null
+  }
   currency?: string
   guaranteeAmount: number
   bookingNumber: string
@@ -939,6 +1308,7 @@ export async function sendPayAtPickupEmail(data: {
   insuranceName?: string
   insuranceSubtotal?: number
   legalReferences?: LegalAcceptanceEmailReference[]
+  idempotencyKey?: string
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -963,15 +1333,35 @@ export async function sendPayAtPickupEmail(data: {
     const companySettings = await prisma.companySettings.findUnique({
       where: { id: "company-settings" },
     })
-    const companyName = companySettings?.companyName || "Car Rental Company"
+    const company = data.companyDetails ?? companySettings
+    const companyName = company?.companyName || "Car Rental Company"
+    const companyPostalCode = data.companyDetails?.companyPostalCode ?? companySettings?.companyZipCode
     const supportEmail = resolveSupportEmail(companySettings)
     const locale = normalizeEmailLocale(data.locale)
     const isGerman = locale === "de"
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
+    const companyAddress = [
+      company?.companyAddress,
+      [companyPostalCode, company?.companyCity].filter(Boolean).join(" "),
+      company?.companyCountry,
+    ].filter(Boolean).join(", ")
+    const companyContact = [company?.companyPhone, company?.companyEmail].filter(Boolean).join(" · ")
+    if (
+      !company?.companyName ||
+      !company.companyAddress ||
+      !companyPostalCode ||
+      !company.companyCity ||
+      !company.companyCountry ||
+      !company.companyPhone ||
+      !company.companyEmail
+    ) {
+      return { error: "Pickup company details are incomplete" }
+    }
 
     const { id, error } = await sendEmail({
       to: data.to,
-      subject: `${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"} - ${data.bookingNumber}`,
+      idempotencyKey: data.idempotencyKey || `booking-cash-confirmation-${data.bookingNumber}`,
+      subject: `${isGerman ? "Buchung bestätigt" : "Booking confirmed"} – ${data.bookingNumber}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -994,27 +1384,29 @@ export async function sendPayAtPickupEmail(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>${isGerman ? "Buchung bestatigt!" : "Booking Confirmed!"}</h1>
+                <h1>${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1>
                 <p>${isGerman ? "Ihre Reservierung wurde erfolgreich erstellt" : "Your reservation has been created successfully"}</p>
               </div>
               <div class="content">
-                <p>${isGerman ? "Hallo" : "Hi"} ${data.userName},</p>
-                <p>${isGerman ? "Ihre Buchung wurde mit <strong>Zahlung bei Abholung</strong> als Zahlungsmethode bestatigt." : "Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method."}</p>
+                <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
+                <p>${data.advanceReceived ? (isGerman ? "Wir haben Ihre Anzahlung erhalten. Ihre Buchung ist jetzt bestätigt; der Restbetrag ist bei Abholung fällig." : "We received your deposit. Your booking is now confirmed and the remaining balance is due at pickup.") : (isGerman ? "Ihre Buchung wurde mit <strong>Zahlung bei Abholung</strong> als Zahlungsmethode bestätigt." : "Your booking is confirmed with <strong>Pay at Pickup</strong> as your payment method.")}</p>
 
                 <div class="box booking-number-box">
                   <div style="font-size: 14px; color: #6b7280;">${isGerman ? "Buchungsnummer" : "Booking Number"}</div>
-                  <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${data.bookingNumber}</div>
+                  <div style="font-family: monospace; font-size: 24px; font-weight: bold;">${escapeHtml(data.bookingNumber)}</div>
                 </div>
 
                 <div class="details">
                   <h3>${isGerman ? "Buchungsdetails" : "Booking Details"}</h3>
-                  <div class="detail-row"><span>${isGerman ? "Fahrzeug:" : "Car:"}</span><strong>${data.carName}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${data.pickupDate}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Ruckgabe:" : "Drop-off:"}</span><strong>${data.dropoffDate}</strong></div>
-                  <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${data.location}</strong></div>
-                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${data.insuranceName} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
+                  <div class="detail-row"><span>${isGerman ? "Fahrzeug:" : "Vehicle:"}</span><strong>${escapeHtml(data.carName)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Abholung:" : "Pick-up:"}</span><strong>${escapeHtml(data.pickupDate)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Rückgabe:" : "Drop-off:"}</span><strong>${escapeHtml(data.dropoffDate)}</strong></div>
+                  <div class="detail-row"><span>${isGerman ? "Standort:" : "Location:"}</span><strong>${escapeHtml(data.location)}</strong></div>
+                  ${companyAddress ? `<div class="detail-row"><span>${isGerman ? "Firmenadresse:" : "Company address:"}</span><strong>${escapeHtml(companyAddress)}</strong></div>` : ""}
+                  ${companyContact ? `<div class="detail-row"><span>${isGerman ? "Kontakt:" : "Contact:"}</span><strong>${escapeHtml(companyContact)}</strong></div>` : ""}
+                  ${data.insuranceName && data.insuranceSubtotal !== undefined ? `<div class="detail-row"><span>${isGerman ? "Versicherung:" : "Insurance:"}</span><strong>${escapeHtml(data.insuranceName)} · ${formatCents(data.insuranceSubtotal, data.currency)}</strong></div>` : ""}
                   ${legalAcceptanceReferencesHtml(data.legalReferences, locale)}
-                  <div class="detail-row"><span>${isGerman ? "Gesamtbetrag:" : "Total Amount:"}</span><strong>${formatCents(data.totalPrice, data.currency)}</strong></div>
+                  <div class="detail-row"><span>${data.advanceReceived ? (isGerman ? "Restbetrag bei Abholung:" : "Remaining at pickup:") : (isGerman ? "Gesamtbetrag:" : "Total Amount:")}</span><strong>${formatCents(data.amountDueAtPickup ?? data.totalPrice, data.currency)}</strong></div>
                   ${
                     data.guaranteeAmount > 0
                       ? `<div class="detail-row"><span>${isGerman ? "Erstattbare Garantie" : "Refundable Guarantee"} (${guaranteePercent}%):</span><strong>${formatCents(data.guaranteeAmount, data.currency)}</strong></div>`
@@ -1024,19 +1416,19 @@ export async function sendPayAtPickupEmail(data: {
 
                 <div class="box pickup-payment-box">
                   <h3 style="margin: 0 0 8px 0;">${isGerman ? "Zahlung bei Abholung" : "Payment at Pickup"}</h3>
-                  <p style="margin: 0;">${isGerman ? "Bitte die Zahlung bei der Fahrzeugabholung abschliessen." : "Please complete payment at pickup when collecting your vehicle."}</p>
+                  <p style="margin: 0;">${isGerman ? "Bitte die Zahlung bei der Fahrzeugabholung abschließen." : "Please complete payment at pickup when collecting your vehicle."}</p>
                   ${
                     data.guaranteeAmount > 0
-                      ? `<p style="margin-top: 8px;">${isGerman ? "Die Garantie ist eine vorubergehende Sicherheitsreservierung und wird nach der Ruckgabe freigegeben, wenn keine Probleme vorliegen." : "The guarantee is a temporary security hold and will be released after return if no issues are found."}</p>`
+                      ? `<p style="margin-top: 8px;">${isGerman ? "Die Garantie ist eine vorübergehende Sicherheitsreservierung und wird nach der Rückgabe freigegeben, wenn keine Probleme vorliegen." : "The guarantee is a temporary security hold and will be released after return if no issues are found."}</p>`
                       : ""
                   }
                 </div>
 
-                <p><strong>${isGerman ? "Nachste Schritte" : "Next steps"}:</strong></p>
+                <p><strong>${isGerman ? "Nächste Schritte" : "Next steps"}:</strong></p>
                 <ol>
                   <li>${isGerman ? "Bitte rechtzeitig am Abholort erscheinen." : "Arrive at the pickup location on time."}</li>
-                  <li>${isGerman ? "Buchungsnummer sowie gultigen Ausweis/Fuhrerschein mitbringen." : "Bring your booking number and a valid ID/driving license."}</li>
-                  <li>${isGerman ? "Zahlung bei Abholung abschliessen." : "Complete payment at pickup."}</li>
+                  <li>${isGerman ? "Buchungsnummer sowie gültigen Ausweis/Führerschein mitbringen." : "Bring your booking number and a valid ID/driving license."}</li>
+                  <li>${isGerman ? "Zahlung bei Abholung abschließen." : "Complete payment at pickup."}</li>
                 </ol>
               </div>
               <div class="footer">
@@ -1074,6 +1466,190 @@ export async function sendPayAtPickupEmail(data: {
   }
 }
 
+export async function sendTransferPaymentConfirmedEmail(data: {
+  to: string
+  userName: string
+  carName: string
+  pickupDate: string
+  dropoffDate: string
+  location: string
+  bookingNumber: string
+  locale?: "de" | "en"
+  idempotencyKey?: string
+  companyDetails?: {
+    companyName?: string | null
+    companyEmail?: string | null
+    companyPhone?: string | null
+    companyAddress?: string | null
+    companyPostalCode?: string | null
+    companyCity?: string | null
+    companyCountry?: string | null
+  }
+}) {
+  try {
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
+    const settings = await prisma.companySettings.findUnique({ where: { id: "company-settings" } })
+    const company = data.companyDetails ?? settings
+    const companyName = company?.companyName || "Qujo Autovermietung GmbH"
+    const companyPostalCode = data.companyDetails?.companyPostalCode ?? settings?.companyZipCode
+    const supportEmail = resolveSupportEmail(settings)
+    const companyAddress = [
+      company?.companyAddress,
+      [companyPostalCode, company?.companyCity].filter(Boolean).join(" "),
+      company?.companyCountry,
+    ].filter(Boolean).join(", ")
+    const companyContact = [company?.companyPhone, company?.companyEmail].filter(Boolean).join(" · ")
+    if (
+      !company?.companyName ||
+      !company.companyAddress ||
+      !companyPostalCode ||
+      !company.companyCity ||
+      !company.companyCountry ||
+      !company.companyPhone ||
+      !company.companyEmail
+    ) {
+      return { error: "Pickup company details are incomplete" }
+    }
+    return await sendEmail({
+      to: data.to,
+      idempotencyKey: data.idempotencyKey || `booking-transfer-confirmed-${data.bookingNumber}`,
+      subject: isGerman ? `Zahlung bestätigt – Buchung ${data.bookingNumber}` : `Payment confirmed – booking ${data.bookingNumber}`,
+      html: `<!doctype html><html><body style="margin:0;background:#f5f7f5;font-family:Arial,sans-serif;color:#142018">
+        <div style="max-width:620px;margin:0 auto;padding:28px 16px">
+          <div style="background:#123f2b;color:white;padding:28px;border-radius:14px 14px 0 0"><h1 style="margin:0;font-size:26px">${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1></div>
+          <div style="background:white;padding:28px;border-radius:0 0 14px 14px">
+            <p>${isGerman ? "Guten Tag" : "Hello"} ${escapeHtml(data.userName)},</p>
+            <p>${isGerman ? "wir haben Ihre Anzahlung erhalten. Ihre Buchung ist jetzt bestätigt." : "we have received your deposit. Your booking is now confirmed."}</p>
+            <div style="background:#f6f7f3;border:1px solid #dfe4dd;border-radius:10px;padding:18px;line-height:1.8">
+              <div><strong>${isGerman ? "Buchungsnummer" : "Booking number"}:</strong> ${escapeHtml(data.bookingNumber)}</div>
+              <div><strong>${isGerman ? "Fahrzeug" : "Vehicle"}:</strong> ${escapeHtml(data.carName)}</div>
+              <div><strong>${isGerman ? "Abholung" : "Pick-up"}:</strong> ${escapeHtml(data.pickupDate)}</div>
+              <div><strong>${isGerman ? "Rückgabe" : "Drop-off"}:</strong> ${escapeHtml(data.dropoffDate)}</div>
+              <div><strong>${isGerman ? "Abholort" : "Pick-up location"}:</strong> ${escapeHtml(data.location)}</div>
+              ${companyAddress ? `<div><strong>${isGerman ? "Firmenadresse" : "Company address"}:</strong> ${escapeHtml(companyAddress)}</div>` : ""}
+              ${companyContact ? `<div><strong>${isGerman ? "Kontakt" : "Contact"}:</strong> ${escapeHtml(companyContact)}</div>` : ""}
+            </div>
+            <p>${isGerman ? "Bitte bringen Sie zur Abholung Ihren gültigen Führerschein und Ausweis mit." : "Please bring your valid driving licence and ID to pickup."}</p>
+            <p style="color:#667168;font-size:13px">${isGerman ? "Die Zahlungsbeträge finden Sie in Ihrer vorherigen Zahlungs-E-Mail." : "Payment amounts remain available in your earlier payment email."}</p>
+          </div>
+          <p style="text-align:center;color:#687269;font-size:13px">${escapeHtml(companyName)} · ${escapeHtml(supportEmail)}</p>
+        </div></body></html>`,
+    })
+  } catch (error) {
+    safeEmailConsole.error("booking.transfer_confirmation_email_failed", error)
+    return { error: "Failed to send transfer confirmation email" }
+  }
+}
+
+export async function sendTransferExpiredEmail(data: {
+  to: string
+  userName: string
+  carName: string
+  bookingNumber: string
+  locale?: "de" | "en"
+  idempotencyKey?: string
+}) {
+  const locale = normalizeEmailLocale(data.locale)
+  const isGerman = locale === "de"
+  const settings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: { companyName: true, companyEmail: true, supportEmail: true },
+  })
+  const companyName = settings?.companyName || "Qujo Autovermietung GmbH"
+  const supportEmail = resolveSupportEmail(settings)
+  return sendEmail({
+    to: data.to,
+    idempotencyKey: data.idempotencyKey || `booking-transfer-expired-${data.bookingNumber}`,
+    subject: isGerman ? `Reservierung abgelaufen – ${data.bookingNumber}` : `Reservation expired – ${data.bookingNumber}`,
+    replyTo: supportEmail || undefined,
+    html: professionalEmailHtml({
+      locale,
+      companyName,
+      supportEmail,
+      preview: isGerman ? `Reservierung ${data.bookingNumber} ist abgelaufen.` : `Reservation ${data.bookingNumber} has expired.`,
+      heading: isGerman ? "Ihre Reservierung ist abgelaufen" : "Your reservation has expired",
+      greetingName: data.userName,
+      bodyHtml: `
+        <p style="margin:0 0 16px">${isGerman ? `Wir konnten innerhalb von ${BOOKING_PAYMENT_WINDOW_HOURS} Stunden keinen Zahlungseingang zuordnen. Deshalb wurde die Reservierung automatisch storniert und das Fahrzeug wieder freigegeben.` : `We could not match a payment within ${BOOKING_PAYMENT_WINDOW_HOURS} hours. The reservation was therefore cancelled automatically and the vehicle has been released.`}</p>
+        ${emailDetailsHtml([
+          { label: isGerman ? "Buchungsnummer" : "Booking number", value: data.bookingNumber },
+          { label: isGerman ? "Fahrzeug" : "Vehicle", value: data.carName },
+        ])}
+        <p style="margin:0"><strong>${isGerman ? "Zahlung bereits gesendet?" : "Already sent the payment?"}</strong><br>${isGerman ? "Antworten Sie bitte auf diese E-Mail und nennen Sie Ihre Buchungsnummer, damit wir die Zahlung prüfen können." : "Reply to this email with your booking number so that we can investigate the payment."}</p>`,
+    }),
+  })
+}
+
+export async function sendBookingLifecycleEmail(data: {
+  to: string
+  userName: string
+  bookingNumber: string
+  locale?: "de" | "en"
+  event: "BALANCE_RECEIPT" | "CANCELLED" | "REFUND_CONFIRMED"
+  amount?: number
+  currency?: string
+  reason?: string
+  idempotencyKey: string
+}) {
+  const locale = normalizeEmailLocale(data.locale)
+  const isGerman = locale === "de"
+  const settings = await prisma.companySettings.findUnique({
+    where: { id: "company-settings" },
+    select: { companyName: true, companyEmail: true, supportEmail: true },
+  })
+  const companyName = settings?.companyName || "Qujo Autovermietung GmbH"
+  const supportEmail = resolveSupportEmail(settings)
+  const content = {
+    BALANCE_RECEIPT: {
+      subject: isGerman ? `Zahlung erfasst – ${data.bookingNumber}` : `Payment recorded – ${data.bookingNumber}`,
+      heading: isGerman ? "Zahlung erfasst" : "Payment recorded",
+      body: isGerman
+        ? `Wir haben Ihre Zahlung über ${formatCents(data.amount ?? 0, data.currency)} erfasst. Für diese Buchung ist kein Restbetrag mehr offen.`
+        : `We recorded your payment of ${formatCents(data.amount ?? 0, data.currency)}. There is no remaining balance for this booking.`,
+    },
+    CANCELLED: {
+      subject: isGerman ? `Buchung storniert – ${data.bookingNumber}` : `Booking cancelled – ${data.bookingNumber}`,
+      heading: isGerman ? "Buchung storniert" : "Booking cancelled",
+      body: isGerman
+        ? `Ihre Buchung wurde storniert.${data.reason ? ` Grund: ${escapeHtml(data.reason)}` : ""}`
+        : `Your booking has been cancelled.${data.reason ? ` Reason: ${escapeHtml(data.reason)}` : ""}`,
+    },
+    REFUND_CONFIRMED: {
+      subject: isGerman ? `Erstattung erfasst – ${data.bookingNumber}` : `Refund recorded – ${data.bookingNumber}`,
+      heading: isGerman ? "Erstattung erfasst" : "Refund recorded",
+      body: isGerman
+        ? `Eine Erstattung über ${formatCents(data.amount ?? 0, data.currency)} wurde für Ihre Buchung erfasst.`
+        : `A refund of ${formatCents(data.amount ?? 0, data.currency)} was recorded for your booking.`,
+    },
+  }[data.event]
+  return sendEmail({
+    to: data.to,
+    replyTo: supportEmail || undefined,
+    idempotencyKey: data.idempotencyKey,
+    subject: content.subject,
+    html: professionalEmailHtml({
+      locale,
+      companyName,
+      supportEmail,
+      preview: content.subject,
+      heading: content.heading,
+      greetingName: data.userName,
+      bodyHtml: `<p style="margin:0 0 16px">${content.body}</p>${emailDetailsHtml([
+        { label: isGerman ? "Buchungsnummer" : "Booking number", value: data.bookingNumber },
+      ])}<p style="margin:0;color:#637068;font-size:14px">${
+        data.event === "REFUND_CONFIRMED"
+          ? isGerman
+            ? "Je nach Zahlungsanbieter kann es einige Werktage dauern, bis die Gutschrift auf Ihrem Konto sichtbar ist."
+            : "Depending on your payment provider, it may take several business days for the credit to appear in your account."
+          : isGerman
+            ? "Bitte bewahren Sie diese E-Mail für Ihre Unterlagen auf."
+            : "Please keep this email for your records."
+      }</p>`,
+    }),
+  })
+}
+
 // Admin Notification Email for New Bookings
 export async function sendAdminBookingNotification(data: {
   adminEmail?: string
@@ -1092,6 +1668,7 @@ export async function sendAdminBookingNotification(data: {
   bookingNumber: string
   bookingId: string
   paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP"
+  idempotencyKey?: string
 }) {
   try {
     const configStatus = getEmailConfigStatus()
@@ -1116,11 +1693,7 @@ export async function sendAdminBookingNotification(data: {
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const recipients = Array.from(
-      new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
-          Boolean(email),
-        ),
-      ),
+      new Set([data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string => Boolean(email))),
     )
 
     if (recipients.length === 0) {
@@ -1155,7 +1728,7 @@ export async function sendAdminBookingNotification(data: {
       ? `
                   <div style="margin-bottom: 10px;">
                     <strong>Transfer Reference Code:</strong>
-                    <div class="transfer-code">${data.transferCode}</div>
+                    <div class="transfer-code">${escapeHtml(data.transferCode)}</div>
                     <p style="font-size: 14px; color: #666; margin: 5px 0;">Customer should include this code in their bank transfer</p>
                   </div>
                   <div class="detail-row">
@@ -1196,7 +1769,7 @@ export async function sendAdminBookingNotification(data: {
     const nextStepsHtml = isTransfer
       ? `
                     <li>Wait for customer to complete bank transfer</li>
-                    <li>Check bank account for payment with reference: <strong>${data.transferCode}</strong></li>
+                    <li>Check the bank account for a payment using reference <strong>${escapeHtml(data.transferCode)}</strong></li>
                     <li>Once payment is confirmed, go to admin dashboard</li>
                     <li>Update booking status to "CONFIRMED"</li>
       `
@@ -1209,7 +1782,8 @@ export async function sendAdminBookingNotification(data: {
 
     const { id, error } = await sendEmail({
       to: recipients,
-      subject: `🔔 New Booking - ${data.carName} (${data.bookingNumber})`,
+      idempotencyKey: data.idempotencyKey || `booking-created-admin-${data.bookingNumber}`,
+      subject: `New booking – ${data.carName} (${data.bookingNumber})`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1231,7 +1805,7 @@ export async function sendAdminBookingNotification(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>🔔 New Booking Received</h1>
+                <h1>New booking received</h1>
               </div>
               <div class="content">
                 <p><strong>${summaryText}</strong></p>
@@ -1244,7 +1818,7 @@ export async function sendAdminBookingNotification(data: {
                   <h3 style="margin-top: 0;">Booking Information</h3>
                   <div class="detail-row">
                     <span><strong>Booking Number:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Status:</strong></span>
@@ -1256,19 +1830,19 @@ export async function sendAdminBookingNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Vehicle:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Pick-up:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Drop-off:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Location:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                 </div>
 
@@ -1276,11 +1850,11 @@ export async function sendAdminBookingNotification(data: {
                   <h3 style="margin-top: 0;">Customer Information</h3>
                   <div class="detail-row">
                     <span><strong>Name:</strong></span>
-                    <span>${data.userName}</span>
+                    <span>${escapeHtml(data.userName)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Email:</strong></span>
-                    <span>${data.userEmail}</span>
+                    <span><a href="mailto:${escapeHtml(data.userEmail)}">${escapeHtml(data.userEmail)}</a></span>
                   </div>
                 </div>
 
@@ -1349,7 +1923,11 @@ export async function sendAdminBookingConfirmationNotification(data: {
   totalPrice: number
   currency?: string
   guaranteeAmount: number
-  transferCode: string
+  transferCode?: string
+  paymentMethod?: "TRANSFER" | "PAY_AT_PICKUP" | "CARD"
+  paymentStatus?: "PENDING" | "DEPOSIT_PAID" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED"
+  customerNotified?: boolean
+  locale?: "de" | "en"
   bookingNumber: string
   bookingId: string
 }) {
@@ -1374,12 +1952,30 @@ export async function sendAdminBookingConfirmationNotification(data: {
     const companyName = companySettings?.companyName || "Car Rental Company"
     const guaranteePercent = Math.round((companySettings?.guaranteePercentage ?? 0) * 100)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const locale = normalizeEmailLocale(data.locale)
+    const isGerman = locale === "de"
+    const paymentSummary =
+      data.paymentStatus === "PAID"
+        ? isGerman
+          ? "Die Zahlung ist als bezahlt markiert."
+          : "Payment is marked as paid."
+        : data.paymentMethod === "PAY_AT_PICKUP"
+          ? isGerman
+            ? "Die Zahlung ist bei der Abholung fällig."
+            : "Payment is due at pick-up."
+          : isGerman
+            ? "Die Banküberweisung ist noch zu prüfen."
+            : "The bank transfer is still pending verification."
+    const notificationSummary =
+      data.customerNotified === false
+        ? isGerman
+          ? "Die Kunden-E-Mail konnte nicht zugestellt werden und muss erneut versendet werden."
+          : "The customer email could not be delivered and must be resent."
+        : isGerman
+          ? "Der Kunde wurde benachrichtigt."
+          : "The customer has been notified."
     const recipients = Array.from(
-      new Set(
-        [data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string =>
-          Boolean(email),
-        ),
-      ),
+      new Set([data.adminEmail, ...(data.adminEmails || []), companySettings?.adminEmail].filter((email): email is string => Boolean(email))),
     )
 
     if (recipients.length === 0) {
@@ -1404,7 +2000,8 @@ export async function sendAdminBookingConfirmationNotification(data: {
 
     const { id, error } = await sendEmail({
       to: recipients,
-      subject: `✅ Booking Confirmed - ${data.carName} (${data.bookingNumber})`,
+      idempotencyKey: `booking-confirmation-admin-${data.bookingNumber}`,
+      subject: isGerman ? `Buchung bestätigt – ${data.carName} (${data.bookingNumber})` : `Booking confirmed – ${data.carName} (${data.bookingNumber})`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -1413,7 +2010,7 @@ export async function sendAdminBookingConfirmationNotification(data: {
             <style>
               body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
               .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #10B981; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+              .header { background: #123c2d; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
               .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
               .success-box { background: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 4px; }
               .details { background: white; padding: 20px; border-radius: 4px; margin: 20px 0; }
@@ -1426,20 +2023,20 @@ export async function sendAdminBookingConfirmationNotification(data: {
           <body>
             <div class="container">
               <div class="header">
-                <h1>✅ Booking Confirmed</h1>
+                <h1>${isGerman ? "Buchung bestätigt" : "Booking confirmed"}</h1>
               </div>
               <div class="content">
                 <p><strong>A booking has been confirmed and is ready for pickup.</strong></p>
                 
                 <div class="success-box">
-                  <p style="margin: 0;"><strong>✅ Confirmed:</strong> Payment received and booking is confirmed. Customer has been notified.</p>
+                  <p style="margin: 0;"><strong>${isGerman ? "Bestätigt" : "Confirmed"}:</strong> ${paymentSummary} ${notificationSummary}</p>
                 </div>
 
                 <div class="details">
                   <h3 style="margin-top: 0;">Booking Information</h3>
                   <div class="detail-row">
                     <span><strong>Booking Number:</strong></span>
-                    <span>${data.bookingNumber}</span>
+                    <span>${escapeHtml(data.bookingNumber)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Status:</strong></span>
@@ -1447,19 +2044,19 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   </div>
                   <div class="detail-row">
                     <span><strong>Vehicle:</strong></span>
-                    <span>${data.carName}</span>
+                    <span>${escapeHtml(data.carName)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Pick-up:</strong></span>
-                    <span>${data.pickupDate}</span>
+                    <span>${escapeHtml(data.pickupDate)}</span>
                   </div>
                   <div class="detail-row">
                     <span><strong>Drop-off:</strong></span>
-                    <span>${data.dropoffDate}</span>
+                    <span>${escapeHtml(data.dropoffDate)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Location:</strong></span>
-                    <span>${data.location}</span>
+                    <span>${escapeHtml(data.location)}</span>
                   </div>
                 </div>
 
@@ -1467,20 +2064,24 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h3 style="margin-top: 0;">Customer Information</h3>
                   <div class="detail-row">
                     <span><strong>Name:</strong></span>
-                    <span>${data.userName}</span>
+                    <span>${escapeHtml(data.userName)}</span>
                   </div>
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Email:</strong></span>
-                    <span>${data.userEmail}</span>
+                    <span><a href="mailto:${escapeHtml(data.userEmail)}">${escapeHtml(data.userEmail)}</a></span>
                   </div>
                 </div>
 
                 <div class="details">
                   <h3 style="margin-top: 0;">Payment Details</h3>
-                  <div style="margin-bottom: 10px;">
+                  ${
+                    data.transferCode
+                      ? `<div style="margin-bottom: 10px;">
                     <strong>Transfer Reference Code:</strong>
-                    <div class="transfer-code">${data.transferCode}</div>
-                  </div>
+                    <div class="transfer-code">${escapeHtml(data.transferCode)}</div>
+                  </div>`
+                      : ""
+                  }
                   <div class="detail-row" style="border-bottom: none;">
                     <span><strong>Total Amount:</strong></span>
                     <span style="color: #10B981; font-weight: bold; font-size: 18px;">${formatCents(data.totalPrice, data.currency)}</span>
@@ -1499,9 +2100,9 @@ export async function sendAdminBookingConfirmationNotification(data: {
                   <h4 style="margin-top: 0; color: #0066FF;">📋 Next Steps:</h4>
                   <ol style="margin: 10px 0; padding-left: 20px;">
                     <li>Prepare the vehicle for pickup</li>
-                    <li>Verify customer's transfer code: <strong>${data.transferCode}</strong></li>
+                    ${data.transferCode ? `<li>Verify the customer's transfer code: <strong>${escapeHtml(data.transferCode)}</strong></li>` : ""}
                     <li>Ensure all documentation is ready</li>
-                    <li>Customer will arrive on: <strong>${data.pickupDate}</strong></li>
+                    <li>Customer arrival: <strong>${escapeHtml(data.pickupDate)}</strong></li>
                   </ol>
                 </div>
 

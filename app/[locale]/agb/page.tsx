@@ -1,104 +1,44 @@
 import Link from "@/navigation"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { ClientOnly } from "@/components/client-only"
-import { getTranslations } from "next-intl/server"
+import { PublicLegalPage, type PublicLegalSection } from "@/components/legal/public-legal-page"
 
-export default async function AGBPage() {
-  const t = await getTranslations("agb")
+const deSections: PublicLegalSection[] = [
+  { title: "1. Geltungsbereich und Vertragspartner", paragraphs: ["Diese Allgemeinen Mietbedingungen gelten für Verträge über die zeitweise Überlassung von Fahrzeugen durch die Qujo Autovermietung GmbH an Verbraucher und Unternehmer. Individuelle Angaben in Buchungsbestätigung und Mietvertrag – insbesondere Fahrzeug, Mietzeit, Preis, Kaution, Kilometer, Versicherung und Zusatzleistungen – gehen diesen allgemeinen Bestimmungen vor."] },
+  { title: "2. Buchungsanfrage und Vertragsschluss", paragraphs: ["Die Darstellung von Fahrzeugen auf der Website ist kein bindendes Angebot. Mit dem Absenden stellen Sie eine Buchungsanfrage. Ein Mietvertrag kommt erst durch unsere ausdrückliche Buchungsbestätigung oder durch Unterzeichnung/Übergabe des Fahrzeugs zustande. Verfügbarkeit, Identität, Fahrerlaubnis und die im Buchungsprozess genannten Voraussetzungen können vor der Bestätigung geprüft werden."] },
+  { title: "3. Fahrzeug und Ersatzfahrzeug", paragraphs: ["Geschuldet ist das bestätigte Fahrzeug oder die bestätigte Fahrzeugklasse. Ist das konkrete Fahrzeug aus einem nicht von uns zu vertretenden Grund nicht verfügbar, dürfen wir ein mindestens gleichwertiges Ersatzfahrzeug anbieten. Weitergehende gesetzliche Rechte des Mieters bleiben unberührt."] },
+  { title: "4. Fahrer und Dokumente", paragraphs: ["Das Fahrzeug darf nur von den im Mietvertrag eingetragenen Fahrern geführt werden. Jeder Fahrer muss die im Angebot genannten Alters-, Führerschein- und Identitätsanforderungen erfüllen und bei Übergabe gültige Originaldokumente vorlegen. Der Mieter muss sicherstellen, dass jeder Fahrer fahrtüchtig und zum Führen des Fahrzeugs berechtigt ist."] },
+  { title: "5. Mietpreis, Kaution und Zahlung", paragraphs: ["Mietpreis, Steuern, Kaution, Fälligkeit und zugelassene Zahlungsart ergeben sich aus dem vor Vertragsschluss angezeigten Angebot und der Buchungsbestätigung. Zusätzliche Entgelte werden nur erhoben, wenn ihre Voraussetzung und Höhe vorher vereinbart wurden oder ein nachweisbarer Schaden bzw. Aufwand nach den gesetzlichen Regeln zu ersetzen ist. Eine Kaution wird nach Vertragsende freigegeben bzw. abgerechnet, sobald offene, prüfbare Ansprüche geklärt sind."] },
+  { title: "6. Übergabe, Zustand, Rückgabe und Verspätung", paragraphs: ["Der Mieter prüft das Fahrzeug bei Übergabe und lässt erkennbare Schäden im Übergabeprotokoll festhalten. Das Fahrzeug ist zum vereinbarten Ort und Zeitpunkt, mit allen Dokumenten, Schlüsseln und Zubehörteilen sowie im vereinbarten Kraftstoff- oder Ladezustand zurückzugeben. Absehbare Verspätungen sind unverzüglich mitzuteilen.", "Die bei der Buchung angezeigte Kulanzzeit bestimmt ausschließlich, ab wann bei verspäteter Rückgabe ein weiterer begonnener 24-Stunden-Miettag nach der vereinbarten Preisregel berechnet wird. Eine solche Berechnung verlängert die vereinbarte Mietzeit nicht und berechtigt den Mieter nicht zur weiteren Nutzung. Eine Verlängerung bedarf vor Ablauf der Rückgabezeit der ausdrücklichen Zustimmung des Vermieters.", "Wird das Fahrzeug nach Ende der vereinbarten Mietzeit nicht zurückgegeben, kann der Vermieter im gesetzlich zulässigen Umfang eine Nutzungsentschädigung sowie den Ersatz nachgewiesener weiterer Schäden verlangen. Die stillschweigende Vertragsverlängerung durch fortgesetzten Gebrauch gemäß § 545 BGB wird ausgeschlossen. Zwingende gesetzliche Rechte bleiben unberührt."] },
+  { title: "7. Nutzung des Fahrzeugs", paragraphs: ["Das Fahrzeug ist sorgfältig, entsprechend Herstellerangaben und Straßenverkehrsrecht zu nutzen. Untersagt sind insbesondere die Nutzung durch nicht autorisierte Fahrer, Fahrten unter Alkohol- oder Drogeneinfluss, Motorsport/Tests, rechtswidrige Zwecke, entgeltliche Personenbeförderung ohne Zustimmung, Überladung, Weitervermietung sowie Auslandsfahrten oder Tiertransport entgegen der Buchungsvereinbarung. Rauchverbote und sonstige fahrzeugspezifische Regeln werden vor Vertragsschluss kenntlich gemacht."] },
+  { title: "8. Kraftstoff, Laden und Kilometer", paragraphs: ["Kraftstoff-/Laderegelung und ein etwaiges Kilometerkontingent ergeben sich ausschließlich aus Angebot und Buchungsbestätigung. Es besteht keine pauschale Zusage unbegrenzter Kilometer. Fehlmengen oder Mehrkilometer werden nur nach der zuvor mitgeteilten Berechnung abgerechnet."] },
+  { title: "9. Versicherung und Selbstbeteiligung", paragraphs: ["Versicherungsumfang, Ausschlüsse und eine etwaige Selbstbeteiligung ergeben sich aus dem konkreten Angebot, den Versicherungsinformationen und dem Mietvertrag. Eine Haftungsreduzierung entfällt oder wird gekürzt nur, soweit dies wirksam vereinbart und gesetzlich zulässig ist, insbesondere bei vorsätzlicher oder grob fahrlässiger Pflichtverletzung."] },
+  { title: "10. Unfall, Panne, Diebstahl und Schäden", paragraphs: ["Unfall, Panne, Diebstahl, Brand, Wild- oder sonstiger Schaden sind uns unverzüglich zu melden. Bei Unfall oder Verdacht auf Straftat ist die Polizei hinzuzuziehen, soweit dies erforderlich oder zumutbar ist; Schuldanerkenntnisse dürfen nicht abgegeben werden. Der Mieter dokumentiert Ereignis, Beteiligte und Zeugen und unterstützt die Schadenaufklärung. Reparaturen dürfen außer in Notfällen nur mit unserer Zustimmung beauftragt werden."] },
+  { title: "11. Haftung", paragraphs: ["Wir haften unbeschränkt bei Vorsatz, grober Fahrlässigkeit, Verletzung von Leben, Körper oder Gesundheit sowie nach zwingenden gesetzlichen Vorschriften. Bei leicht fahrlässiger Verletzung wesentlicher Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt. Der Mieter haftet nach den gesetzlichen Vorschriften und den wirksam vereinbarten Versicherungs-/Haftungsregeln; ihm bleibt der Nachweis vorbehalten, dass kein oder ein geringerer Schaden entstanden ist."] },
+  { title: "12. Stornierung, Nichtabholung und Widerruf", paragraphs: ["Vertragliche Stornierungsfristen und -entgelte gelten nur, wenn sie vor Abgabe der Buchungsanfrage klar angezeigt und in der Buchungsbestätigung festgehalten wurden. Bei Nichtabholung werden ersparte Aufwendungen und eine mögliche anderweitige Vermietung angerechnet. Für eine Fahrzeugmiete zu einem spezifischen Termin oder Zeitraum besteht nach § 312g Abs. 2 Nr. 9 BGB grundsätzlich kein gesetzliches Widerrufsrecht."], content: <p><Link href="/widerruf" className="font-medium text-foreground underline underline-offset-2">Hinweis zum Widerrufsrecht lesen</Link></p> },
+  { title: "13. Kündigung", paragraphs: ["Beide Parteien können den Mietvertrag aus wichtigem Grund außerordentlich kündigen. Ein wichtiger Grund kann insbesondere bei erheblicher Gefährdung des Fahrzeugs, fehlender Fahrerlaubnis, Zahlungsverzug oder schwerwiegender vertragswidriger Nutzung vorliegen. Zwingende gesetzliche Rechte bleiben unberührt."] },
+  { title: "14. Beschwerden und Streitbeilegung", paragraphs: ["Beschwerden können über die im Impressum genannten Kontaktdaten eingereicht werden. Wir sind weder bereit noch verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen."] },
+  { title: "15. Recht, Gerichtsstand und Schlussbestimmungen", paragraphs: ["Es gilt deutsches Recht unter Ausschluss des UN-Kaufrechts. Bei Verbrauchern bleiben zwingende Schutzvorschriften des Staates ihres gewöhnlichen Aufenthalts unberührt. Ein ausschließlicher Gerichtsstand wird nur mit Kaufleuten, juristischen Personen des öffentlichen Rechts oder öffentlich-rechtlichen Sondervermögen im gesetzlich zulässigen Umfang vereinbart. Sollten einzelne Bestimmungen unwirksam sein, bleibt der Vertrag im Übrigen wirksam; an ihre Stelle treten die gesetzlichen Vorschriften."] },
+]
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-background px-4 py-4 border-b border-border sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </Link>
-            <h1 className="text-xl font-bold">{t("title")}</h1>
-          </div>
-          <ClientOnly>
-            <LanguageSwitcher />
-          </ClientOnly>
-        </div>
-      </header>
+const enSections: PublicLegalSection[] = [
+  { title: "1. Scope and contracting party", paragraphs: ["These General Rental Terms apply to temporary vehicle rentals by Qujo Autovermietung GmbH to consumers and businesses. Individual terms in the booking confirmation and rental agreement—particularly vehicle, period, price, deposit, mileage, insurance and extras—take precedence over these general terms."] },
+  { title: "2. Booking request and contract", paragraphs: ["Vehicles shown on the website are not binding offers. By submitting the flow, you make a booking request. A rental contract is concluded only by our express confirmation or by signature/vehicle handover. Availability, identity, driving licence and disclosed eligibility requirements may be checked before confirmation."] },
+  { title: "3. Vehicle and replacement", paragraphs: ["We owe the confirmed vehicle or class. If the specific vehicle is unavailable for reasons beyond our responsibility, we may offer an equivalent or better replacement. The renter's statutory rights remain unaffected."] },
+  { title: "4. Drivers and documents", paragraphs: ["Only drivers named in the rental agreement may drive. Each must meet the disclosed age, licence and identity requirements and present valid originals at handover. The renter must ensure every driver is fit and legally entitled to drive."] },
+  { title: "5. Price, deposit and payment", paragraphs: ["Price, taxes, deposit, due dates and accepted payment method are stated before contract conclusion and in the confirmation. Extra charges apply only where their basis and amount were agreed in advance or where proven loss/expense is recoverable by law. A deposit is released or accounted for after the rental once verifiable outstanding claims are resolved."] },
+  { title: "6. Handover, condition, return and delay", paragraphs: ["The renter should inspect the vehicle and record visible damage at handover. It must be returned at the agreed place and time with all documents, keys and accessories and the agreed fuel/charge level. Expected delay must be reported immediately.", "The grace period shown during booking determines only when a further started 24-hour rental day is charged under the agreed pricing rule. Such a charge does not extend the agreed rental period and does not authorize continued use. Any extension requires the rental company's express consent before the agreed return time.", "If the vehicle is not returned when the agreed rental period ends, the rental company may claim compensation for continued possession and proven additional loss to the extent permitted by law. Tacit extension through continued use under section 545 BGB is excluded. Mandatory statutory rights remain unaffected."] },
+  { title: "7. Vehicle use", paragraphs: ["The vehicle must be used carefully, according to manufacturer instructions and traffic law. Prohibited uses include unauthorised drivers, driving under alcohol/drugs, racing/tests, illegal purposes, paid passenger transport without consent, overloading, sub-rental, or cross-border/animal transport contrary to the booking. Smoking and vehicle-specific restrictions are disclosed before contract conclusion."] },
+  { title: "8. Fuel, charging and mileage", paragraphs: ["Fuel/charging policy and any mileage allowance are governed solely by the offer and confirmation. Unlimited mileage is not promised generally. Shortfalls or excess mileage are charged only according to the calculation disclosed beforehand."] },
+  { title: "9. Insurance and excess", paragraphs: ["Insurance scope, exclusions and any excess are stated in the offer, insurance information and rental agreement. Any liability reduction is lost or reduced only where validly agreed and legally permitted, particularly for intentional or grossly negligent breaches."] },
+  { title: "10. Accident, breakdown, theft and damage", paragraphs: ["Accidents, breakdowns, theft, fire, wildlife or other damage must be reported immediately. Police must be called where required or reasonable; no admission of liability may be made. The renter documents the event, parties and witnesses and assists investigation. Repairs require our consent except in emergencies."] },
+  { title: "11. Liability", paragraphs: ["We have unlimited liability for intent, gross negligence, injury to life/body/health and mandatory statutory liability. For slight negligence involving an essential contractual duty, liability is limited to typical foreseeable loss. The renter is liable under statutory law and valid insurance/liability terms and may prove that no or a lower loss occurred."] },
+  { title: "12. Cancellation, no-show and withdrawal", paragraphs: ["Contractual cancellation periods or charges apply only when clearly disclosed before the booking request and recorded in the confirmation. Saved expenses and any replacement rental are credited in a no-show calculation. A vehicle rental for a specific date or period generally has no statutory withdrawal right under section 312g(2)(9) BGB."], content: <p><Link href="/widerruf" className="font-medium text-foreground underline underline-offset-2">Read the withdrawal-right notice</Link></p> },
+  { title: "13. Termination", paragraphs: ["Either party may terminate for serious cause, including material vehicle risk, no valid licence, payment default or serious misuse. Mandatory statutory rights remain unaffected."] },
+  { title: "14. Complaints and dispute resolution", paragraphs: ["Complaints may be submitted using the Legal Notice contact details. We are neither willing nor obliged to participate in consumer arbitration proceedings."] },
+  { title: "15. Law, venue and final terms", paragraphs: ["German law applies, excluding the UN Convention on Contracts for the International Sale of Goods. Mandatory consumer protection law of the consumer's habitual residence remains unaffected. Exclusive jurisdiction is agreed only with merchants and public-law entities where legally permitted. If a term is invalid, the remainder stays effective and statutory law applies in its place."] },
+]
 
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="space-y-8">
-          <section>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("intro")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("lastUpdated")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("scope.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("scope.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("scope.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("contract.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("contract.intro")}</p>
-            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-              <li>{t("contract.steps.booking")}</li>
-              <li>{t("contract.steps.confirmation")}</li>
-              <li>{t("contract.steps.payment")}</li>
-              <li>{t("contract.steps.contract")}</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("prices.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("prices.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("prices.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("payment.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("payment.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("payment.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("pickup.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("pickup.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("pickup.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("return.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("return.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("return.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("liability.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("liability.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("liability.content2")}</p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("cancellation.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed mb-4">{t("cancellation.content1")}</p>
-            <p className="text-muted-foreground leading-relaxed">{t("cancellation.content2")}</p>
-            <p className="text-muted-foreground leading-relaxed mt-4">
-              <Link href="/widerruf" className="text-primary hover:underline">
-                {t("cancellation.link")}
-              </Link>
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold mb-4">{t("applicableLaw.title")}</h2>
-            <p className="text-muted-foreground leading-relaxed">{t("applicableLaw.content")}</p>
-          </section>
-        </div>
-      </div>
-    </div>
-  )
+export default async function AGBPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  const de = locale !== "en"
+  return <PublicLegalPage title={de ? "Allgemeine Mietbedingungen" : "General Rental Terms"} intro={de ? "Klare, faire Grundregeln für Buchungsanfragen und Fahrzeugmieten. Die konkreten Konditionen Ihrer Buchung werden vor dem Absenden angezeigt." : "Clear general rules for booking requests and vehicle rentals. The specific terms of your booking are shown before submission."} updated={de ? "Stand: 27. Juli 2026" : "Last updated: 27 July 2026"} sections={de ? deSections : enSections} />
 }
-

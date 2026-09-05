@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getTranslations } from "next-intl/server"
+import { getPublicCarPrices } from "@/lib/cars/public-pricing"
 
 export const dynamic = "force-dynamic"
 
@@ -30,15 +31,16 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
 
   const savedCarsList = savedCars.map((saved) => saved.car)
   const reviewStatsByCar = await getCarReviewStatsMap(savedCarsList.map((car) => car.id))
+  const publicPrices = await getPublicCarPrices(prisma, savedCarsList)
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,rgba(248,250,252,0.95)_0%,rgba(255,255,255,1)_45%,rgba(248,250,252,0.96)_100%)] pb-24">
+    <div className="qujo-page pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
             <h1 className="text-xl font-bold sm:text-2xl">{t("saved.title")}</h1>
-            <p className="text-sm text-muted-foreground">{t("cars.subtitle", { count: savedCarsList.length })}</p>
+            <p className="text-sm text-muted-foreground">{t("saved.subtitle", { count: savedCarsList.length })}</p>
           </div>
           <Link
             href="/cars"
@@ -78,6 +80,7 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
           <div className="grid grid-cols-1 gap-5 pb-4 sm:grid-cols-2 xl:grid-cols-3">
             {savedCarsList.map((car) => {
               const stats = getCarReviewStats(reviewStatsByCar, car.id)
+              const publicPrice = publicPrices.get(car.id)!
 
               return (
                 <CarCard
@@ -87,7 +90,8 @@ export default async function SavedPage({ params }: { params: Promise<{ locale: 
                     name: car.name,
                     nameDe: car.nameDe,
                     category: car.category,
-                    price: car.price,
+                    price: publicPrice.price,
+                    pricingPublished: publicPrice.pricingPublished,
                     image: car.image,
                     status: car.status,
                     specs: {

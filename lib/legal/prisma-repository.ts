@@ -45,9 +45,11 @@ export class PrismaLegalRepository {
   constructor(readonly db: ConfigurationDbClient) {}
 
   async loadPageData(): Promise<LegalAdministrationPageData> {
-    const [documents, draftConfig, activeRelease, draftRelease] = await Promise.all([
+    const [documents, draftConfig] = await Promise.all([
       this.db.legalDocumentVersion.findMany({ include: documentInclude, orderBy: [{ type: "asc" }, { versionNumber: "desc" }] }),
       this.db.configurationVersion.findFirst({ where: { domain: "LEGAL_ACCEPTANCE", status: { in: ["DRAFT", "VALIDATED"] } }, include: acceptanceInclude, orderBy: { updatedAt: "desc" } }),
+    ])
+    const [activeRelease, draftRelease] = await Promise.all([
       this.db.businessConfigurationRelease.findFirst({ where: { status: "ACTIVE" }, include: { generalRentalConfig: true, legalAcceptanceConfig: { include: { version: { include: acceptanceInclude }, termsDocument: { include: { translations: true } }, privacyDocument: { include: { translations: true } }, translations: true } } } }),
       this.db.businessConfigurationRelease.findFirst({ where: { status: { in: ["DRAFT", "VALIDATED"] } }, include: { generalRentalConfig: true }, orderBy: { updatedAt: "desc" } }),
     ])

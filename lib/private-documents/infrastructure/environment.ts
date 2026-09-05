@@ -26,6 +26,15 @@ export interface PrivateDocumentEnvironment {
   issues: string[];
 }
 
+export function privateDocumentHealthCodes(
+  environment: PrivateDocumentEnvironment,
+): string[] {
+  if (environment.issues.length) return environment.issues;
+  return environment.production
+    ? []
+    : ["DOCUMENT_NONPRODUCTION_WORKFLOW_DISABLED"];
+}
+
 type Environment = Readonly<Record<string, string | undefined>>;
 
 function positiveInteger(value: string | undefined, fallback: number) {

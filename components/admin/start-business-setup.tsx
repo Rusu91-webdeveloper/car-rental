@@ -6,8 +6,10 @@ import { useRouter } from "@/navigation"
 import { startBusinessSetupAction } from "@/app/actions/business-setup"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { useLocale } from "next-intl"
 
 export function StartBusinessSetup() {
+  const de = useLocale() === "de"
   const router = useRouter()
   const started = useRef(false)
   const [pending, startTransition] = useTransition()
@@ -39,18 +41,18 @@ export function StartBusinessSetup() {
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-700">
               <AlertCircle className="h-6 w-6" />
             </span>
-            <h2 className="mt-4 text-lg font-semibold">We couldn’t prepare your settings</h2>
+            <h2 className="mt-4 text-lg font-semibold">{de ? "Ihre Einstellungen konnten nicht vorbereitet werden" : "We couldn’t prepare your settings"}</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground" role="alert">{message}</p>
-            <Button className="mt-5" onClick={prepareSetup} disabled={pending}>Try again</Button>
+            <Button className="mt-5" onClick={prepareSetup} disabled={pending}>{de ? "Erneut versuchen" : "Try again"}</Button>
           </>
         ) : (
           <>
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <LoaderCircle className="h-6 w-6 animate-spin" />
             </span>
-            <h2 className="mt-4 text-lg font-semibold">Getting your settings ready</h2>
+            <h2 className="mt-4 text-lg font-semibold">{de ? "Ihre Einstellungen werden vorbereitet" : "Getting your settings ready"}</h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-              This will only take a moment. Your first setup step will open automatically.
+              {de ? "Dies dauert nur einen Moment. Der erste Einrichtungsschritt wird automatisch geöffnet." : "This will only take a moment. Your first setup step will open automatically."}
             </p>
           </>
         )}

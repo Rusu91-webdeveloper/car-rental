@@ -1,0 +1,1515 @@
+{
+  "communities": {
+    "0": [
+      "app_actions_admin",
+      "app_actions_admin_createadminuser",
+      "app_actions_admin_createmanualreservation",
+      "app_actions_admin_createmanualreservationschema",
+      "app_actions_admin_deleteadminuser",
+      "app_actions_admin_deletemanualreservation",
+      "app_actions_admin_encodemanualreservationreason",
+      "app_actions_admin_getadminstats",
+      "app_actions_admin_getallbookings",
+      "app_actions_admin_getallcars",
+      "app_actions_admin_getallusers",
+      "app_actions_admin_getauditlogs",
+      "app_actions_admin_ismanualreservationreason",
+      "app_actions_admin_setuseractivestate",
+      "app_actions_bookings_getuserbookings",
+      "app_actions_cars",
+      "app_actions_cars_createcar",
+      "app_actions_cars_deletecar",
+      "app_actions_cars_filtercarsbyavailability",
+      "app_actions_cars_getcaravailability",
+      "app_actions_cars_updatecar",
+      "app_actions_reviews",
+      "app_actions_reviews_canreviewbooking",
+      "app_actions_reviews_createbookingreview",
+      "app_actions_reviews_deletereviewasadmin",
+      "app_actions_reviews_synccarratingstats",
+      "app_actions_settings",
+      "app_actions_settings_companysettingsschema",
+      "app_actions_settings_getcompanysettings",
+      "app_actions_settings_updatecompanysettings",
+      "app_api_cloudinary_signature_route",
+      "app_api_cloudinary_signature_route_post",
+      "app_api_cloudinary_signature_route_signcloudinaryparams",
+      "app_api_cron_cancel_expired_bookings_route",
+      "app_api_cron_cancel_expired_bookings_route_get",
+      "app_api_cron_cancel_expired_bookings_route_isauthorized",
+      "app_api_cron_cancel_expired_bookings_route_post",
+      "app_locale_admin_admin_client",
+      "app_locale_admin_admin_client_adminbooking",
+      "app_locale_admin_admin_client_admincar",
+      "app_locale_admin_admin_client_admindashboard",
+      "app_locale_admin_admin_client_adminmanualreservation",
+      "app_locale_admin_admin_client_adminreview",
+      "app_locale_admin_admin_client_adminuser",
+      "app_locale_admin_admin_client_carform",
+      "app_locale_admin_admin_client_carformvalues",
+      "app_locale_admin_admin_client_manualreservationform",
+      "app_locale_admin_admin_client_manualreservationformvalues",
+      "app_locale_admin_admin_client_settingsform",
+      "app_locale_admin_admin_client_userform",
+      "app_locale_admin_admin_client_userformvalues",
+      "app_locale_bookings_booking_review_section",
+      "app_locale_bookings_booking_review_section_bookingreview",
+      "app_locale_bookings_booking_review_section_bookingreviewsection",
+      "app_locale_bookings_booking_review_section_bookingreviewsectionprops",
+      "app_locale_bookings_booking_review_section_stardisplay",
+      "app_locale_bookings_booking_review_section_staricon",
+      "app_locale_contact_page_contactpage",
+      "components_ui_card",
+      "components_ui_card_card",
+      "components_ui_card_cardaction",
+      "components_ui_card_cardcontent",
+      "components_ui_card_carddescription",
+      "components_ui_card_cardfooter",
+      "components_ui_card_cardheader",
+      "components_ui_card_cardtitle",
+      "hooks_use_toast_usetoast",
+      "lib_auth_requireadmin",
+      "lib_availability",
+      "lib_availability_dbclient",
+      "lib_availability_getunavailabledates",
+      "lib_availability_iscaravailable",
+      "lib_booking_expiration_runbookinglifecyclemaintenance",
+      "lib_logger_logger_error",
+      "lib_validations",
+      "lib_validations_createadminuserschema",
+      "lib_validations_createbookingreviewschema",
+      "lib_validations_createbookingschema",
+      "lib_validations_createcarschema",
+      "lib_validations_imageschema",
+      "lib_validations_roleschema",
+      "lib_validations_setuseractivestatusschema",
+      "lib_validations_updatebookingstatusschema",
+      "lib_validations_updatecarschema"
+    ],
+    "1": [
+      "app_locale_cars_id_car_availability_calendar",
+      "app_locale_cars_id_car_availability_calendar_caravailabilitycalendar",
+      "app_locale_cars_id_car_availability_calendar_caravailabilitycalendarprops",
+      "app_locale_cars_id_car_availability_calendar_unavailabledaterange",
+      "app_locale_checkout_id_booking_success_modal",
+      "app_locale_checkout_id_booking_success_modal_bookingsuccessmodal",
+      "app_locale_checkout_id_booking_success_modal_bookingsuccessmodalprops",
+      "app_locale_checkout_id_checkout_client",
+      "app_locale_profile_logout_button",
+      "app_locale_profile_logout_button_logoutbutton",
+      "app_locale_profile_page",
+      "app_locale_profile_page_profilepage",
+      "components_date_filter",
+      "components_date_filter_datefilter",
+      "components_date_filter_datefilterprops",
+      "components_demo_banner",
+      "components_ui_alert",
+      "components_ui_alert_alert",
+      "components_ui_alert_alertdescription",
+      "components_ui_alert_alerttitle",
+      "components_ui_alert_alertvariants",
+      "components_ui_alert_dialog",
+      "components_ui_alert_dialog_alertdialog",
+      "components_ui_alert_dialog_alertdialogaction",
+      "components_ui_alert_dialog_alertdialogcancel",
+      "components_ui_alert_dialog_alertdialogcontent",
+      "components_ui_alert_dialog_alertdialogdescription",
+      "components_ui_alert_dialog_alertdialogfooter",
+      "components_ui_alert_dialog_alertdialogheader",
+      "components_ui_alert_dialog_alertdialogoverlay",
+      "components_ui_alert_dialog_alertdialogportal",
+      "components_ui_alert_dialog_alertdialogtitle",
+      "components_ui_alert_dialog_alertdialogtrigger",
+      "components_ui_button",
+      "components_ui_button_button",
+      "components_ui_button_buttonvariants",
+      "components_ui_calendar",
+      "components_ui_calendar_calendar",
+      "components_ui_calendar_calendardaybutton",
+      "components_ui_label",
+      "components_ui_label_label",
+      "components_ui_pagination",
+      "components_ui_pagination_pagination",
+      "components_ui_pagination_paginationcontent",
+      "components_ui_pagination_paginationellipsis",
+      "components_ui_pagination_paginationitem",
+      "components_ui_pagination_paginationlink",
+      "components_ui_pagination_paginationlinkprops",
+      "components_ui_pagination_paginationnext",
+      "components_ui_pagination_paginationprevious",
+      "components_ui_popover",
+      "components_ui_popover_popover",
+      "components_ui_popover_popoveranchor",
+      "components_ui_popover_popovercontent",
+      "components_ui_popover_popovertrigger",
+      "lib_constants"
+    ],
+    "2": [
+      "app_actions_saved",
+      "app_actions_saved_togglesavedcar",
+      "app_api_auth_nextauth_route",
+      "app_api_health_route",
+      "app_api_health_route_get",
+      "app_locale_admin_page",
+      "app_locale_admin_page_adminpage",
+      "app_locale_admin_page_manualreservationpayload",
+      "app_locale_admin_page_parsemanualreservationpayload",
+      "app_locale_bookings_page",
+      "app_locale_bookings_page_bookingspage",
+      "app_locale_cars_id_book_now_button",
+      "app_locale_cars_id_book_now_button_booknowbutton",
+      "app_locale_cars_id_page",
+      "app_locale_cars_id_page_cardetailpage",
+      "app_locale_cars_page",
+      "app_locale_cars_page_carspage",
+      "app_locale_checkout_id_page",
+      "app_locale_checkout_id_page_checkoutpage",
+      "app_locale_page",
+      "app_locale_page_homepage",
+      "app_locale_saved_page",
+      "app_locale_saved_page_savedpage",
+      "components_car_image_carousel",
+      "components_car_image_carousel_carimagecarousel",
+      "components_save_car_button",
+      "components_save_car_button_savecarbutton",
+      "components_share_button",
+      "components_share_button_sharebutton",
+      "components_ui_badge",
+      "components_ui_badge_badge",
+      "components_ui_badge_badgevariants",
+      "lib_auth",
+      "lib_auth_auth_signin_signout_handlers",
+      "lib_auth_getcurrentuser",
+      "lib_auth_requireauth",
+      "lib_booking_expiration",
+      "lib_booking_expiration_cancelexpiredbookings",
+      "lib_booking_expiration_completefinishedbookings",
+      "lib_booking_expiration_dbclient",
+      "lib_booking_expiration_formatdateforlocale",
+      "lib_booking_expiration_normalizebookinglocale",
+      "lib_car_review_stats",
+      "lib_car_review_stats_carreviewstats",
+      "lib_car_review_stats_getcarreviewstats",
+      "lib_car_review_stats_getcarreviewstatsmap",
+      "lib_config",
+      "lib_config_adminemailsfromenv",
+      "lib_config_config",
+      "lib_config_smtpenabled",
+      "lib_db",
+      "lib_db_globalforprisma",
+      "scripts_make_admin",
+      "scripts_make_admin_makeadmin"
+    ],
+    "3": [
+      "app_layout",
+      "app_layout_firamono",
+      "app_layout_metadata",
+      "app_layout_notosans",
+      "app_layout_rootlayout",
+      "components_providers",
+      "components_providers_providers",
+      "components_ui_toast",
+      "components_ui_toast_toast",
+      "components_ui_toast_toastaction",
+      "components_ui_toast_toastactionelement",
+      "components_ui_toast_toastclose",
+      "components_ui_toast_toastdescription",
+      "components_ui_toast_toastprops",
+      "components_ui_toast_toasttitle",
+      "components_ui_toast_toastvariants",
+      "components_ui_toast_toastviewport",
+      "components_ui_toaster",
+      "components_ui_toaster_toaster",
+      "components_ui_use_toast",
+      "components_ui_use_toast_action",
+      "components_ui_use_toast_actiontype",
+      "components_ui_use_toast_actiontypes",
+      "components_ui_use_toast_addtoremovequeue",
+      "components_ui_use_toast_dispatch",
+      "components_ui_use_toast_genid",
+      "components_ui_use_toast_listeners",
+      "components_ui_use_toast_memorystate",
+      "components_ui_use_toast_reducer",
+      "components_ui_use_toast_state",
+      "components_ui_use_toast_toast",
+      "components_ui_use_toast_toastertoast",
+      "components_ui_use_toast_toasttimeouts",
+      "components_ui_use_toast_usetoast",
+      "hooks_use_toast",
+      "hooks_use_toast_action",
+      "hooks_use_toast_actiontype",
+      "hooks_use_toast_actiontypes",
+      "hooks_use_toast_addtoremovequeue",
+      "hooks_use_toast_dispatch",
+      "hooks_use_toast_genid",
+      "hooks_use_toast_listeners",
+      "hooks_use_toast_memorystate",
+      "hooks_use_toast_reducer",
+      "hooks_use_toast_state",
+      "hooks_use_toast_toast",
+      "hooks_use_toast_toastertoast",
+      "hooks_use_toast_toasttimeouts"
+    ],
+    "4": [
+      "components_ui_sheet",
+      "components_ui_sheet_sheet",
+      "components_ui_sheet_sheetclose",
+      "components_ui_sheet_sheetcontent",
+      "components_ui_sheet_sheetdescription",
+      "components_ui_sheet_sheetfooter",
+      "components_ui_sheet_sheetheader",
+      "components_ui_sheet_sheetoverlay",
+      "components_ui_sheet_sheetportal",
+      "components_ui_sheet_sheettitle",
+      "components_ui_sheet_sheettrigger",
+      "components_ui_sidebar",
+      "components_ui_sidebar_sidebar",
+      "components_ui_sidebar_sidebarcontent",
+      "components_ui_sidebar_sidebarcontext",
+      "components_ui_sidebar_sidebarcontextprops",
+      "components_ui_sidebar_sidebarfooter",
+      "components_ui_sidebar_sidebargroup",
+      "components_ui_sidebar_sidebargroupaction",
+      "components_ui_sidebar_sidebargroupcontent",
+      "components_ui_sidebar_sidebargrouplabel",
+      "components_ui_sidebar_sidebarheader",
+      "components_ui_sidebar_sidebarinput",
+      "components_ui_sidebar_sidebarinset",
+      "components_ui_sidebar_sidebarmenu",
+      "components_ui_sidebar_sidebarmenuaction",
+      "components_ui_sidebar_sidebarmenubadge",
+      "components_ui_sidebar_sidebarmenubutton",
+      "components_ui_sidebar_sidebarmenubuttonvariants",
+      "components_ui_sidebar_sidebarmenuitem",
+      "components_ui_sidebar_sidebarmenuskeleton",
+      "components_ui_sidebar_sidebarmenusub",
+      "components_ui_sidebar_sidebarmenusubbutton",
+      "components_ui_sidebar_sidebarmenusubitem",
+      "components_ui_sidebar_sidebarprovider",
+      "components_ui_sidebar_sidebarrail",
+      "components_ui_sidebar_sidebarseparator",
+      "components_ui_sidebar_sidebartrigger",
+      "components_ui_sidebar_usesidebar",
+      "components_ui_skeleton",
+      "components_ui_skeleton_skeleton",
+      "components_ui_tooltip",
+      "components_ui_tooltip_tooltip",
+      "components_ui_tooltip_tooltipcontent",
+      "components_ui_tooltip_tooltipprovider",
+      "components_ui_tooltip_tooltiptrigger",
+      "hooks_use_mobile",
+      "hooks_use_mobile_useismobile"
+    ],
+    "5": [
+      "components_ui_accordion",
+      "components_ui_accordion_accordion",
+      "components_ui_accordion_accordioncontent",
+      "components_ui_accordion_accordionitem",
+      "components_ui_accordion_accordiontrigger",
+      "components_ui_avatar",
+      "components_ui_avatar_avatar",
+      "components_ui_avatar_avatarfallback",
+      "components_ui_avatar_avatarimage",
+      "components_ui_field",
+      "components_ui_field_field",
+      "components_ui_field_fieldcontent",
+      "components_ui_field_fielddescription",
+      "components_ui_field_fielderror",
+      "components_ui_field_fieldgroup",
+      "components_ui_field_fieldlabel",
+      "components_ui_field_fieldlegend",
+      "components_ui_field_fieldseparator",
+      "components_ui_field_fieldset",
+      "components_ui_field_fieldtitle",
+      "components_ui_field_fieldvariants",
+      "components_ui_kbd",
+      "components_ui_kbd_kbd",
+      "components_ui_kbd_kbdgroup",
+      "components_ui_radio_group",
+      "components_ui_radio_group_radiogroup",
+      "components_ui_radio_group_radiogroupitem",
+      "components_ui_scroll_area",
+      "components_ui_scroll_area_scrollarea",
+      "components_ui_scroll_area_scrollbar",
+      "components_ui_table",
+      "components_ui_table_table",
+      "components_ui_table_tablebody",
+      "components_ui_table_tablecaption",
+      "components_ui_table_tablecell",
+      "components_ui_table_tablefooter",
+      "components_ui_table_tablehead",
+      "components_ui_table_tableheader",
+      "components_ui_table_tablerow",
+      "components_ui_tabs",
+      "components_ui_tabs_tabs",
+      "components_ui_tabs_tabscontent",
+      "components_ui_tabs_tabslist",
+      "components_ui_tabs_tabstrigger",
+      "lib_utils_cn"
+    ],
+    "6": [
+      "components_ui_carousel",
+      "components_ui_carousel_carousel",
+      "components_ui_carousel_carouselapi",
+      "components_ui_carousel_carouselcontent",
+      "components_ui_carousel_carouselcontext",
+      "components_ui_carousel_carouselcontextprops",
+      "components_ui_carousel_carouselitem",
+      "components_ui_carousel_carouselnext",
+      "components_ui_carousel_carouseloptions",
+      "components_ui_carousel_carouselplugin",
+      "components_ui_carousel_carouselprevious",
+      "components_ui_carousel_carouselprops",
+      "components_ui_carousel_usecarousel",
+      "components_ui_carousel_usecarouselparameters",
+      "components_ui_chart",
+      "components_ui_chart_chartconfig",
+      "components_ui_chart_chartcontainer",
+      "components_ui_chart_chartcontext",
+      "components_ui_chart_chartcontextprops",
+      "components_ui_chart_chartlegendcontent",
+      "components_ui_chart_chartstyle",
+      "components_ui_chart_charttooltipcontent",
+      "components_ui_chart_getpayloadconfigfrompayload",
+      "components_ui_chart_themes",
+      "components_ui_chart_usechart",
+      "components_ui_form",
+      "components_ui_form_formcontrol",
+      "components_ui_form_formdescription",
+      "components_ui_form_formfield",
+      "components_ui_form_formfieldcontext",
+      "components_ui_form_formfieldcontextvalue",
+      "components_ui_form_formitem",
+      "components_ui_form_formitemcontext",
+      "components_ui_form_formitemcontextvalue",
+      "components_ui_form_formlabel",
+      "components_ui_form_formmessage",
+      "components_ui_form_useformfield",
+      "components_ui_use_mobile",
+      "components_ui_use_mobile_useismobile",
+      "package_dependencies_react",
+      "react"
+    ],
+    "7": [
+      "package",
+      "package_devdependencies",
+      "package_devdependencies_postcss",
+      "package_devdependencies_prisma",
+      "package_devdependencies_tailwindcss",
+      "package_devdependencies_tailwindcss_postcss",
+      "package_devdependencies_tsx",
+      "package_devdependencies_tw_animate_css",
+      "package_devdependencies_types_node",
+      "package_devdependencies_types_nodemailer",
+      "package_devdependencies_types_react",
+      "package_devdependencies_types_react_dom",
+      "package_devdependencies_typescript",
+      "package_name",
+      "package_private",
+      "package_scripts",
+      "package_scripts_build",
+      "package_scripts_db_backup",
+      "package_scripts_db_deploy",
+      "package_scripts_db_migrate",
+      "package_scripts_db_push",
+      "package_scripts_db_seed",
+      "package_scripts_db_studio",
+      "package_scripts_db_update_year",
+      "package_scripts_dev",
+      "package_scripts_lint",
+      "package_scripts_postinstall",
+      "package_scripts_start",
+      "package_version",
+      "postcss",
+      "prisma",
+      "tailwindcss",
+      "tailwindcss_postcss",
+      "tsx",
+      "tw_animate_css",
+      "types_node",
+      "types_nodemailer",
+      "types_react",
+      "types_react_dom",
+      "typescript"
+    ],
+    "8": [
+      "app_actions_bookings",
+      "app_actions_bookings_createbooking",
+      "app_actions_bookings_formatdateforlocale",
+      "app_actions_bookings_normalizebookinglocale",
+      "app_actions_bookings_updatebookingstatus",
+      "app_locale_checkout_id_checkout_client_checkoutclient",
+      "app_locale_home_client_homeclient",
+      "lib_availability_calculatetotaldays",
+      "lib_email",
+      "lib_email_bookingemaildata",
+      "lib_email_emaillocale",
+      "lib_email_extractemailaddress",
+      "lib_email_getemailconfigstatus",
+      "lib_email_isvalidemail",
+      "lib_email_normalizeemaillocale",
+      "lib_email_resend",
+      "lib_email_resolvesupportemail",
+      "lib_email_sendadminbookingconfirmationnotification",
+      "lib_email_sendadminbookingnotification",
+      "lib_email_sendbookingcompletionreviewemail",
+      "lib_email_sendbookingconfirmationemail",
+      "lib_email_sendbookingstatusemail",
+      "lib_email_sendemail",
+      "lib_email_sendemailinput",
+      "lib_email_sendmanualpaymentemail",
+      "lib_email_sendpayatpickupemail",
+      "lib_email_smtpenabled",
+      "lib_money",
+      "lib_money_formatcents",
+      "lib_money_formatcurrency",
+      "lib_payment_details",
+      "lib_payment_details_getpaymentdetails",
+      "lib_payment_details_paymentdetails"
+    ],
+    "9": [
+      "ref",
+      "ref_dom",
+      "ref_dom_iterable",
+      "ref_esnext",
+      "ref_next_dev_types_ts",
+      "ref_next_env_d_ts",
+      "ref_next_types_ts",
+      "ref_node_modules",
+      "ref_ts",
+      "ref_tsx",
+      "tsconfig",
+      "tsconfig_compileroptions",
+      "tsconfig_compileroptions_allowjs",
+      "tsconfig_compileroptions_esmoduleinterop",
+      "tsconfig_compileroptions_incremental",
+      "tsconfig_compileroptions_isolatedmodules",
+      "tsconfig_compileroptions_jsx",
+      "tsconfig_compileroptions_lib",
+      "tsconfig_compileroptions_module",
+      "tsconfig_compileroptions_moduleresolution",
+      "tsconfig_compileroptions_noemit",
+      "tsconfig_compileroptions_paths",
+      "tsconfig_compileroptions_plugins",
+      "tsconfig_compileroptions_resolvejsonmodule",
+      "tsconfig_compileroptions_skiplibcheck",
+      "tsconfig_compileroptions_strict",
+      "tsconfig_compileroptions_target",
+      "tsconfig_exclude",
+      "tsconfig_include",
+      "tsconfig_paths"
+    ],
+    "10": [
+      "components_ui_checkbox",
+      "components_ui_checkbox_checkbox",
+      "components_ui_hover_card",
+      "components_ui_hover_card_hovercard",
+      "components_ui_hover_card_hovercardcontent",
+      "components_ui_hover_card_hovercardtrigger",
+      "components_ui_input_otp",
+      "components_ui_input_otp_inputotp",
+      "components_ui_input_otp_inputotpgroup",
+      "components_ui_input_otp_inputotpseparator",
+      "components_ui_input_otp_inputotpslot",
+      "components_ui_progress",
+      "components_ui_progress_progress",
+      "components_ui_resizable",
+      "components_ui_resizable_resizablehandle",
+      "components_ui_resizable_resizablepanel",
+      "components_ui_resizable_resizablepanelgroup",
+      "components_ui_slider",
+      "components_ui_slider_slider",
+      "components_ui_spinner",
+      "components_ui_spinner_spinner",
+      "components_ui_switch",
+      "components_ui_switch_switch",
+      "lib_utils"
+    ],
+    "11": [
+      "components_ui_command",
+      "components_ui_command_command",
+      "components_ui_command_commanddialog",
+      "components_ui_command_commandempty",
+      "components_ui_command_commandgroup",
+      "components_ui_command_commandinput",
+      "components_ui_command_commanditem",
+      "components_ui_command_commandlist",
+      "components_ui_command_commandseparator",
+      "components_ui_command_commandshortcut",
+      "components_ui_dialog",
+      "components_ui_dialog_dialog",
+      "components_ui_dialog_dialogclose",
+      "components_ui_dialog_dialogcontent",
+      "components_ui_dialog_dialogdescription",
+      "components_ui_dialog_dialogfooter",
+      "components_ui_dialog_dialogheader",
+      "components_ui_dialog_dialogoverlay",
+      "components_ui_dialog_dialogportal",
+      "components_ui_dialog_dialogtitle",
+      "components_ui_dialog_dialogtrigger"
+    ],
+    "12": [
+      "components_ui_button_group",
+      "components_ui_button_group_buttongroup",
+      "components_ui_button_group_buttongroupseparator",
+      "components_ui_button_group_buttongrouptext",
+      "components_ui_button_group_buttongroupvariants",
+      "components_ui_item",
+      "components_ui_item_item",
+      "components_ui_item_itemactions",
+      "components_ui_item_itemcontent",
+      "components_ui_item_itemdescription",
+      "components_ui_item_itemfooter",
+      "components_ui_item_itemgroup",
+      "components_ui_item_itemheader",
+      "components_ui_item_itemmedia",
+      "components_ui_item_itemmediavariants",
+      "components_ui_item_itemseparator",
+      "components_ui_item_itemtitle",
+      "components_ui_item_itemvariants",
+      "components_ui_separator",
+      "components_ui_separator_separator"
+    ],
+    "13": [
+      "app_locale_about_page",
+      "app_locale_about_page_aboutpage",
+      "app_locale_agb_page",
+      "app_locale_agb_page_agbpage",
+      "app_locale_contact_page",
+      "app_locale_datenschutz_page",
+      "app_locale_datenschutz_page_datenschutzpage",
+      "app_locale_help_page",
+      "app_locale_help_page_helppage",
+      "app_locale_impressum_page",
+      "app_locale_impressum_page_impressumpage",
+      "app_locale_widerruf_page",
+      "app_locale_widerruf_page_widerrufpage",
+      "components_client_only",
+      "components_client_only_clientonly",
+      "components_language_switcher",
+      "components_language_switcher_languageswitcher",
+      "lib_business_info",
+      "lib_business_info_getbusinessinfo"
+    ],
+    "14": [
+      "app_sign_in_page",
+      "app_sign_in_page_resolvelocale",
+      "app_sign_in_page_searchparams",
+      "app_sign_in_page_signinredirect",
+      "app_sign_up_page",
+      "app_sign_up_page_resolvelocale",
+      "app_sign_up_page_searchparams",
+      "app_sign_up_page_signupredirect",
+      "i18n",
+      "i18n_defaultlocale",
+      "i18n_locales",
+      "lib_auth_edge",
+      "lib_auth_edge_hasauthenv",
+      "proxy",
+      "proxy_config",
+      "proxy_getlocalefrompathname",
+      "proxy_intlmiddleware",
+      "proxy_isadminroute",
+      "proxy_ispublicroute"
+    ],
+    "15": [
+      "components_navigation_menu",
+      "components_navigation_menu_navigationmenucontent",
+      "components_navigation_menu_navigationmenuprops",
+      "components_ui_dropdown_menu",
+      "components_ui_dropdown_menu_dropdownmenu",
+      "components_ui_dropdown_menu_dropdownmenucheckboxitem",
+      "components_ui_dropdown_menu_dropdownmenucontent",
+      "components_ui_dropdown_menu_dropdownmenugroup",
+      "components_ui_dropdown_menu_dropdownmenuitem",
+      "components_ui_dropdown_menu_dropdownmenulabel",
+      "components_ui_dropdown_menu_dropdownmenuportal",
+      "components_ui_dropdown_menu_dropdownmenuradiogroup",
+      "components_ui_dropdown_menu_dropdownmenuradioitem",
+      "components_ui_dropdown_menu_dropdownmenuseparator",
+      "components_ui_dropdown_menu_dropdownmenushortcut",
+      "components_ui_dropdown_menu_dropdownmenusub",
+      "components_ui_dropdown_menu_dropdownmenusubcontent",
+      "components_ui_dropdown_menu_dropdownmenusubtrigger",
+      "components_ui_dropdown_menu_dropdownmenutrigger"
+    ],
+    "16": [
+      "components",
+      "components_aliases",
+      "components_aliases_components",
+      "components_aliases_hooks",
+      "components_aliases_lib",
+      "components_aliases_ui",
+      "components_aliases_utils",
+      "components_iconlibrary",
+      "components_rsc",
+      "components_schema",
+      "components_style",
+      "components_tailwind",
+      "components_tailwind_basecolor",
+      "components_tailwind_config",
+      "components_tailwind_css",
+      "components_tailwind_cssvariables",
+      "components_tailwind_prefix",
+      "components_tsx"
+    ],
+    "17": [
+      "app_locale_cars_cars_client",
+      "app_locale_cars_cars_client_car",
+      "app_locale_cars_cars_client_carsclient",
+      "app_locale_home_client",
+      "app_locale_home_client_car",
+      "components_bottom_nav",
+      "components_bottom_nav_bottomnav",
+      "components_bottom_nav_bottomnavprops",
+      "components_car_card",
+      "components_car_card_car",
+      "components_car_card_carcard",
+      "components_category_filter",
+      "components_category_filter_categories",
+      "components_category_filter_categoryfilter",
+      "components_category_filter_categoryfilterprops",
+      "components_filter_bar_filterbar",
+      "components_navigation_menu_navigationmenu"
+    ],
+    "18": [
+      "app_locale_login_demo_login",
+      "app_locale_login_demo_login_demologin",
+      "app_locale_login_page",
+      "app_locale_login_page_loginpage",
+      "app_locale_signup_demo_signup",
+      "app_locale_signup_demo_signup_demosignup",
+      "app_locale_signup_page",
+      "app_locale_signup_page_signuppage",
+      "app_locale_verify_email_page",
+      "app_locale_verify_email_page_verifyemailcontent",
+      "app_locale_verify_email_page_verifyemailpage",
+      "components_mobile_menu",
+      "components_mobile_menu_mobilemenu",
+      "components_mobile_menu_mobilemenucontent",
+      "components_mobile_menu_mobilemenuprops",
+      "navigation",
+      "navigation_link_redirect_usepathname_userouter"
+    ],
+    "19": [
+      "components_ui_menubar",
+      "components_ui_menubar_menubar",
+      "components_ui_menubar_menubarcheckboxitem",
+      "components_ui_menubar_menubarcontent",
+      "components_ui_menubar_menubargroup",
+      "components_ui_menubar_menubaritem",
+      "components_ui_menubar_menubarlabel",
+      "components_ui_menubar_menubarmenu",
+      "components_ui_menubar_menubarportal",
+      "components_ui_menubar_menubarradiogroup",
+      "components_ui_menubar_menubarradioitem",
+      "components_ui_menubar_menubarseparator",
+      "components_ui_menubar_menubarshortcut",
+      "components_ui_menubar_menubarsub",
+      "components_ui_menubar_menubarsubcontent",
+      "components_ui_menubar_menubarsubtrigger",
+      "components_ui_menubar_menubartrigger"
+    ],
+    "20": [
+      "components_ui_context_menu",
+      "components_ui_context_menu_contextmenu",
+      "components_ui_context_menu_contextmenucheckboxitem",
+      "components_ui_context_menu_contextmenucontent",
+      "components_ui_context_menu_contextmenugroup",
+      "components_ui_context_menu_contextmenuitem",
+      "components_ui_context_menu_contextmenulabel",
+      "components_ui_context_menu_contextmenuportal",
+      "components_ui_context_menu_contextmenuradiogroup",
+      "components_ui_context_menu_contextmenuradioitem",
+      "components_ui_context_menu_contextmenuseparator",
+      "components_ui_context_menu_contextmenushortcut",
+      "components_ui_context_menu_contextmenusub",
+      "components_ui_context_menu_contextmenusubcontent",
+      "components_ui_context_menu_contextmenusubtrigger",
+      "components_ui_context_menu_contextmenutrigger"
+    ],
+    "21": [
+      "lib_db_url",
+      "lib_db_url_getdatabaseurl",
+      "lib_db_url_normalizedatabaseurl",
+      "prisma_backup_data",
+      "prisma_backup_data_backupdata",
+      "prisma_backup_data_prisma",
+      "prisma_seed",
+      "prisma_seed_main",
+      "prisma_seed_prisma",
+      "prisma_update_existing_cars_year",
+      "prisma_update_existing_cars_year_prisma",
+      "prisma_update_existing_cars_year_updateexistingcarsyear",
+      "scripts_with_db_url",
+      "scripts_with_db_url_args",
+      "scripts_with_db_url_command"
+    ],
+    "22": [
+      "class_variance_authority",
+      "i18",
+      "input_otp",
+      "package_dependencies",
+      "package_dependencies_class_variance_authority",
+      "package_dependencies_i18",
+      "package_dependencies_input_otp",
+      "package_dependencies_radix_ui_react_tabs",
+      "package_dependencies_radix_ui_react_toast",
+      "package_dependencies_tailwindcss_animate",
+      "package_dependencies_vercel_analytics",
+      "radix_ui_react_tabs",
+      "tailwindcss_animate",
+      "vercel_analytics"
+    ],
+    "23": [
+      "lib_errors",
+      "lib_errors_apperror",
+      "lib_errors_apperror_constructor",
+      "lib_errors_conflicterror",
+      "lib_errors_conflicterror_constructor",
+      "lib_errors_forbiddenerror",
+      "lib_errors_forbiddenerror_constructor",
+      "lib_errors_handleerror",
+      "lib_errors_notfounderror",
+      "lib_errors_notfounderror_constructor",
+      "lib_errors_unauthorizederror",
+      "lib_errors_unauthorizederror_constructor",
+      "lib_errors_validationerror",
+      "lib_errors_validationerror_constructor"
+    ],
+    "24": [
+      "components_filter_bar",
+      "components_filter_bar_filterbarprops",
+      "components_ui_select",
+      "components_ui_select_select",
+      "components_ui_select_selectcontent",
+      "components_ui_select_selectgroup",
+      "components_ui_select_selectitem",
+      "components_ui_select_selectlabel",
+      "components_ui_select_selectscrolldownbutton",
+      "components_ui_select_selectscrollupbutton",
+      "components_ui_select_selectseparator",
+      "components_ui_select_selecttrigger",
+      "components_ui_select_selectvalue"
+    ],
+    "25": [
+      "components_ui_input",
+      "components_ui_input_group",
+      "components_ui_input_group_inputgroup",
+      "components_ui_input_group_inputgroupaddon",
+      "components_ui_input_group_inputgroupaddonvariants",
+      "components_ui_input_group_inputgroupbutton",
+      "components_ui_input_group_inputgroupbuttonvariants",
+      "components_ui_input_group_inputgroupinput",
+      "components_ui_input_group_inputgrouptext",
+      "components_ui_input_group_inputgrouptextarea",
+      "components_ui_input_input",
+      "components_ui_textarea",
+      "components_ui_textarea_textarea"
+    ],
+    "26": [
+      "components_ui_drawer",
+      "components_ui_drawer_drawer",
+      "components_ui_drawer_drawerclose",
+      "components_ui_drawer_drawercontent",
+      "components_ui_drawer_drawerdescription",
+      "components_ui_drawer_drawerfooter",
+      "components_ui_drawer_drawerheader",
+      "components_ui_drawer_draweroverlay",
+      "components_ui_drawer_drawerportal",
+      "components_ui_drawer_drawertitle",
+      "components_ui_drawer_drawertrigger"
+    ],
+    "27": [
+      "components_ui_navigation_menu",
+      "components_ui_navigation_menu_navigationmenu",
+      "components_ui_navigation_menu_navigationmenucontent",
+      "components_ui_navigation_menu_navigationmenuindicator",
+      "components_ui_navigation_menu_navigationmenuitem",
+      "components_ui_navigation_menu_navigationmenulink",
+      "components_ui_navigation_menu_navigationmenulist",
+      "components_ui_navigation_menu_navigationmenutrigger",
+      "components_ui_navigation_menu_navigationmenutriggerstyle",
+      "components_ui_navigation_menu_navigationmenuviewport"
+    ],
+    "28": [
+      "app_locale_layout",
+      "app_locale_layout_generatestaticparams",
+      "app_locale_layout_localelayout",
+      "components_demo_banner_demobanner",
+      "components_footer",
+      "components_footer_businessinfo",
+      "components_footer_footer",
+      "components_footer_footerprops"
+    ],
+    "29": [
+      "components_ui_breadcrumb",
+      "components_ui_breadcrumb_breadcrumb",
+      "components_ui_breadcrumb_breadcrumbellipsis",
+      "components_ui_breadcrumb_breadcrumbitem",
+      "components_ui_breadcrumb_breadcrumblink",
+      "components_ui_breadcrumb_breadcrumblist",
+      "components_ui_breadcrumb_breadcrumbpage",
+      "components_ui_breadcrumb_breadcrumbseparator"
+    ],
+    "30": [
+      "components_ui_empty",
+      "components_ui_empty_empty",
+      "components_ui_empty_emptycontent",
+      "components_ui_empty_emptydescription",
+      "components_ui_empty_emptyheader",
+      "components_ui_empty_emptymedia",
+      "components_ui_empty_emptymediavariants",
+      "components_ui_empty_emptytitle"
+    ],
+    "31": [
+      "lib_demo_store",
+      "lib_demo_store_demobooking",
+      "lib_demo_store_democar",
+      "lib_demo_store_democars",
+      "lib_demo_store_demostore",
+      "lib_demo_store_demouser",
+      "lib_demo_store_demousers",
+      "lib_demo_store_usedemostore"
+    ],
+    "32": [
+      "lib_logger",
+      "lib_logger_logdata",
+      "lib_logger_logger",
+      "lib_logger_logger_debug",
+      "lib_logger_logger_info",
+      "lib_logger_logger_log",
+      "lib_logger_logger_warn",
+      "lib_logger_loglevel"
+    ],
+    "33": [
+      "prisma_migrations_20251230082045_add_year_to_car_migration",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_adminauditlog",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_blockeddate",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_booking",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_car",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_payment",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_savedcar",
+      "prisma_migrations_20251230082045_add_year_to_car_migration_user"
+    ],
+    "34": [
+      "components_ui_toggle",
+      "components_ui_toggle_group",
+      "components_ui_toggle_group_togglegroup",
+      "components_ui_toggle_group_togglegroupcontext",
+      "components_ui_toggle_group_togglegroupitem",
+      "components_ui_toggle_toggle",
+      "components_ui_toggle_togglevariants"
+    ],
+    "35": [
+      "lib_store",
+      "lib_store_appstate",
+      "lib_store_booking",
+      "lib_store_car",
+      "lib_store_initialcars",
+      "lib_store_user",
+      "lib_store_usestore"
+    ],
+    "36": [
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration",
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration_account",
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration_companysettings",
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration_session",
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration_user",
+      "prisma_migrations_20260106004518_add_nextauth_tables_migration_verificationtoken"
+    ],
+    "37": [
+      "components_ui_collapsible",
+      "components_ui_collapsible_collapsible",
+      "components_ui_collapsible_collapsiblecontent",
+      "components_ui_collapsible_collapsibletrigger"
+    ],
+    "38": [
+      "lib_stripe",
+      "lib_stripe_formatamountforstripe",
+      "lib_stripe_formatamountfromstripe",
+      "lib_stripe_requirestripe"
+    ],
+    "39": [
+      "app_api_webhooks_stripe_route",
+      "app_api_webhooks_stripe_route_post",
+      "app_api_webhooks_stripe_route_rationale_86"
+    ],
+    "40": [
+      "next_config",
+      "next_config_nextconfig",
+      "next_config_withnextintl"
+    ],
+    "41": [
+      "prisma_migrations_20260213224500_add_guarantee_settings_and_amount_migration",
+      "prisma_migrations_20260213224500_add_guarantee_settings_and_amount_migration_booking",
+      "prisma_migrations_20260213224500_add_guarantee_settings_and_amount_migration_companysettings"
+    ],
+    "42": [
+      "app_locale_admin_loading",
+      "app_locale_admin_loading_loading"
+    ],
+    "43": [
+      "app_locale_loading",
+      "app_locale_loading_loading"
+    ],
+    "44": [
+      "app_locale_sign_in_sign_in_page",
+      "app_locale_sign_in_sign_in_page_signinpage"
+    ],
+    "45": [
+      "app_locale_sign_up_sign_up_page",
+      "app_locale_sign_up_sign_up_page_signuppage"
+    ],
+    "46": [
+      "app_locale_verify_email_loading",
+      "app_locale_verify_email_loading_loading"
+    ],
+    "47": [
+      "auth_prisma_adapter",
+      "package_dependencies_auth_prisma_adapter"
+    ],
+    "48": [
+      "autoprefixer",
+      "package_dependencies_autoprefixer"
+    ],
+    "49": [
+      "clsx",
+      "package_dependencies_clsx"
+    ],
+    "50": [
+      "cmdk",
+      "package_dependencies_cmdk"
+    ],
+    "51": [
+      "components_search_bar",
+      "components_search_bar_searchbar"
+    ],
+    "52": [
+      "components_theme_provider",
+      "components_theme_provider_themeprovider"
+    ],
+    "53": [
+      "components_ui_aspect_ratio",
+      "components_ui_aspect_ratio_aspectratio"
+    ],
+    "54": [
+      "components_ui_sonner",
+      "components_ui_sonner_toaster"
+    ],
+    "55": [
+      "date_fns",
+      "package_dependencies_date_fns"
+    ],
+    "56": [
+      "embla_carousel_react",
+      "package_dependencies_embla_carousel_react"
+    ],
+    "57": [
+      "hookform_resolvers",
+      "package_dependencies_hookform_resolvers"
+    ],
+    "58": [
+      "immer",
+      "package_dependencies_immer"
+    ],
+    "59": [
+      "lucide_react",
+      "package_dependencies_lucide_react"
+    ],
+    "60": [
+      "neondatabase_serverless",
+      "package_dependencies_neondatabase_serverless"
+    ],
+    "61": [
+      "next",
+      "package_dependencies_next"
+    ],
+    "62": [
+      "next_auth",
+      "package_dependencies_next_auth"
+    ],
+    "63": [
+      "next_intl",
+      "package_dependencies_next_intl"
+    ],
+    "64": [
+      "next_themes",
+      "package_dependencies_next_themes"
+    ],
+    "65": [
+      "nodemailer",
+      "package_dependencies_nodemailer"
+    ],
+    "66": [
+      "package_dependencies_prettier",
+      "prettier"
+    ],
+    "67": [
+      "package_dependencies_prisma_client",
+      "prisma_client"
+    ],
+    "68": [
+      "package_dependencies_radix_ui_react_accordion",
+      "radix_ui_react_accordion"
+    ],
+    "69": [
+      "package_dependencies_radix_ui_react_alert_dialog",
+      "radix_ui_react_alert_dialog"
+    ],
+    "70": [
+      "package_dependencies_radix_ui_react_aspect_ratio",
+      "radix_ui_react_aspect_ratio"
+    ],
+    "71": [
+      "package_dependencies_radix_ui_react_avatar",
+      "radix_ui_react_avatar"
+    ],
+    "72": [
+      "package_dependencies_radix_ui_react_checkbox",
+      "radix_ui_react_checkbox"
+    ],
+    "73": [
+      "package_dependencies_radix_ui_react_collapsible",
+      "radix_ui_react_collapsible"
+    ],
+    "74": [
+      "package_dependencies_radix_ui_react_context_menu",
+      "radix_ui_react_context_menu"
+    ],
+    "75": [
+      "package_dependencies_radix_ui_react_dialog",
+      "radix_ui_react_dialog"
+    ],
+    "76": [
+      "package_dependencies_radix_ui_react_dropdown_menu",
+      "radix_ui_react_dropdown_menu"
+    ],
+    "77": [
+      "package_dependencies_radix_ui_react_hover_card",
+      "radix_ui_react_hover_card"
+    ],
+    "78": [
+      "package_dependencies_radix_ui_react_label",
+      "radix_ui_react_label"
+    ],
+    "79": [
+      "package_dependencies_radix_ui_react_menubar",
+      "radix_ui_react_menubar"
+    ],
+    "80": [
+      "package_dependencies_radix_ui_react_navigation_menu",
+      "radix_ui_react_navigation_menu"
+    ],
+    "81": [
+      "package_dependencies_radix_ui_react_popover",
+      "radix_ui_react_popover"
+    ],
+    "82": [
+      "package_dependencies_radix_ui_react_progress",
+      "radix_ui_react_progress"
+    ],
+    "83": [
+      "package_dependencies_radix_ui_react_radio_group",
+      "radix_ui_react_radio_group"
+    ],
+    "84": [
+      "package_dependencies_radix_ui_react_scroll_area",
+      "radix_ui_react_scroll_area"
+    ],
+    "85": [
+      "package_dependencies_radix_ui_react_select",
+      "radix_ui_react_select"
+    ],
+    "86": [
+      "package_dependencies_radix_ui_react_separator",
+      "radix_ui_react_separator"
+    ],
+    "87": [
+      "package_dependencies_radix_ui_react_slider",
+      "radix_ui_react_slider"
+    ],
+    "88": [
+      "package_dependencies_radix_ui_react_slot",
+      "radix_ui_react_slot"
+    ],
+    "89": [
+      "package_dependencies_radix_ui_react_switch",
+      "radix_ui_react_switch"
+    ],
+    "90": [
+      "package_dependencies_radix_ui_react_toggle",
+      "radix_ui_react_toggle"
+    ],
+    "91": [
+      "package_dependencies_radix_ui_react_toggle_group",
+      "radix_ui_react_toggle_group"
+    ],
+    "92": [
+      "package_dependencies_radix_ui_react_tooltip",
+      "radix_ui_react_tooltip"
+    ],
+    "93": [
+      "package_dependencies_react_day_picker",
+      "react_day_picker"
+    ],
+    "94": [
+      "package_dependencies_react_dom",
+      "react_dom"
+    ],
+    "95": [
+      "package_dependencies_react_hook_form",
+      "react_hook_form"
+    ],
+    "96": [
+      "package_dependencies_react_resizable_panels",
+      "react_resizable_panels"
+    ],
+    "97": [
+      "package_dependencies_recharts",
+      "recharts"
+    ],
+    "98": [
+      "package_dependencies_resend",
+      "resend"
+    ],
+    "99": [
+      "package_dependencies_sonner",
+      "sonner"
+    ],
+    "100": [
+      "package_dependencies_stripe",
+      "stripe"
+    ],
+    "101": [
+      "package_dependencies_tailwind_merge",
+      "tailwind_merge"
+    ],
+    "102": [
+      "package_dependencies_use_sync_external_store",
+      "use_sync_external_store"
+    ],
+    "103": [
+      "package_dependencies_vaul",
+      "vaul"
+    ],
+    "104": [
+      "package_dependencies_zod",
+      "zod"
+    ],
+    "105": [
+      "package_dependencies_zustand",
+      "zustand"
+    ],
+    "106": [
+      "postcss_config",
+      "postcss_config_config"
+    ],
+    "107": [
+      "prisma_add_business_info_fields",
+      "prisma_add_business_info_fields_companysettings"
+    ],
+    "108": [
+      "prisma_migrations_20251231053558_add_company_settings_migration",
+      "prisma_migrations_20251231053558_add_company_settings_migration_companysettings"
+    ],
+    "109": [
+      "prisma_migrations_20260104182400_add_business_info_fields_migration",
+      "prisma_migrations_20260104182400_add_business_info_fields_migration_companysettings"
+    ],
+    "110": [
+      "prisma_migrations_20260213121000_add_user_active_status_migration",
+      "prisma_migrations_20260213121000_add_user_active_status_migration_user"
+    ],
+    "111": [
+      "prisma_migrations_20260213134500_add_booking_payment_method_migration",
+      "prisma_migrations_20260213134500_add_booking_payment_method_migration_booking"
+    ],
+    "112": [
+      "prisma_migrations_20260213211500_add_reviews_migration",
+      "prisma_migrations_20260213211500_add_reviews_migration_review"
+    ],
+    "113": [
+      "prisma_migrations_20260214023000_add_booking_locale_migration",
+      "prisma_migrations_20260214023000_add_booking_locale_migration_booking"
+    ],
+    "114": [
+      "app_api_auth_nextauth_route_get_post"
+    ],
+    "115": [
+      "prisma_migrations_20260104182400_add_nextauth_tables_migration"
+    ],
+    "116": [
+      "prisma_migrations_20260213175220_new_one_migration"
+    ],
+    "117": [
+      "prisma_migrations_20260214004500_drop_provider_id_unique_index_migration"
+    ]
+  },
+  "cohesion": {
+    "0": 0.05220883534136546,
+    "1": 0.06168831168831169,
+    "2": 0.09224318658280922,
+    "3": 0.06205673758865248,
+    "4": 0.05673758865248227,
+    "5": 0.0797979797979798,
+    "6": 0.06951219512195123,
+    "7": 0.05,
+    "8": 0.17992424242424243,
+    "9": 0.06666666666666667,
+    "10": 0.08333333333333333,
+    "11": 0.11904761904761904,
+    "12": 0.12631578947368421,
+    "13": 0.26900584795321636,
+    "14": 0.15204678362573099,
+    "15": 0.13450292397660818,
+    "16": 0.1111111111111111,
+    "17": 0.18382352941176472,
+    "18": 0.11764705882352941,
+    "19": 0.11764705882352941,
+    "20": 0.125,
+    "21": 0.17142857142857143,
+    "22": 0.15384615384615385,
+    "23": 0.1978021978021978,
+    "24": 0.21794871794871795,
+    "25": 0.20512820512820512,
+    "26": 0.18181818181818182,
+    "27": 0.2222222222222222,
+    "28": 0.2857142857142857,
+    "29": 0.25,
+    "30": 0.2857142857142857,
+    "31": 0.25,
+    "32": 0.39285714285714285,
+    "33": 0.5357142857142857,
+    "34": 0.42857142857142855,
+    "35": 0.2857142857142857,
+    "36": 0.4666666666666667,
+    "37": 0.5,
+    "38": 0.5,
+    "39": 0.6666666666666666,
+    "40": 0.6666666666666666,
+    "41": 0.6666666666666666,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0
+  },
+  "gods": [
+    {
+      "id": "lib_utils_cn",
+      "label": "cn()",
+      "degree": 278
+    },
+    {
+      "id": "lib_auth_requireadmin",
+      "label": "requireAdmin()",
+      "degree": 25
+    },
+    {
+      "id": "lib_money_formatcents",
+      "label": "formatCents()",
+      "degree": 22
+    },
+    {
+      "id": "package_dependencies_react",
+      "label": "react",
+      "degree": 20
+    },
+    {
+      "id": "lib_booking_expiration_runbookinglifecyclemaintenance",
+      "label": "runBookingLifecycleMaintenance()",
+      "degree": 19
+    },
+    {
+      "id": "lib_auth_getcurrentuser",
+      "label": "getCurrentUser()",
+      "degree": 18
+    },
+    {
+      "id": "components_ui_button_button",
+      "label": "Button()",
+      "degree": 16
+    },
+    {
+      "id": "tsconfig_compileroptions",
+      "label": "compilerOptions",
+      "degree": 16
+    },
+    {
+      "id": "app_locale_admin_admin_client_admindashboard",
+      "label": "AdminDashboard()",
+      "degree": 14
+    },
+    {
+      "id": "app_actions_bookings_createbooking",
+      "label": "createBooking()",
+      "degree": 13
+    }
+  ],
+  "surprises": [
+    {
+      "source": "AdminDashboard()",
+      "target": "Calendar()",
+      "source_files": [
+        "app/[locale]/admin/admin-client.tsx",
+        "components/ui/calendar.tsx"
+      ],
+      "confidence": "INFERRED",
+      "relation": "indirect_call",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "LocaleLayout()",
+      "target": "getBusinessInfo()",
+      "source_files": [
+        "app/[locale]/layout.tsx",
+        "lib/business-info.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `LocaleLayout()` unexpectedly reaches hub `getBusinessInfo()`"
+    },
+    {
+      "source": "ProfilePage()",
+      "target": "getCurrentUser()",
+      "source_files": [
+        "app/[locale]/profile/page.tsx",
+        "lib/auth.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `ProfilePage()` unexpectedly reaches hub `getCurrentUser()`"
+    },
+    {
+      "source": "MobileMenuContent()",
+      "target": "cn()",
+      "source_files": [
+        "components/mobile-menu.tsx",
+        "lib/utils.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `MobileMenuContent()` unexpectedly reaches hub `cn()`"
+    },
+    {
+      "source": "NavigationMenuContent()",
+      "target": "cn()",
+      "source_files": [
+        "components/navigation-menu.tsx",
+        "lib/utils.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `NavigationMenuContent()` unexpectedly reaches hub `cn()`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `cn()` connect `Community 5` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 6`, `Community 10`, `Community 11`, `Community 12`, `Community 15`, `Community 18`, `Community 19`, `Community 20`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 29`, `Community 30`, `Community 34`?",
+      "why": "High betweenness centrality (0.359) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `dependencies` connect `Community 22` to `Community 6`, `Community 7`, `Community 47`, `Community 48`, `Community 49`, `Community 50`, `Community 55`, `Community 56`, `Community 57`, `Community 58`, `Community 59`, `Community 60`, `Community 61`, `Community 62`, `Community 63`, `Community 64`, `Community 65`, `Community 66`, `Community 67`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 72`, `Community 73`, `Community 74`, `Community 75`, `Community 76`, `Community 77`, `Community 78`, `Community 79`, `Community 80`, `Community 81`, `Community 82`, `Community 83`, `Community 84`, `Community 85`, `Community 86`, `Community 87`, `Community 88`, `Community 89`, `Community 90`, `Community 91`, `Community 92`, `Community 93`, `Community 94`, `Community 95`, `Community 96`, `Community 97`, `Community 98`, `Community 99`, `Community 100`, `Community 101`, `Community 102`, `Community 103`, `Community 104`, `Community 105`?",
+      "why": "High betweenness centrality (0.252) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `react` connect `Community 6` to `Community 0`, `Community 1`, `Community 34`, `Community 3`, `Community 4`, `Community 10`, `Community 22`?",
+      "why": "High betweenness centrality (0.240) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `AdminUser`, `AdminCar`, `AdminBooking` to the rest of the system?",
+      "why": "247 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.05220883534136546 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.06168831168831169 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 2` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09224318658280922 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

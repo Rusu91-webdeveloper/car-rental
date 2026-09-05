@@ -21,15 +21,22 @@ const legalIssue = (code: string, severity: "BLOCKER" | "WARNING" | "INFO", mess
 export function validateLegalAcceptanceConfiguration(configuration: LegalAcceptanceConfiguration, supportedLocales: string[]) {
   const issues: ConfigurationValidationIssue[] = []
   const parsed = legalAcceptanceConfigurationSchema.safeParse(configuration)
-  if (!parsed.success) issues.push(...parsed.error.issues.map((item) => legalIssue(item.message.split(":")[0] || "LEGAL_ACCEPTANCE_CONFIG_INVALID", "BLOCKER", item.message)))
+  if (!parsed.success)
+    issues.push(
+      ...parsed.error.issues
+        .filter((item) => item.path.at(-1) !== "publicationStatus")
+        .map((item) => legalIssue(item.message.split(":")[0] || "LEGAL_ACCEPTANCE_CONFIG_INVALID", "BLOCKER", item.message)),
+    )
+  if (configuration.termsDocument.publicationStatus !== "PUBLISHED")
+    issues.push(legalIssue("LEGAL_ACCEPTANCE_PUBLICATION_INVALID", "BLOCKER", "Publish the Rental Terms before finishing this step."))
+  if (configuration.privacyDocument.publicationStatus !== "PUBLISHED")
+    issues.push(legalIssue("LEGAL_ACCEPTANCE_PUBLICATION_INVALID", "BLOCKER", "Publish the Privacy Notice before finishing this step."))
   if (!configuration.bookingEnforcementEnabled) return configurationValidationResult(issues)
   if (configuration.requiredLocales.length === 0) issues.push(legalIssue("LEGAL_PRIMARY_LANGUAGE_MISSING", "BLOCKER", "Choose at least one required legal language."))
   for (const locale of configuration.requiredLocales) {
     if (!supportedLocales.includes(locale)) issues.push(legalIssue("LEGAL_LOCALE_UNSUPPORTED", "BLOCKER", "A required legal language is not supported by the booking application.", locale))
     const labels = configuration.translations.find((item) => item.locale === locale)
     if (!labels) issues.push(legalIssue("LEGAL_TRANSLATION_MISSING", "BLOCKER", "Localized legal acceptance labels are missing.", locale))
-    if (configuration.termsAcceptance !== "DISABLED" && configuration.termsDocument.publicationStatus !== "PUBLISHED") issues.push(legalIssue("LEGAL_ACCEPTANCE_PUBLICATION_INVALID", "BLOCKER", "The selected Rental Terms publication is not available for a future release.", locale))
-    if (configuration.privacyAcknowledgment !== "DISABLED" && configuration.privacyDocument.publicationStatus !== "PUBLISHED") issues.push(legalIssue("LEGAL_ACCEPTANCE_PUBLICATION_INVALID", "BLOCKER", "The selected Privacy Notice publication is not available for a future release.", locale))
     if (configuration.termsAcceptance !== "DISABLED" && !configuration.termsDocument.availableLocales.includes(locale)) issues.push(legalIssue("LEGAL_REQUIRED_LANGUAGE_MISSING", "BLOCKER", "Rental Terms are missing a required booking language.", locale))
     if (configuration.privacyAcknowledgment !== "DISABLED" && !configuration.privacyDocument.availableLocales.includes(locale)) issues.push(legalIssue("LEGAL_REQUIRED_LANGUAGE_MISSING", "BLOCKER", "The Privacy Notice is missing a required booking language.", locale))
     if (configuration.termsAcceptance === "REQUIRED" && !labels?.termsCheckboxLabel?.trim()) issues.push(legalIssue("LEGAL_TRANSLATION_MISSING", "BLOCKER", "Rental Terms acknowledgement text is required.", locale))

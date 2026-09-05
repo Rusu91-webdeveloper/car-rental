@@ -4,7 +4,12 @@ import {
   normalizeAndValidateBookingFields,
   resolveEffectiveBookingFields,
 } from "@/lib/booking-configuration/field-resolver"
-import { resolveEffectiveBookingFlow, validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
+import {
+  resolveEffectiveBookingFlow,
+  synchronizeConfiguredBookingSteps,
+  synchronizeInsuranceBookingStep,
+  validateBookingWorkflow,
+} from "@/lib/booking-configuration/workflow"
 import { validBusinessConfigurationDomains } from "../../helpers/configuration-fixtures"
 
 describe("effective customer fields and booking workflow", () => {
@@ -106,5 +111,61 @@ describe("effective customer fields and booking workflow", () => {
       visible: false,
       available: true,
     })
+  })
+
+  it("automatically matches the insurance booking step to the saved insurance choice", () => {
+    const domains = validBusinessConfigurationDomains()
+    const workflow = domains["booking-workflow"]
+
+    const mandatory = synchronizeInsuranceBookingStep(workflow, {
+      ...domains.insurance,
+      enabled: true,
+      selectionMode: "MANDATORY",
+    })
+    expect(mandatory.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("REQUIRED")
+
+    const optional = synchronizeInsuranceBookingStep(workflow, {
+      ...domains.insurance,
+      enabled: true,
+      selectionMode: "OPTIONAL",
+    })
+    expect(optional.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("OPTIONAL")
+
+    const disabled = synchronizeInsuranceBookingStep(mandatory, {
+      ...domains.insurance,
+      enabled: false,
+    })
+    expect(disabled.steps.find(({ step }) => step === "INSURANCE")?.requirement).toBe("HIDDEN")
+  })
+
+  it("matches locked document and legal steps to settings completed later", () => {
+    const domains = validBusinessConfigurationDomains()
+    const workflow = {
+      ...domains["booking-workflow"],
+      steps: domains["booking-workflow"].steps.map((step) =>
+        ["DOCUMENTS", "LEGAL_ACCEPTANCE"].includes(step.step)
+          ? { ...step, requirement: "HIDDEN" as const }
+          : step,
+      ),
+    }
+    const synchronized = synchronizeConfiguredBookingSteps(workflow, {
+      insurance: domains.insurance,
+      documents: {
+        ...domains["document-policy"],
+        requirements: domains["document-policy"].requirements.map((rule) => ({
+          ...rule,
+          requirement: "REQUIRED" as const,
+        })),
+      },
+      legal: {
+        ...domains["legal-acceptance"],
+        bookingEnforcementEnabled: true,
+        termsAcceptance: "REQUIRED",
+        privacyAcknowledgment: "REQUIRED",
+      },
+    })
+
+    expect(synchronized.steps.find(({ step }) => step === "DOCUMENTS")?.requirement).toBe("REQUIRED")
+    expect(synchronized.steps.find(({ step }) => step === "LEGAL_ACCEPTANCE")?.requirement).toBe("REQUIRED")
   })
 })

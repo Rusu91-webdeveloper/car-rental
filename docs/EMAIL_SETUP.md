@@ -1,227 +1,64 @@
-# Email Configuration Guide
+# Gmail SMTP email configuration
 
-This document explains how email sending is configured in the car rental app using SMTP with nodemailer.
+Qujo sends all transactional messages through Gmail SMTP with Nodemailer. The same transport is used for contact messages, booking applications, document decisions, confirmations, cancellations, status changes, and production alert tests.
 
-## 📧 Email Provider Setup
-
-The app supports **SMTP with nodemailer** as the primary email provider, with Resend as a fallback option.
-
-### SMTP Configuration (Recommended)
-
-Add these environment variables to your `.env.local` file:
+## Required production variables
 
 ```env
-# SMTP Configuration
-EMAIL_HOST=smtp.gmail.com              # Your SMTP server host
-EMAIL_PORT=587                         # SMTP port (587 for TLS, 465 for SSL)
-EMAIL_USER=your-email@gmail.com         # SMTP username (usually your email)
-EMAIL_PASS=your-app-password            # SMTP password or app-specific password
-EMAIL_FROM="Car Rental <noreply@yourdomain.com>"  # Sender name and email
+GMAIL_SMTP_USER=bookings@example.com
+GMAIL_SMTP_APP_PASSWORD=abcdefghijklmnop
+EMAIL_FROM="Qujo Autovermietung GmbH <bookings@example.com>"
 ```
 
-### Common SMTP Providers
+- `GMAIL_SMTP_USER` is the dedicated Gmail or Google Workspace mailbox.
+- `GMAIL_SMTP_APP_PASSWORD` is a 16-character Google App Password. Spaces are accepted and removed by the application. Never use the normal Google account password.
+- `EMAIL_FROM` should use the authenticated mailbox or a Send As alias already verified in that Google account. Gmail may replace an unverified sender address.
 
-#### Gmail
-```env
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password  # Use App Password, not regular password
-EMAIL_FROM="Car Rental <your-email@gmail.com>"
-```
+Keep these variables server-only. Configure secrets in Vercel and local secrets in `.env.local`; never commit their values.
 
-**Note:** For Gmail, you need to:
-1. Enable 2-factor authentication
-2. Generate an "App Password" from your Google Account settings
-3. Use the app password (not your regular password)
+## Google account setup
 
-#### Outlook/Hotmail
-```env
-EMAIL_HOST=smtp-mail.outlook.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@outlook.com
-EMAIL_PASS=your-password
-EMAIL_FROM="Car Rental <your-email@outlook.com>"
-```
+1. Use a dedicated business mailbox, preferably Google Workspace.
+2. Enable 2-Step Verification on the Google account.
+3. Open Google Account → Security → App passwords.
+4. Create an App Password named `Qujo production website`.
+5. Store the generated password as `GMAIL_SMTP_APP_PASSWORD` in Vercel Production.
+6. Set `GMAIL_SMTP_USER` and `EMAIL_FROM`, then redeploy.
 
-#### Custom SMTP Server
-```env
-EMAIL_HOST=smtp.yourdomain.com
-EMAIL_PORT=587
-EMAIL_USER=noreply@yourdomain.com
-EMAIL_PASS=your-smtp-password
-EMAIL_FROM="Car Rental <noreply@yourdomain.com>"
-```
+App Passwords may be unavailable for accounts using Advanced Protection, security-key-only 2-Step Verification, or an organisation policy that disables them. In that case, use Gmail OAuth 2.0 or a transactional provider instead.
 
-### Fallback: Resend (Optional)
+## Live verification
 
-If SMTP is not configured, the app will fall back to Resend:
+After deployment:
 
-```env
-RESEND_API_KEY=re_your_api_key_here
-EMAIL_FROM="Car Rental <noreply@yourdomain.com>"
-```
+1. Sign in as an administrator.
+2. Open `/de/admin/health`.
+3. Select **Test-E-Mail versenden**.
+4. Confirm the message arrived in the configured alert inbox.
+5. Complete one synthetic booking and verify the customer and administrator messages.
+6. Reject one synthetic document and verify the replacement-request email.
+7. Check Gmail Sent Mail and Vercel runtime logs for rejected messages.
 
-## 📬 Email Flow
+The health configuration check only confirms that credentials are present. Only the protected alert test proves that Gmail accepted a real message.
 
-### 1. **On Booking Creation**
+## Operational limits
 
-When a customer creates a booking:
+Gmail SMTP is suitable for testing and low-volume operation, but Gmail is not a dedicated transactional email platform. Personal Gmail accounts normally have lower daily recipient limits than Google Workspace, may rewrite the From address, and may block connections that Google considers suspicious. Monitor delivery closely and move to a business transactional provider when volume or reliability requirements grow.
 
-- **User Email**: Receives `sendManualPaymentEmail` with:
-  - Booking details
-  - Payment instructions
-  - Bank transfer details
-  - Transfer reference code
-  - Deadline for payment
+## Troubleshooting
 
-- **Admin Email**: Receives `sendAdminBookingNotification` with:
-  - New booking alert
-  - Customer information
-  - Booking details
-  - Transfer reference code
-  - Payment amount
-  - Link to admin dashboard
+- `534 5.7.90 Application-specific password required`: enable 2-Step Verification and use an App Password.
+- `535 Username and Password not accepted`: verify the mailbox and App Password; generate a new App Password if the Google account password was changed.
+- Message From address changed: use the authenticated mailbox or configure the address as a verified Gmail Send As alias.
+- Connection timeout: check Vercel runtime logs and Google security activity; Gmail may reject unusual server locations.
+- Daily limit exceeded: wait for the Gmail quota window to reset or use Google Workspace/a transactional provider.
 
-### 2. **On Booking Confirmation**
+## Privacy and business requirements
 
-When an admin confirms a booking (status changed to "CONFIRMED"):
+Customer and document-review emails may contain personal data. Use a business-controlled account, restrict mailbox access, enable 2-Step Verification, define retention rules, and put the required Google data-processing arrangements in place. Update the published Privacy Notice whenever the actual provider or processing terms change.
 
-- **User Email**: Receives `sendBookingConfirmationEmail` with:
-  - Confirmation message
-  - Complete booking details
-  - Transfer code for pickup
-  - Pickup instructions
-  - Next steps
+Official references:
 
-- **Admin Email**: Receives `sendAdminBookingConfirmationNotification` with:
-  - Confirmation notification
-  - Booking details
-  - Customer information
-  - Pickup date reminder
-  - Link to booking details
-
-### 3. **On Booking Status Changes**
-
-For other status changes (CANCELLED, REJECTED):
-
-- **User Email**: Receives `sendBookingStatusEmail` with status update
-
-## 🔧 Configuration Files
-
-### Email Functions Location
-- **File**: `lib/email.tsx`
-- **Functions**:
-  - `sendEmail()` - Core email sending function
-  - `sendManualPaymentEmail()` - Payment instructions to user
-  - `sendBookingConfirmationEmail()` - Detailed confirmation to user
-  - `sendBookingStatusEmail()` - Status updates to user
-  - `sendAdminBookingNotification()` - New booking alert to admin
-  - `sendAdminBookingConfirmationNotification()` - Confirmation alert to admin
-
-### Booking Actions Location
-- **File**: `app/actions/bookings.ts`
-- **Functions**:
-  - `createBooking()` - Sends emails on booking creation
-  - `updateBookingStatus()` - Sends emails on status changes
-
-## ✅ Email Configuration Check
-
-The app automatically detects if email is configured:
-
-```typescript
-// From lib/config.ts
-emailEnabled: smtpEnabled || !!process.env.RESEND_API_KEY
-```
-
-Where `smtpEnabled` checks for:
-- `EMAIL_HOST`
-- `EMAIL_USER`
-- `EMAIL_PASS`
-
-## 🧪 Testing Email Configuration
-
-1. **Check Configuration**:
-   - Ensure all SMTP variables are set in `.env.local`
-   - Restart your development server after adding variables
-
-2. **Test Email Sending**:
-   - Create a test booking
-   - Check console logs for email sending status
-   - Look for `[EMAIL]` log messages
-
-3. **Verify Emails**:
-   - Check user's inbox for booking confirmation
-   - Check admin email for notifications
-   - Check spam folder if emails don't arrive
-
-## 🐛 Troubleshooting
-
-### Emails Not Sending
-
-1. **Check Environment Variables**:
-   ```bash
-   # Verify variables are loaded
-   echo $EMAIL_HOST
-   echo $EMAIL_USER
-   ```
-
-2. **Check SMTP Credentials**:
-   - Verify username and password are correct
-   - For Gmail, ensure you're using an App Password
-   - Check if your email provider requires special settings
-
-3. **Check Port Settings**:
-   - Port 587: TLS (most common)
-   - Port 465: SSL
-   - Ensure firewall allows outbound connections on these ports
-
-4. **Check Console Logs**:
-   - Look for `[EMAIL_ERROR]` messages
-   - Check for SMTP authentication errors
-   - Verify email addresses are valid
-
-### Common Errors
-
-**"Email provider not configured"**
-- Solution: Add SMTP credentials or Resend API key
-
-**"Authentication failed"**
-- Solution: Check EMAIL_USER and EMAIL_PASS are correct
-- For Gmail: Use App Password, not regular password
-
-**"Connection timeout"**
-- Solution: Check EMAIL_HOST and EMAIL_PORT are correct
-- Verify firewall/network allows SMTP connections
-
-## 📝 Admin Email Configuration
-
-Admin emails are configured via:
-
-1. **Environment Variables**:
-   ```env
-   ADMIN_EMAILS=admin@yourdomain.com,manager@yourdomain.com
-   # or
-   ADMIN_EMAIL=admin@yourdomain.com
-   ```
-
-2. **Company Settings** (Database):
-   - Set `adminEmail` in company settings via admin panel
-   - This is used as a fallback if env vars are not set
-
-3. **Default**:
-   - If no admin emails are configured, defaults to `admin@rentcar.com`
-
-## 🔒 Security Notes
-
-- **Never commit** `.env.local` to version control
-- Use **App Passwords** for Gmail (not regular passwords)
-- Keep SMTP credentials secure
-- Consider using environment-specific email addresses for testing
-
-## 📚 Additional Resources
-
-- [Nodemailer Documentation](https://nodemailer.com/about/)
-- [Gmail App Passwords](https://support.google.com/accounts/answer/185833)
-- [Resend Documentation](https://resend.com/docs)
-
+- [Google App Passwords](https://support.google.com/accounts/answer/185833)
+- [Nodemailer Gmail guide](https://nodemailer.com/guides/using-gmail)
+- [Nodemailer SMTP transport](https://nodemailer.com/smtp)

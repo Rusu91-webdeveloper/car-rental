@@ -3,8 +3,11 @@
 import { useEffect } from "react"
 import { signIn } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
+import { useTranslations } from "next-intl"
+import { BrandMark } from "@/components/brand-mark"
 
 export default function SignInPage() {
+  const t = useTranslations("auth")
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect_url") || "/"
   const error = searchParams.get("error")
@@ -22,20 +25,21 @@ export default function SignInPage() {
     const isAccessDenied = error === "AccessDenied"
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-        <div className="max-w-sm rounded-xl border border-border bg-background p-6 text-center shadow-sm">
-          <h1 className="text-lg font-semibold mb-2">Sign-in blocked</h1>
+      <div className="qujo-page flex min-h-screen items-center justify-center p-4">
+        <div className="qujo-panel max-w-sm p-8 text-center">
+          <BrandMark className="mb-7 justify-center" />
+          <h1 className="text-lg font-semibold mb-2">{t("signInBlocked")}</h1>
           <p className="text-sm text-muted-foreground mb-4">
             {isAccessDenied
-              ? "Your account is currently inactive. Please contact an administrator."
-              : "Sign-in failed. Please try again."}
+              ? t("accountInactive")
+              : t("signInFailed")}
           </p>
           <button
             type="button"
             onClick={() => signIn("google", { callbackUrl })}
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Try again
+            {t("tryAgain")}
           </button>
         </div>
       </div>
@@ -43,9 +47,11 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-      <div className="text-center">
-        <p className="text-muted-foreground">Redirecting to Google sign-in...</p>
+    <div className="qujo-page flex min-h-screen items-center justify-center p-4">
+      <div className="qujo-panel w-full max-w-sm p-8 text-center">
+        <BrandMark className="mb-8 justify-center" />
+        <span className="mx-auto mb-4 block h-7 w-7 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+        <p className="text-sm text-muted-foreground">{t("redirectingToSignIn")}</p>
       </div>
     </div>
   )

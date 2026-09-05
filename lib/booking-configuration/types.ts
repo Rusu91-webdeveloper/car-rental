@@ -1,4 +1,10 @@
-import type { BookingStep, CustomerField } from "@/lib/business-configuration/domains"
+import type {
+  BookingStep,
+  BusinessHoursException,
+  CustomerField,
+  HandoverPolicy,
+  WeeklyOpeningHours,
+} from "@/lib/business-configuration/domains"
 import type { InsuranceTaxTreatment } from "@/lib/pricing/types"
 import type { BookingLegalRequirements } from "@/lib/legal/types"
 
@@ -101,8 +107,28 @@ export interface PublicBookingConfiguration {
   customerDriverConfigVersionId?: string
   bookingWorkflowConfigVersionId?: string
   businessTimeZone: string
+  weeklyOpeningHours: WeeklyOpeningHours
+  openingHoursExceptions: BusinessHoursException[]
+  handoverPolicy: HandoverPolicy
+  minimumRentalMinutes: number
+  minimumChargeDays: number
+  gracePeriodMinutes: number
+  preparationBufferMinutes: number
   fields: EffectiveBookingField[]
   steps: EffectiveBookingStep[]
   insurance?: ActiveInsuranceOffer
+  payment?: {
+    configurationVersionId: string
+    methods: Array<{
+      method: "TRANSFER" | "PAY_AT_PICKUP"
+      configuredMode: "BANK_TRANSFER" | "CASH_ON_PICKUP"
+      label: string
+      description: string
+      instructions?: string
+    }>
+    defaultMethod: "TRANSFER" | "PAY_AT_PICKUP"
+    depositEnabled: boolean
+    depositPercentage: number
+  }
   legal?: BookingLegalRequirements
 }

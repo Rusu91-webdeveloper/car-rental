@@ -21,6 +21,7 @@ export function pricingWorkspaceRecords(): PricingWorkspaceRecords {
         rentalMonthDefinition: "FIXED_30_DAYS",
         billableDayRule: "STARTED_24_HOUR_PERIODS",
         gracePeriodMinutes: 0,
+        preparationBufferMinutes: 120,
         minimumRentalMinutes: 1,
         minimumChargeDays: 1,
         pricesIncludeTax: true,

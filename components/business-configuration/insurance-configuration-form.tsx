@@ -9,8 +9,10 @@ import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/
 import { formatAdminMoneyInput } from "@/lib/pricing-admin/money-input"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
 import { formatCents } from "@/lib/money"
+import { useLocale } from "next-intl"
 
 export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
+  const de = useLocale() === "de"
   const draft = data.draftInsurance
   const router = useRouter()
   const [message, setMessage] = useState<string>()
@@ -28,12 +30,12 @@ export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: 
         configuration: { ...config, pricePerDay: price },
       })
       if ("error" in result) {
-        setMessage(result.error)
+        setMessage(de ? "Die Versicherungseinstellungen konnten nicht gespeichert werden." : result.error)
         return
       }
-      setMessage("Insurance saved.")
+      setMessage(de ? "Versicherungseinstellungen gespeichert." : "Insurance saved.")
       const navigationError = await completeOwnerSetupStep("insurance", nextHref, router)
-      if (navigationError) setMessage(navigationError)
+      if (navigationError) setMessage(de ? "Die Versicherungseinstellungen wurden gespeichert, aber der nächste Schritt konnte nicht geöffnet werden." : navigationError)
     })
   const set = <K extends keyof typeof config>(key: K, value: (typeof config)[K]) => setConfig((current) => (current ? { ...current, [key]: value } : current))
   return (
@@ -58,21 +60,21 @@ export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: 
             disabled={!canEdit}
           />
           <span>
-            <span className="font-medium">Offer full-cover insurance</span>
-            <span className="block text-sm text-muted-foreground">Enable customers to add full insurance during booking.</span>
+            <span className="font-medium">{de ? "Vollkaskoversicherung anbieten" : "Offer full-cover insurance"}</span>
+            <span className="block text-sm text-muted-foreground">{de ? "Ermöglichen Sie Kunden, während der Buchung eine Vollkaskoversicherung hinzuzufügen." : "Enable customers to add full insurance during booking."}</span>
           </span>
         </label>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field label="Customer-facing name">
+          <Field label={de ? "Angezeigter Name" : "Customer-facing name"}>
             <Input value={config.customerFacingName} onChange={(event) => set("customerFacingName", event.target.value)} disabled={!canEdit} />
           </Field>
-          <Field label="Short description">
+          <Field label={de ? "Kurzbeschreibung" : "Short description"}>
             <Input value={config.shortDescription ?? ""} onChange={(event) => set("shortDescription", event.target.value)} disabled={!canEdit} />
           </Field>
-          <Field label={`Price per rental day (${data.currency})`}>
+          <Field label={de ? `Preis pro Miettag (${data.currency})` : `Price per rental day (${data.currency})`}>
             <Input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} disabled={!canEdit || !config.enabled} />
           </Field>
-          <Field label="How should insurance work?">
+          <Field label={de ? "Wie soll die Versicherung angeboten werden?" : "How should insurance work?"}>
             <select
               className="w-full rounded-md border p-2"
               value={config.selectionMode}
@@ -91,38 +93,38 @@ export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: 
               }}
               disabled={!canEdit || !config.enabled}
             >
-              <option value="OPTIONAL">Optional — customer chooses</option>
-              <option value="MANDATORY">Required — included for eligible bookings</option>
+              <option value="OPTIONAL">{de ? "Optional — Kunde wählt" : "Optional — customer chooses"}</option>
+              <option value="MANDATORY">{de ? "Erforderlich — bei berechtigten Buchungen enthalten" : "Required — included for eligible bookings"}</option>
             </select>
           </Field>
-          <Field label="Which cars offer insurance?">
+          <Field label={de ? "Für welche Fahrzeuge wird die Versicherung angeboten?" : "Which cars offer insurance?"}>
             <select className="w-full rounded-md border p-2" value={config.availabilityScope} onChange={(event) => set("availabilityScope", event.target.value as typeof config.availabilityScope)} disabled={!canEdit}>
-              <option value="ALL_VEHICLES">Every car</option>
-              <option value="SELECTED_VEHICLES">Selected cars only</option>
+              <option value="ALL_VEHICLES">{de ? "Alle Fahrzeuge" : "Every car"}</option>
+              <option value="SELECTED_VEHICLES">{de ? "Nur ausgewählte Fahrzeuge" : "Selected cars only"}</option>
             </select>
           </Field>
         </div>
         <div className="mt-4 flex flex-wrap gap-5">
-          <Toggle label="Show in confirmations" checked={config.showInConfirmation} onChange={(value) => set("showInConfirmation", value)} disabled={!canEdit} />
-          <Toggle label="Show as a choice while booking" checked={config.showCustomerSelection} onChange={(value) => set("showCustomerSelection", value)} disabled={!canEdit || !config.enabled || config.selectionMode !== "OPTIONAL"} />
+          <Toggle label={de ? "In Bestätigungen anzeigen" : "Show in confirmations"} checked={config.showInConfirmation} onChange={(value) => set("showInConfirmation", value)} disabled={!canEdit} />
+          <Toggle label={de ? "Während der Buchung als Auswahl anzeigen" : "Show as a choice while booking"} checked={config.showCustomerSelection} onChange={(value) => set("showCustomerSelection", value)} disabled={!canEdit || !config.enabled || config.selectionMode !== "OPTIONAL"} />
         </div>
         <details className="mt-4 rounded-lg border p-4 text-sm">
-          <summary className="cursor-pointer font-medium">Advanced</summary>
+          <summary className="cursor-pointer font-medium">{de ? "Erweitert" : "Advanced"}</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field label="How tax is shown">
+            <Field label={de ? "Steuerdarstellung" : "How tax is shown"}>
               <select className="w-full rounded-md border p-2" value={config.taxTreatment} onChange={(event) => set("taxTreatment", event.target.value as typeof config.taxTreatment)} disabled={!canEdit}>
-                <option value="INHERIT_RENTAL">Same as the rental price</option>
-                <option value="TAX_INCLUDED">Tax included</option>
-                <option value="TAX_EXCLUDED">Tax added separately</option>
+                <option value="INHERIT_RENTAL">{de ? "Wie beim Mietpreis" : "Same as the rental price"}</option>
+                <option value="TAX_INCLUDED">{de ? "Steuer enthalten" : "Tax included"}</option>
+                <option value="TAX_EXCLUDED">{de ? "Steuer separat hinzufügen" : "Tax added separately"}</option>
               </select>
             </Field>
-            <Toggle label="Selected when the page opens" checked={config.preselectedByDefault} onChange={(value) => set("preselectedByDefault", value)} disabled={!canEdit || !config.showCustomerSelection} />
+            <Toggle label={de ? "Beim Öffnen der Seite vorausgewählt" : "Selected when the page opens"} checked={config.preselectedByDefault} onChange={(value) => set("preselectedByDefault", value)} disabled={!canEdit || !config.showCustomerSelection} />
           </div>
         </details>
       </section>
       {config.availabilityScope === "SELECTED_VEHICLES" ? (
         <section className="rounded-xl border bg-background p-5">
-          <h2 className="font-semibold">Cars offering insurance</h2>
+          <h2 className="font-semibold">{de ? "Fahrzeuge mit Versicherungsangebot" : "Cars offering insurance"}</h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {data.vehicles.map((vehicle) => (
               <label key={vehicle.id} className="flex gap-2 rounded border p-3 text-sm">
@@ -135,19 +137,19 @@ export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: 
       ) : null}
       {data.insuranceQuoteExample ? (
         <section className="rounded-xl border bg-background p-5">
-          <h2 className="font-semibold">Example customer price</h2>
-          <p className="mt-1 text-sm text-muted-foreground">A {data.insuranceQuoteExample.billableDays}-day rental with and without insurance.</p>
+          <h2 className="font-semibold">{de ? "Beispielpreis für Kunden" : "Example customer price"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{de ? `Eine Miete über ${data.insuranceQuoteExample.billableDays} Tage mit und ohne Versicherung.` : `A ${data.insuranceQuoteExample.billableDays}-day rental with and without insurance.`}</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
             <div>
-              <span className="block text-muted-foreground">Not selected</span>
+              <span className="block text-muted-foreground">{de ? "Nicht ausgewählt" : "Not selected"}</span>
               {formatCents(data.insuranceQuoteExample.unselectedGrandTotal, data.currency)}
             </div>
             <div>
-              <span className="block text-muted-foreground">Insurance</span>
+              <span className="block text-muted-foreground">{de ? "Versicherung" : "Insurance"}</span>
               {formatCents(data.insuranceQuoteExample.insuranceSubtotal, data.currency)}
             </div>
             <div>
-              <span className="block text-muted-foreground">Selected</span>
+              <span className="block text-muted-foreground">{de ? "Ausgewählt" : "Selected"}</span>
               {formatCents(data.insuranceQuoteExample.selectedGrandTotal, data.currency)}
             </div>
           </div>
@@ -156,10 +158,10 @@ export function InsuranceConfigurationForm({ data, canEdit, nextHref }: { data: 
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            {ownerSetupSaveLabel(nextHref)}
+            {ownerSetupSaveLabel(nextHref, de)}
           </Button>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">View-only access</p>
+          <p className="mt-3 text-sm text-muted-foreground">{de ? "Nur Lesezugriff" : "View-only access"}</p>
         )}
         {message ? <p className="mt-3 text-sm">{message}</p> : null}
       </section>

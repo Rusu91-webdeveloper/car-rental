@@ -9,7 +9,7 @@ This phase did not implement online payment, change rental rules or legal wordin
 - Production readiness score: **79/100**.
 - Estimated deployment readiness: **2–4 focused engineering days after the critical decisions are approved**, followed by a production-like launch rehearsal and owner sign-off.
 - Remaining critical blockers: the Nodemailer/Auth.js dependency decision; approved private production Blob/OIDC provisioning; production worker/role/alert ownership and a deletion rehearsal.
-- Remaining medium risks: Auth.js remains a v5 beta; Prisma 5.22 requires a separately planned major upgrade; repository-wide ESLint remains at its inherited baseline; email delivery is not transactionally coupled to Booking persistence; no external alert destination is configured.
+- Remaining medium risks: Auth.js remains a v5 beta; Prisma 5.22 requires a separately planned major upgrade; repository-wide ESLint remains at its inherited baseline; no external alert destination is configured. Booking lifecycle emails now use a transactionally-created retryable outbox.
 - Remaining low risks: duplicate transitive UI packages remain; worker overlap is safe through idempotent operations but does not yet have a single-flight lease; the public health endpoint is liveness-only by design.
 - Technical debt: inherited UI lint findings, legacy manual-payment terminology/schema fields, old setup documents, and mixed formatting conventions.
 

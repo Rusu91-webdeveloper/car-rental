@@ -43,8 +43,10 @@ export default async function BookingApplicationPage({
   if ("error" in state)
     return (
       <main className="mx-auto max-w-2xl p-6">
-        <h1 className="text-2xl font-semibold">Application unavailable</h1>
-        <p className="mt-3 text-muted-foreground">{state.error}</p>
+        <h1 className="text-2xl font-semibold">{locale === "de" ? "Antrag nicht verfügbar" : "Application unavailable"}</h1>
+        <p className="mt-3 text-muted-foreground">
+          {locale === "de" ? "Dieser Buchungsantrag kann derzeit nicht geöffnet werden. Bitte kehren Sie zu Ihren Buchungen zurück oder wenden Sie sich an den Support." : state.error}
+        </p>
       </main>
     )
   return (
@@ -52,6 +54,7 @@ export default async function BookingApplicationPage({
       locale={locale}
       initialApplication={state.application}
       initialReadiness={state.readiness}
+      pageRenderedAt={new Date().toISOString()}
     />
   )
 }

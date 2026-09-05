@@ -11,6 +11,7 @@ import { documentError } from "../domain/errors";
 import type { DocumentActor } from "../domain/types";
 import { readPrivateDocumentEnvironment } from "../infrastructure/environment";
 import { PrismaDocumentLifecycleRepository } from "../infrastructure/prisma-repository";
+import { readRuntimePrivateDocumentEnvironment } from "../infrastructure/runtime-environment";
 import { createPrivateDocumentStorage } from "../storage/factory";
 
 function serverAuthenticationEvidence(session: unknown) {
@@ -88,7 +89,7 @@ export async function loadPrivateDocumentRequestContext(documentId: string) {
       user.accessRoleAssignments.map(({ accessRole }) => accessRole.key),
     ),
   };
-  const environment = readPrivateDocumentEnvironment();
+  const environment = await readRuntimePrivateDocumentEnvironment();
   const repository = new PrismaDocumentLifecycleRepository(prisma);
   const storage = createPrivateDocumentStorage({
     environment,

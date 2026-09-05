@@ -103,7 +103,7 @@ function MobileMenuContent({
           "hover:bg-background hover:shadow-md",
           isOpen && "border-primary/35 bg-primary/5 shadow-primary/20"
         )}
-        aria-label="Open navigation menu"
+        aria-label={t("navigation.openMenu")}
         aria-expanded={isOpen}
         aria-controls="mobile-menu-panel"
       >
@@ -139,7 +139,7 @@ function MobileMenuContent({
             id="mobile-menu-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="Site navigation"
+            aria-label={t("navigation.siteNavigation")}
             className="fixed bottom-3 left-3 top-3 z-50 w-[88vw] max-w-[22rem] animate-in slide-in-from-left rounded-[24px] border border-border/70 bg-background/95 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.75)] backdrop-blur-2xl"
           >
             <div className="flex h-full flex-col">
@@ -151,12 +151,12 @@ function MobileMenuContent({
                         <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
                       </svg>
                     </span>
-                    <span className="text-sm font-semibold tracking-tight">RentCar</span>
+                    <span className="text-sm font-semibold tracking-tight">Qujo</span>
                   </div>
                   <button
                     onClick={() => setIsOpen(false)}
                     className="rounded-lg border border-border/70 bg-background p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Close navigation menu"
+                    aria-label={t("navigation.closeMenu")}
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -167,7 +167,7 @@ function MobileMenuContent({
 
               <nav
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent px-2 py-3"
-                aria-label="Primary"
+                aria-label={t("navigation.primary")}
                 style={{ scrollbarWidth: "thin", scrollBehavior: "smooth" }}
               >
                 <div className="space-y-1">

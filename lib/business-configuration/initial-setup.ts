@@ -1,5 +1,14 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
+import {
+  DEFAULT_DOCUMENT_ROLE_PERMISSIONS,
+  defaultDocumentRolePermission,
+} from "@/lib/document-configuration/default-role-permissions"
 import { BOOKING_STEPS, CONFIRMATION_SECTIONS, CUSTOMER_FIELDS } from "./domains"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 const requiredCustomerFields = new Set(["FIRST_NAME", "LAST_NAME", "EMAIL"])
 
@@ -93,11 +102,13 @@ export async function initializeBusinessConfiguration(
 
       const settings = await tx.companySettings.findUnique({
         where: { id: "company-settings" },
-        select: { currency: true, taxRate: true, taxIncluded: true, depositPercentage: true },
+        select: { currency: true, taxRate: true, taxIncluded: true, depositPercentage: true, accountName: true, iban: true },
       })
       const currency = settings?.currency?.toUpperCase() || "EUR"
       const taxRateBps = Math.round((settings?.taxRate ?? 0) * 10_000)
-      const depositBps = Math.round((settings?.depositPercentage ?? 0) * 10_000)
+      const depositBps = settings?.accountName.trim() && settings.iban?.trim()
+        ? Math.round((settings.depositPercentage ?? 0) * 10_000)
+        : 0
 
       const general =
         (await latestDraftVersion(tx, "GENERAL_RENTAL")) ??
@@ -107,6 +118,9 @@ export async function initializeBusinessConfiguration(
               businessTimeZone: "UTC",
               currency,
               supportedLocales: ["en", "de"],
+              weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS as unknown as Prisma.InputJsonValue,
+              openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS as unknown as Prisma.InputJsonValue,
+              handoverPolicy: DEFAULT_HANDOVER_POLICY as unknown as Prisma.InputJsonValue,
             },
           },
         }))
@@ -122,7 +136,8 @@ export async function initializeBusinessConfiguration(
               rentalMonthDefinition: "FIXED_30_DAYS",
               billableDayMethod: "STARTED_24_HOUR_PERIODS",
               gracePeriodMinutes: 0,
-              minimumRentalMinutes: 1_440,
+              preparationBufferMinutes: 120,
+              minimumRentalMinutes: 1,
               minimumChargeDays: 1,
               priceTaxTreatment: settings?.taxIncluded ? "TAX_INCLUDED" : "TAX_EXCLUDED",
               taxRateBps,
@@ -200,6 +215,36 @@ export async function initializeBusinessConfiguration(
             },
           },
         }))
+
+      const documentPolicyPermissionCount =
+        await tx.documentPolicyRolePermission.count({
+          where: { documentPolicyConfigVersionId: documentPolicy.id },
+        })
+      if (documentPolicyPermissionCount === 0) {
+        const documentRoles = await tx.accessRole.findMany({
+          where: {
+            key: { in: Object.keys(DEFAULT_DOCUMENT_ROLE_PERMISSIONS) },
+            status: "ACTIVE",
+          },
+          select: { id: true, key: true },
+        })
+        const rolePermissions = documentRoles.flatMap((role) => {
+          const permission = defaultDocumentRolePermission(role.key)
+          return permission
+            ? [
+                {
+                  documentPolicyConfigVersionId: documentPolicy.id,
+                  accessRoleId: role.id,
+                  ...permission,
+                },
+              ]
+            : []
+        })
+        if (rolePermissions.length)
+          await tx.documentPolicyRolePermission.createMany({
+            data: rolePermissions,
+          })
+      }
 
       const payment =
         (await latestDraftVersion(tx, "PAYMENTS")) ??

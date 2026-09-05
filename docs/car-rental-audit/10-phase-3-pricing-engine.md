@@ -44,7 +44,7 @@ The unexplained 10% fallback is an existing compatibility ambiguity. Preserving 
 `lib/pricing/duration.ts` requires pickup, return, IANA business timezone, minimum rental minutes, minimum charge days, and grace minutes. It rejects invalid or reversed ranges.
 
 - `STARTED_24_HOUR_PERIODS` preserves elapsed-time compatibility; legacy mode explicitly uses UTC.
-- `CALENDAR_DAYS` compares local dates in the business timezone.
+- `CALENDAR_DAYS` compares local dates in the business timezone and charges the final partial day when the return time exceeds the pickup time plus the configured grace period.
 - `PICKUP_TIME_BOUNDARY` counts local pickup-time boundaries with grace.
 
 DST spring/autumn behavior is tested for Europe/Berlin. A dedicated `YYYY-MM-DD` adapter preserves date-only semantics. Calendar-month arithmetic is not implemented.

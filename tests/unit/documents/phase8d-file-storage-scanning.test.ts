@@ -99,6 +99,25 @@ describe("Phase 8D disposable adapters", () => {
     });
   });
 
+  it("continues a staged upload across request-scoped adapter instances", async () => {
+    const root = await mkdtemp(join(tmpdir(), "phase8d-request-storage-"));
+    const creatingRequest = new LocalPrivateDocumentStorage(root);
+    const uploadRequest = new LocalPrivateDocumentStorage(root);
+    stores.push(creatingRequest, uploadRequest);
+    const target = await creatingRequest.createUploadTarget({
+      uploadIntentId: "intent-request-boundary-1",
+      normalizedExtension: ".pdf",
+      declaredMimeType: "application/pdf",
+      maximumBytes: 1024,
+      expectedChecksumSha256: sha256(pdf),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await uploadRequest.completeStagedUpload(target.targetId, pdf);
+
+    expect(await creatingRequest.readObjectForVerification(target.object, 1024)).toEqual(pdf);
+  });
+
   it("normalizes every fake scan result and reports a production block", async () => {
     const root = await mkdtemp(join(tmpdir(), "phase8d-health-"));
     const store = new LocalPrivateDocumentStorage(root);

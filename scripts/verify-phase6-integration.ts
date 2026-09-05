@@ -30,7 +30,7 @@ async function main() {
       db: prisma,
     })
   }
-  let page = await loadPhase6ConfigurationPage(prisma)
+  const page = await loadPhase6ConfigurationPage(prisma)
   assert(page.draftInsurance && page.draftCustomerDriver && page.draftWorkflow)
   await updateInsuranceDraft({
     actorId,

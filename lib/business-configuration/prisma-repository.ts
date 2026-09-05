@@ -8,6 +8,11 @@ import type {
   ConfigurationEvidenceRepository,
   ReleaseAggregate,
 } from "./repositories"
+import {
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
 
 export type ConfigurationDbClient = PrismaClient | Prisma.TransactionClient
 
@@ -111,6 +116,9 @@ function mapDomains(row: ReleaseRow): BusinessConfigurationDomains {
       businessTimeZone: row.generalRentalConfig.businessTimeZone,
       currency: row.generalRentalConfig.currency,
       supportedLocales: row.generalRentalConfig.supportedLocales,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(row.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(row.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(row.generalRentalConfig.handoverPolicy),
     },
     "pricing-billing": {
       weeklyPricingEnabled: row.pricingBillingConfig.weeklyPricingEnabled,
@@ -119,6 +127,7 @@ function mapDomains(row: ReleaseRow): BusinessConfigurationDomains {
       rentalMonthDefinition: row.pricingBillingConfig.rentalMonthDefinition,
       billableDayRule: row.pricingBillingConfig.billableDayMethod,
       gracePeriodMinutes: row.pricingBillingConfig.gracePeriodMinutes,
+      preparationBufferMinutes: row.pricingBillingConfig.preparationBufferMinutes,
       minimumRentalMinutes: row.pricingBillingConfig.minimumRentalMinutes,
       minimumChargeDays: row.pricingBillingConfig.minimumChargeDays,
       pricesIncludeTax: row.pricingBillingConfig.priceTaxTreatment === "TAX_INCLUDED",
@@ -350,6 +359,7 @@ export class PrismaBusinessConfigurationRepository
         rentalMonthDefinition: pricing.pricingBilling.rentalMonthDefinition,
         billableDayRule: pricing.pricingBilling.billableDayMethod,
         gracePeriodMinutes: pricing.pricingBilling.gracePeriodMinutes,
+        preparationBufferMinutes: pricing.pricingBilling.preparationBufferMinutes,
         minimumRentalMinutes: pricing.pricingBilling.minimumRentalMinutes,
         minimumChargeDays: pricing.pricingBilling.minimumChargeDays,
         pricesIncludeTax: pricing.pricingBilling.priceTaxTreatment === "TAX_INCLUDED",

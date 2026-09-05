@@ -1,0 +1,1 @@
+{"nodes": [{"id": "users_emanuelrusu_desktop_mvps_car_rental_app_prisma_migrations_20260104182400_add_nextauth_tables_migration_sql", "label": "migration.sql", "file_type": "code", "source_file": "prisma/migrations/20260104182400_add_nextauth_tables/migration.sql", "source_location": null}], "edges": []}

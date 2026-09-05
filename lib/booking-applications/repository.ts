@@ -29,6 +29,9 @@ export interface BookingApplicationRepository {
     },
   ): Promise<BookingApplicationView>
   submitForReview(input: ApplicationMutationInput): Promise<BookingApplicationView>
+  reconcileConfirmedQuoteAfterReview(
+    applicationId: string,
+  ): Promise<"VALID" | "RENEWED" | "CUSTOMER_ACTION_REQUIRED" | "NOT_APPLICABLE">
   evaluateReadiness(applicationId: string): Promise<ApplicationReadiness>
   markCustomerActionRequired(
     input: ApplicationMutationInput & { reason: string },

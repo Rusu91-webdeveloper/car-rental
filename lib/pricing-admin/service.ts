@@ -1,13 +1,24 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import { PricingError, publicPricingErrorMessage } from "@/lib/pricing/errors"
 import { money } from "@/lib/pricing/money"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
 import { quoteVehicleRental } from "@/lib/pricing/quote-service"
-import type { PricingBillingConfiguration } from "@/lib/business-configuration/domains"
+import type {
+  BusinessHoursException,
+  HandoverPolicy,
+  PricingBillingConfiguration,
+  WeeklyOpeningHours,
+} from "@/lib/business-configuration/domains"
 import type { ConfigurationValidationIssue } from "@/lib/business-configuration/types"
 import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 import { parseAdminMoneyInput } from "./money-input"
 import { PrismaPricingAdminRepository } from "./prisma-repository"
 import type { PricingWorkspaceRecords } from "./repositories"
@@ -67,6 +78,7 @@ const ruleLabels: Record<keyof PricingBillingConfiguration, string> = {
   rentalMonthDefinition: "Month length",
   billableDayRule: "Billable duration",
   gracePeriodMinutes: "Grace period",
+  preparationBufferMinutes: "Preparation buffer",
   minimumRentalMinutes: "Minimum rental duration",
   minimumChargeDays: "Minimum charge",
   pricesIncludeTax: "Tax treatment",
@@ -161,6 +173,12 @@ export function buildPricingAdminPageData(records: PricingWorkspaceRecords): Pri
     fleetDraftAttached: Boolean(draftRelease && fleetDraft && draftRelease.fleetRateSet.id === fleetDraft.id),
     businessTimeZone: draftRelease?.domains["general-rental"]?.businessTimeZone ?? active?.domains["general-rental"]?.businessTimeZone ?? "UTC",
     liveBusinessTimeZone: active?.domains["general-rental"]?.businessTimeZone,
+    weeklyOpeningHours: draftRelease?.domains["general-rental"]?.weeklyOpeningHours ?? active?.domains["general-rental"]?.weeklyOpeningHours ?? DEFAULT_WEEKLY_OPENING_HOURS,
+    liveWeeklyOpeningHours: active?.domains["general-rental"]?.weeklyOpeningHours,
+    openingHoursExceptions: draftRelease?.domains["general-rental"]?.openingHoursExceptions ?? active?.domains["general-rental"]?.openingHoursExceptions ?? DEFAULT_OPENING_HOURS_EXCEPTIONS,
+    liveOpeningHoursExceptions: active?.domains["general-rental"]?.openingHoursExceptions,
+    handoverPolicy: draftRelease?.domains["general-rental"]?.handoverPolicy ?? active?.domains["general-rental"]?.handoverPolicy ?? DEFAULT_HANDOVER_POLICY,
+    liveHandoverPolicy: active?.domains["general-rental"]?.handoverPolicy,
     currency,
     livePricing: active ? pricingVersionFromRelease(active) : undefined,
     draftPricing: pricingDraft,
@@ -255,6 +273,9 @@ export async function updatePricingRules(input: {
   configuration: PricingBillingConfiguration
   changeSummary: string
   businessTimeZone?: string
+  weeklyOpeningHours?: WeeklyOpeningHours
+  openingHoursExceptions?: BusinessHoursException[]
+  handoverPolicy?: HandoverPolicy
   db?: PrismaClient
 }) {
   return pricingMutation(new PrismaPricingAdminRepository(input.db ?? prisma).updatePricingRules({ ...input, client: input.db ?? prisma }))
@@ -346,7 +367,10 @@ export async function generatePricingPreview(input: {
       persistentStrategy: configuration.mixedDurationStrategy,
       monthDefinition: configuration.rentalMonthDefinition,
       billableDayMethod: configuration.billableDayRule,
-      minimumRentalMinutes: configuration.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        configuration.minimumRentalMinutes,
+        configuration.minimumChargeDays,
+      ),
       minimumChargeDays: configuration.minimumChargeDays,
       gracePeriodMinutes: configuration.gracePeriodMinutes,
       taxTreatment: configuration.pricesIncludeTax ? "TAX_INCLUDED" : "TAX_EXCLUDED",

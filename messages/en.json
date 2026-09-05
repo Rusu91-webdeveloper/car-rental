@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "RentCar",
+    "appName": "Qujo Car Rental",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
@@ -10,6 +10,13 @@
     "delete": "Delete",
     "edit": "Edit",
     "back": "Back",
+    "home": "Home",
+    "backToHome": "Back to home",
+    "brandHome": "Qujo Car Rental – home",
+    "switchToEnglish": "Switch to English",
+    "switchToGerman": "Switch to German",
+    "notification": "Notification",
+    "notificationsHotkey": "Notifications",
     "next": "Next",
     "previous": "Previous",
     "search": "Search",
@@ -21,20 +28,36 @@
     "searchPlaceholder": "Search location, dates...",
     "bookNow": "Book Now",
     "viewDetails": "View Details",
-    "close": "Close"
+    "close": "Close",
+    "share": "Share",
+    "linkCopied": "Link copied to clipboard.",
+    "copyLink": "Copy this link:",
+    "shareFailed": "Unable to share this link.",
+    "previousImage": "Previous image",
+    "nextImage": "Next image",
+    "showImage": "Show image {number}"
+  },
+  "demoBanner": {
+    "title": "Demo mode active",
+    "compactDescription": "Sample data is shown.",
+    "compactHelpLink": "Setup help",
+    "descriptionBefore": "You are using demo mode with sample data. For complete setup instructions, visit the",
+    "helpLink": "help page",
+    "descriptionAfter": ".",
+    "close": "Close demo notice"
   },
   "home": {
-    "kicker": "Premium car rental",
-    "title": "Ready for your next trip?",
-    "subtitle": "Find the perfect car nearby",
-    "ctaPrimary": "Explore the fleet",
-    "ctaSecondary": "How it works",
-    "searchTitle": "Plan your ride",
-    "searchSubtitle": "Choose dates, then filter by year",
+    "kicker": "Simply arrive",
+    "title": "The right rental car. No detours.",
+    "subtitle": "Selected vehicles, fair terms and personal service – reliable from your first request to the return.",
+    "ctaPrimary": "View available cars",
+    "ctaSecondary": "Discover Qujo",
+    "searchTitle": "Check availability",
+    "searchSubtitle": "Choose your rental period and find the right vehicle.",
     "highlights": {
-      "insurance": "Full insurance included",
-      "support": "24/7 roadside support",
-      "cancel": "Free cancellation"
+      "insurance": "Clear insurance terms",
+      "support": "A personal contact",
+      "cancel": "Transparent rental terms"
     },
     "stats": {
       "cars": "Cars ready",
@@ -45,28 +68,31 @@
       "title": "Featured today",
       "badge": "Top pick"
     },
-    "popularCars": "Popular Cars",
+    "popularCars": "Our vehicle selection",
     "noCarsFound": "No cars found",
     "tryDifferentSearch": "Try a different search or filter"
   },
   "about": {
     "title": "About Us",
-    "heroTitle": "Welcome to RentCar",
-    "subtitle": "Your trusted partner for car rentals",
-    "storyTitle": "Our Story",
-    "storyBody": "Founded in 2020, RentCar has been dedicated to providing exceptional car rental experiences. We understand that every journey is unique, and we're committed to offering a diverse fleet of vehicles to match your specific needs.",
+    "heroTitle": "Mobility you can rely on.",
+    "subtitle": "Qujo Autovermietung GmbH – personal, transparent and straightforward.",
+    "storyTitle": "Our standard",
+    "storyBody": "Qujo is a car rental company built around people and their journeys. We combine a carefully selected fleet with clear processes and genuinely personal service.",
     "missionTitle": "Our Mission",
-    "missionBody": "To make car rentals simple, affordable, and accessible for everyone. We believe in transparent pricing, quality vehicles, and outstanding customer service.",
+    "missionBody": "We make mobility predictable with understandable terms, well-kept vehicles and reliable support before, during and after every rental.",
     "whyTitle": "Why Choose Us",
-    "feature1Title": "Wide Selection",
-    "feature1Body": "From economy to luxury, electric to SUV - we have the perfect car for every occasion.",
+    "feature1Title": "A suitable vehicle",
+    "feature1Body": "Compare the vehicles currently available and choose one that suits your route, passengers and luggage.",
     "feature2Title": "Transparent Pricing",
-    "feature2Body": "No hidden fees. What you see is what you pay. Simple, clear, and honest.",
-    "feature3Title": "24/7 Support",
-    "feature3Body": "Our customer support team is always ready to assist you, anytime, anywhere."
+    "feature2Body": "Price, tax, deposit, mileage and selected extras are shown before you submit a booking request.",
+    "feature3Title": "Personal contact",
+    "feature3Body": "For questions, reach our team through the contact form and the published contact details.",
+    "ctaKicker": "Simply get moving",
+    "ctaTitle": "Find the vehicle that fits your plans."
   },
   "help": {
     "title": "Help & Support",
+    "kicker": "Frequently asked questions",
     "heading": "How can we help you?",
     "subtitle": "Find answers to common questions below",
     "stillNeedHelpTitle": "Still need help?",
@@ -75,45 +101,55 @@
     "faqs": {
       "booking": {
         "question": "How do I book a car?",
-        "answer": "Browse our available cars, select the one you like, choose your dates and location, and complete the checkout process. You'll receive a confirmation email immediately."
+        "answer": "Select an available vehicle and rental period, provide the information requested in the booking flow and submit your request. A contract is formed only when we expressly confirm it or hand over the vehicle."
       },
       "documents": {
         "question": "What documents do I need?",
-        "answer": "You'll need a valid driver's license, a credit card in your name, and proof of insurance. International customers may also need a passport."
+        "answer": "The documents actually required are shown during booking. A valid driving licence and identity document are normally required; further evidence may depend on the driver, vehicle and rental area."
       },
       "modify": {
         "question": "Can I modify or cancel my booking?",
-        "answer": "Yes! You can modify or cancel your booking up to 24 hours before pickup through your account dashboard. Cancellation fees may apply depending on timing."
+        "answer": "Contact us as early as possible with your booking number. Whether a change or cancellation is available and whether it costs anything depends on the terms shown before submission and your confirmation."
       },
       "pricing": {
         "question": "What's included in the rental price?",
-        "answer": "Our prices include basic insurance, unlimited mileage, and 24/7 roadside assistance. Additional features like GPS or child seats can be added for a fee."
+        "answer": "Before submitting, you will see the rental price, tax, deposit, mileage policy, insurance and selected extras. The booking summary and your confirmation control."
       },
       "late": {
         "question": "What if I return the car late?",
-        "answer": "Late returns are charged hourly at 1/4 of the daily rate. If you're more than 2 hours late, you'll be charged for a full additional day."
+        "answer": "Tell us immediately if delay is likely. The return time and any consequences are governed by your confirmation and the Rental Terms; we do not impose blanket charges that were not disclosed beforehand."
       },
       "longTerm": {
         "question": "Do you offer long-term rentals?",
-        "answer": "Yes! We offer discounted rates for rentals longer than 7 days. Contact our support team for custom long-term rental packages."
+        "answer": "Available rental periods are shown in vehicle search. For a period not offered there, send an enquiry through the contact form."
       }
     }
   },
   "contact": {
     "title": "Contact Us",
+    "kicker": "Here for you personally",
     "subtitle": "We'd love to hear from you. Send us a message anytime.",
-    "success": "Thank you! We'll get back to you soon.",
+    "success": "Thank you! Your message has been sent to our team.",
+    "error": "Your message could not be sent. Please try again later.",
+    "rateLimit": "You have sent too many messages. Please try again in a few minutes.",
+    "privacy": {
+      "before": "Information about how we process your details is available in our",
+      "link": "Privacy Notice",
+      "after": "."
+    },
     "info": {
       "emailTitle": "Email",
       "phoneTitle": "Phone",
-      "addressTitle": "Address"
+      "addressTitle": "Address",
+      "formOnly": "Use the form and your message will be delivered securely to our team."
     },
     "form": {
       "name": "Name",
       "email": "Email",
       "subject": "Subject",
       "message": "Message",
-      "send": "Send Message"
+      "send": "Send Message",
+      "sending": "Sending…"
     }
   },
   "login": {
@@ -123,11 +159,17 @@
     "subtitle": "Create an account to book your first ride."
   },
   "verify": {
-    "subtitle": "We've sent a 6-digit verification code to <highlight>{email}</highlight>. Please enter it below."
+    "title": "Verify it's you",
+    "subtitle": "We've sent a 6-digit verification code to <highlight>{email}</highlight>. Please enter it below.",
+    "help": "Help",
+    "resendIn": "Resend code in",
+    "verifyAccount": "Verify account",
+    "checkSpam": "Didn't receive the email? Check your spam folder.",
+    "changeEmail": "Change email address"
   },
   "cars": {
     "title": "All Cars",
-    "subtitle": "{count} {count, plural, one {car} other {cars}} available",
+    "subtitle": "{count} {count, plural, one {car} other {cars}} available to book",
     "noCars": "No cars found",
     "adjustFilters": "Try adjusting your filters or search query",
     "clearFilters": "Clear Filters"
@@ -135,6 +177,8 @@
   "car": {
     "category": "Category",
     "pricePerDay": "Per Day",
+    "priceComingSoon": "Price coming soon",
+    "bookingUnavailable": "Booking unavailable",
     "rating": "Rating",
     "reviews": "{count} {count, plural, one {review} other {reviews}}",
     "seats": "{count} {count, plural, one {seat} other {seats}}",
@@ -194,7 +238,7 @@
     "step3": "Once payment is verified, your booking will be confirmed",
     "step4": "You'll receive a final confirmation email with pickup details",
     "viewBookings": "View My Bookings",
-    "confirmationEmail": "A confirmation email has been sent with all the details above."
+    "confirmationEmail": "A confirmation email has been sent with all the details above. If you don't see it in your inbox, please check your spam or junk folder."
   },
   "profile": {
     "title": "Profile",
@@ -253,6 +297,7 @@
   },
   "saved": {
     "title": "Saved Cars",
+    "subtitle": "{count} saved {count, plural, one {car} other {cars}}",
     "noSaved": "No saved cars",
     "explore": "Explore cars and save your favorites",
     "browseCars": "Browse Cars"
@@ -278,7 +323,13 @@
     "forgotPassword": "Forgot Password?",
     "dontHaveAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
-    "demoMode": "Demo Mode"
+    "demoMode": "Demo Mode",
+    "signInBlocked": "Sign-in blocked",
+    "accountInactive": "Your account is currently inactive. Please contact an administrator.",
+    "signInFailed": "Sign-in failed. Please try again.",
+    "tryAgain": "Try again",
+    "redirectingToSignIn": "Redirecting to secure sign-in…",
+    "redirectingToSignUp": "Redirecting to Google sign-up…"
   },
   "navigation": {
     "home": "Home",
@@ -292,7 +343,11 @@
     "contact": "Contact",
     "help": "Help & Support",
     "more": "More",
-    "language": "Language"
+    "language": "Language",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "siteNavigation": "Site navigation",
+    "primary": "Primary navigation"
   },
   "categories": {
     "all": "All",
@@ -306,7 +361,8 @@
     "available": "Available",
     "lowStock": "Low Stock",
     "rented": "Rented",
-    "maintenance": "Maintenance"
+    "maintenance": "Maintenance",
+    "comingSoon": "Coming soon"
   },
   "filters": {
     "year": "From Year",
@@ -321,244 +377,26 @@
     "showingAvailableCars": "Showing only cars available for selected dates"
   },
   "footer": {
-    "companyName": "RentCar GmbH",
-    "tagline": "Your trusted partner for premium car rentals",
-    "address": {
-      "line1": "Musterstraße 123",
-      "line2": "10115 Berlin, Germany"
-    },
+    "companyName": "Qujo Autovermietung GmbH",
+    "tagline": "Car rental. Personal. Transparent. Reliable.",
     "quickLinks": "Quick Links",
     "legal": "Legal",
     "contact": "Contact",
-    "email": "info@rentcar.de",
-    "phone": "+49 (0) 30 12345678",
     "links": {
       "about": "About Us",
       "contact": "Contact",
       "help": "Help & Support",
       "cars": "Browse Cars",
       "impressum": "Imprint",
-      "datenschutz": "Privacy Policy",
-      "agb": "Terms & Conditions",
-      "widerruf": "Cancellation Policy"
+      "datenschutz": "Privacy Notice",
+      "agb": "General Rental Terms",
+      "widerruf": "Withdrawal-right notice"
     },
     "legalInfo": {
       "managingDirector": "Managing Director",
-      "directorName": "Max Mustermann",
       "register": "Commercial Register",
-      "registerNumber": "HRB 123456 B",
-      "registerCourt": "District Court Berlin-Charlottenburg",
-      "vatId": "VAT ID",
-      "vatNumber": "DE123456789"
+      "vatId": "VAT ID"
     },
     "copyright": "All rights reserved."
-  },
-  "impressum": {
-    "title": "Imprint",
-    "companyInfo": {
-      "title": "Information according to § 5 TMG",
-      "name": "RentCar GmbH",
-      "address": {
-        "line1": "Musterstraße 123",
-        "line2": "10115 Berlin, Germany"
-      }
-    },
-    "contact": {
-      "title": "Contact",
-      "phone": "Phone",
-      "phoneNumber": "+49 (0) 30 12345678",
-      "email": "Email",
-      "emailAddress": "info@rentcar.de"
-    },
-    "legalInfo": {
-      "title": "Legal Information",
-      "managingDirector": "Managing Director",
-      "directorName": "Max Mustermann",
-      "register": "Commercial Register",
-      "registerNumber": "HRB 123456 B",
-      "registerCourt": "District Court Berlin-Charlottenburg",
-      "vatId": "VAT ID",
-      "vatNumber": "DE123456789"
-    },
-    "responsibility": {
-      "title": "Responsible for content according to § 55 Abs. 2 RStV",
-      "content": "Max Mustermann, Musterstraße 123, 10115 Berlin, Germany"
-    },
-    "disputeResolution": {
-      "title": "Dispute Resolution",
-      "intro": "The European Commission provides a platform for online dispute resolution (OS):",
-      "content": "We are not willing or obligated to participate in dispute resolution procedures before a consumer arbitration board."
-    }
-  },
-  "datenschutz": {
-    "title": "Privacy Policy",
-    "intro": "As a rule, our website can be used without providing personal data. If personal data (such as name, address or e-mail addresses) is collected on our pages, this is always done on a voluntary basis as far as possible.",
-    "lastUpdated": "Last updated: January 2024",
-    "dataController": {
-      "title": "Data Controller",
-      "name": "RentCar GmbH",
-      "address": {
-        "line1": "Musterstraße 123",
-        "line2": "10115 Berlin, Germany"
-      },
-      "email": "Email",
-      "emailAddress": "info@rentcar.de"
-    },
-    "dataCollection": {
-      "title": "Collection and Storage of Personal Data",
-      "intro": "We collect and store the following personal data:",
-      "items": {
-        "personal": "Personal information (name, address, date of birth)",
-        "booking": "Booking information (rental period, vehicle type)",
-        "payment": "Payment data (as required)",
-        "usage": "Usage data of our website (IP address, browser type, access times)"
-      }
-    },
-    "dataPurpose": {
-      "title": "Purpose of Data Collection",
-      "intro": "We use your personal data for the following purposes:",
-      "items": {
-        "processing": "Processing your bookings and rental contracts",
-        "communication": "Communication with you regarding your bookings",
-        "legal": "Compliance with legal obligations",
-        "improvement": "Improvement of our services"
-      }
-    },
-    "dataSharing": {
-      "title": "Data Sharing",
-      "content": "We do not share your personal data with third parties unless this is required by law or necessary for contract fulfillment."
-    },
-    "dataRights": {
-      "title": "Your Rights",
-      "intro": "You have the following rights:",
-      "items": {
-        "access": "Information about your stored data",
-        "rectification": "Correction of incorrect data",
-        "deletion": "Deletion of your data",
-        "restriction": "Restriction of processing",
-        "portability": "Data portability",
-        "objection": "Objection to processing"
-      },
-      "contact": "If you have questions about data protection, please contact us at info@rentcar.de."
-    },
-    "cookies": {
-      "title": "Cookies",
-      "content": "Our website uses cookies to ensure functionality. You can adjust your browser settings to disable cookies."
-    },
-    "security": {
-      "title": "Data Security",
-      "content": "We implement technical and organizational measures to protect your personal data from loss, manipulation or unauthorized access."
-    },
-    "changes": {
-      "title": "Changes to the Privacy Policy",
-      "content": "We reserve the right to adjust this privacy policy to ensure it always complies with current legal requirements."
-    }
-  },
-  "agb": {
-    "title": "Terms & Conditions",
-    "intro": "The following Terms & Conditions (T&C) govern the use of our car rental service.",
-    "lastUpdated": "Last updated: January 2024",
-    "scope": {
-      "title": "Scope",
-      "content1": "These T&C apply to all rental contracts between RentCar GmbH (hereinafter \"Lessor\") and the customer (hereinafter \"Lessee\").",
-      "content2": "Deviating, conflicting or supplementary T&C of the Lessee do not become part of the contract."
-    },
-    "contract": {
-      "title": "Contract Conclusion",
-      "intro": "The rental contract is concluded through the following steps:",
-      "steps": {
-        "booking": "Online booking of the rental car by the Lessee",
-        "confirmation": "Confirmation of the booking by the Lessor",
-        "payment": "Payment of the rental fee",
-        "contract": "Contract is concluded upon handover of the vehicle"
-      }
-    },
-    "prices": {
-      "title": "Prices and Payment Terms",
-      "content1": "All prices are stated in Euros including statutory VAT. The prices include basic insurance and unlimited mileage.",
-      "content2": "Additional services (e.g. GPS, child seat, additional driver) are to be paid separately."
-    },
-    "payment": {
-      "title": "Payment",
-      "content1": "Payment can be made by credit card, bank transfer or other offered payment methods.",
-      "content2": "When paying by bank transfer, the rental fee must be settled before vehicle pickup."
-    },
-    "pickup": {
-      "title": "Vehicle Pickup",
-      "content1": "The Lessee is obliged to pick up the vehicle at the agreed time and location. If the vehicle is not picked up, the right to the vehicle expires.",
-      "content2": "A valid driver's license, ID card or passport and a credit card must be presented upon pickup."
-    },
-    "return": {
-      "title": "Vehicle Return",
-      "content1": "The vehicle must be returned at the agreed time and location. Additional fees will be charged for late returns.",
-      "content2": "The vehicle must be returned with the same fuel level as at pickup."
-    },
-    "liability": {
-      "title": "Liability",
-      "content1": "The Lessor is not liable for damages resulting from improper use of the vehicle.",
-      "content2": "The Lessee is liable for all damages to the vehicle during the rental period, unless they were caused by fault of the Lessor."
-    },
-    "cancellation": {
-      "title": "Cancellation",
-      "content1": "Cancellations can be made free of charge up to 24 hours before pickup. Late cancellations may incur cancellation fees.",
-      "content2": "Details on the right of withdrawal can be found in our Cancellation Policy.",
-      "link": "To Cancellation Policy"
-    },
-    "applicableLaw": {
-      "title": "Applicable Law",
-      "content": "The law of the Federal Republic of Germany applies, excluding the UN Convention on Contracts for the International Sale of Goods."
-    }
-  },
-  "widerruf": {
-    "title": "Cancellation Policy",
-    "intro": "Consumers have the right to cancel this contract within fourteen days without giving any reason.",
-    "lastUpdated": "Last updated: January 2024",
-    "right": {
-      "title": "Right of Withdrawal",
-      "content1": "You have the right to cancel this contract within 14 days without giving any reason.",
-      "content2": "The withdrawal period is 14 days from the day of the contract conclusion."
-    },
-    "period": {
-      "title": "Withdrawal Period",
-      "content1": "To exercise your right of withdrawal, you must inform us (RentCar GmbH, Musterstraße 123, 10115 Berlin, Germany, Email: info@rentcar.de) by means of a clear statement of your decision to withdraw from this contract.",
-      "content2": "To meet the withdrawal deadline, it is sufficient for you to send your communication concerning your exercise of the right of withdrawal before the withdrawal period has expired."
-    },
-    "procedure": {
-      "title": "Withdrawal Procedure",
-      "intro": "To exercise the right of withdrawal, please contact us at:",
-      "recipient": "To:",
-      "address": {
-        "line1": "RentCar GmbH",
-        "line2": "Musterstraße 123, 10115 Berlin, Germany"
-      },
-      "email": "Email",
-      "emailAddress": "info@rentcar.de"
-    },
-    "consequences": {
-      "title": "Consequences of Withdrawal",
-      "content1": "If you withdraw from this contract, we shall reimburse to you all payments received from you, including the costs of delivery (with the exception of the supplementary costs resulting from the choice of a type of delivery other than the least expensive type of standard delivery offered by us), without undue delay and in any event not later than 14 days from the day on which we are informed about your decision to withdraw from this contract.",
-      "content2": "We may withhold reimbursement until we have received the goods back or you have supplied evidence of having sent back the goods, whichever is the earliest."
-    },
-    "exceptions": {
-      "title": "Exclusion of Right of Withdrawal",
-      "intro": "The right of withdrawal does not exist for:",
-      "items": {
-        "perishable": "Contracts for the supply of goods which are not pre-manufactured and for the manufacture of which an individual selection or determination by the consumer is decisive",
-        "custom": "Contracts for the supply of goods which are liable to deteriorate or expire rapidly",
-        "urgent": "Contracts for the supply of sealed goods which are not suitable for return due to health protection or hygiene reasons, if their seal has been removed after delivery",
-        "sealed": "Contracts which provide for immediate performance and where the trader has confirmed that he has begun the performance after the consumer has exercised his right of withdrawal"
-      }
-    },
-    "modelForm": {
-      "title": "Model Withdrawal Form",
-      "intro": "If you wish to withdraw from the contract, please complete and return this form:",
-      "to": "To:",
-      "content": "I/We (*) hereby give notice that I/We (*) withdraw from my/our (*) contract of sale of the following goods (*)/ for the supply of the following service (*):",
-      "bookingNumber": "Ordered on (*)/ received on (*):",
-      "customerName": "Name of consumer(s):",
-      "customerAddress": "Address of consumer(s):",
-      "customerEmail": "Email address of consumer(s):",
-      "customerPhone": "Phone number of consumer(s):"
-    }
   }
 }

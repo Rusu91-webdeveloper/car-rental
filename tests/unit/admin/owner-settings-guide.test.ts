@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide"
+import { buildOwnerSettingsGuide, businessProfileReadiness } from "@/lib/admin/owner-settings-guide"
 import type { ConfigurationOverview } from "@/lib/business-configuration/workflow-service"
 
 type GuideOverview = Pick<
@@ -8,8 +8,16 @@ type GuideOverview = Pick<
 >
 
 const company = {
-  companyName: "City Drive Rentals",
+  companyName: "Qujo Autovermietung GmbH",
   companyEmail: "hello@city-drive.example",
+  companyPhone: "+49 30 5550100",
+  companyAddress: "Beispielweg 8",
+  companyCity: "Berlin",
+  companyZipCode: "10117",
+  companyCountry: "Deutschland",
+  managingDirector: "Erika Beispiel",
+  commercialRegister: "HRB 987654 B",
+  registerCourt: "Amtsgericht Charlottenburg",
   bankName: "City Bank",
   accountName: "City Drive Rentals",
   accountNumber: "100200300",
@@ -35,6 +43,20 @@ function overview(overrides: Partial<GuideOverview> = {}): GuideOverview {
 }
 
 describe("owner settings guide", () => {
+  it("reports the exact registered business details that still need attention", () => {
+    const readiness = businessProfileReadiness({
+      ...company,
+      companyName: "Carssss",
+      commercialRegister: "",
+    })
+
+    expect(readiness).toEqual({
+      complete: false,
+      missingFields: ["registered business name", "commercial register number"],
+    })
+    expect(businessProfileReadiness(company)).toEqual({ complete: true, missingFields: [] })
+  })
+
   it("treats demo placeholders as unfinished setup", () => {
     const guide = buildOwnerSettingsGuide({
       company: {
@@ -96,19 +118,20 @@ describe("owner settings guide", () => {
     const hrefs = guide.steps.map((step) => step.href)
 
     expect(hrefs).toEqual([
-      "/admin/settings/profile",
-      "/admin/bookings/settings/duration",
-      "/admin/bookings/settings/insurance",
-      "/admin/bookings/settings/flow",
-      "/admin/bookings/driver-rules",
-      "/admin/customers/settings",
-      "/admin/documents/settings",
-      "/admin/payments",
-      "/admin/settings/notifications",
-      "/admin/settings/legal",
+      "/admin/settings?step=business-profile",
+      "/admin/settings?step=rental-rules",
+      "/admin/settings?step=insurance",
+      "/admin/settings?step=booking-flow",
+      "/admin/settings?step=driver-rules",
+      "/admin/settings?step=customer-information",
+      "/admin/settings?step=documents",
+      "/admin/settings?step=payments",
+      "/admin/settings?step=customer-messages",
+      "/admin/settings?step=legal",
     ])
     expect(new Set(hrefs).size).toBe(hrefs.length)
     expect(hrefs).not.toContain("/admin/bookings/settings")
+    expect(hrefs.every((href) => href.startsWith("/admin/settings?step="))).toBe(true)
   })
 
   it("selects the first unfinished step while keeping completed steps editable", () => {
@@ -159,6 +182,23 @@ describe("owner settings guide", () => {
       "business-basics",
       "booking-experience",
       "payments-communication",
+    ])
+  })
+
+  it("provides German copy for the owner setup when the admin locale is German", () => {
+    const guide = buildOwnerSettingsGuide({ company, overview: overview(), locale: "de" })
+
+    expect(guide.steps.map(({ title }) => title)).toEqual([
+      "Unternehmensdaten",
+      "Mietregeln und Steuern",
+      "Versicherung",
+      "Buchungsschritte für Kunden",
+      "Fahrerregeln",
+      "Kundeninformationen",
+      "Erforderliche Dokumente",
+      "Zahlungen und Kautionen",
+      "Kundennachrichten",
+      "Mietbedingungen und Datenschutz",
     ])
   })
 })

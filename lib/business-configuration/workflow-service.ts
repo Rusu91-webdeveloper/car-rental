@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { calculatePricing } from "@/lib/pricing/engine"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
 import { money } from "@/lib/pricing/money"
 import {
   CONFIGURATION_DOMAIN_IDS,
@@ -19,8 +20,13 @@ import { databaseUserHasCapability } from "@/lib/authorization/database-capabili
 import { resolveEffectiveBookingFields } from "@/lib/booking-configuration/field-resolver"
 import { validateBookingWorkflow } from "@/lib/booking-configuration/workflow"
 import { loadPhase6ConfigurationPage } from "@/lib/phase6-admin/service"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
-const IMPLEMENTED_PAYMENT_METHODS = ["BOOKING_REQUEST", "BANK_TRANSFER", "CASH_ON_PICKUP"] as const
+const IMPLEMENTED_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH_ON_PICKUP"] as const
 
 export interface FleetCoverageSummary {
   totalVehicles: number
@@ -269,23 +275,24 @@ export async function loadConfigurationOverview(options?: {
   includeAudit?: boolean
 }): Promise<ConfigurationOverview> {
   const repository = new PrismaBusinessConfigurationRepository(options?.db ?? prisma)
-  const [
-    activeRelease,
-    draftRelease,
-    vehicles,
-    legalEvidence,
-    recentAuditEvents,
-    pricingDraftEvidence,
-    phase6DraftEvidence,
-  ] = await Promise.all([
+  // Keep each read batch below the production Prisma pool limit. This overview is
+  // rendered alongside the admin layout, so an unbounded fan-out can otherwise
+  // starve authentication and step-specific queries on serverless instances.
+  const [activeRelease, draftRelease, vehicles] = await Promise.all([
     repository.findActiveRelease(),
     repository.findLatestDraftRelease(),
     repository.listBookableVehicles(),
+  ])
+  const [legalEvidence, recentAuditEvents, pricingDraftEvidence] = await Promise.all([
     repository.listPublishedLegalEvidence(),
     options?.includeAudit === false ? [] : repository.listRecentConfigurationEvents(20),
     repository.findLatestPricingDraftEvidence(),
-    loadPhase6ConfigurationPage(options?.db ?? prisma),
   ])
+  const phase6DraftEvidence = await loadPhase6ConfigurationPage(options?.db ?? prisma, {
+    activeRelease,
+    draftRelease,
+    bookableVehicles: vehicles,
+  })
   const changed = changedDomains(activeRelease, draftRelease)
   const pricingDraftIsIndependent = Boolean(
     pricingDraftEvidence && pricingDraftEvidence.pricingVersionId !== draftRelease?.versions["pricing-billing"].id,
@@ -315,6 +322,9 @@ export async function loadConfigurationOverview(options?: {
             businessTimeZone: "UTC",
             currency: pricingDraftEvidence.fleetRateSet.currency,
             supportedLocales: ["en"],
+            weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS,
+            openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS,
+            handoverPolicy: DEFAULT_HANDOVER_POLICY,
           },
         },
         fleetRateSet: pricingDraftEvidence.fleetRateSet,
@@ -326,6 +336,23 @@ export async function loadConfigurationOverview(options?: {
         ...fleetIssues(pricingEvidenceRelease, vehicles),
       ])
     : undefined
+  const validationForDomain = (domain: ConfigurationDomainId) => {
+    const releaseIssues = validation?.issues.filter((issue) => issue.domain === domain) ?? []
+    const evidenceIssues = domain === "pricing-billing"
+      ? (pricingEvidenceValidation?.issues ?? [])
+      : domain in phase6DraftByDomain && phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain]
+        ? phase6DraftEvidence.issues.filter((issue) => issue.domain === domain)
+        : []
+    if (!validation && evidenceIssues.length === 0) return undefined
+
+    const unique = new Map(
+      [...releaseIssues, ...evidenceIssues].map((issue) => [
+        `${issue.domain}:${issue.code}:${issue.field ?? ""}:${issue.affectedResource ?? ""}`,
+        issue,
+      ]),
+    )
+    return configurationValidationResult([...unique.values()])
+  }
   const health = evaluateConfigurationHealth(
     CONFIGURATION_DOMAIN_IDS.map((domain) => ({
       domain,
@@ -340,14 +367,7 @@ export async function loadConfigurationOverview(options?: {
               )
             : Boolean(activeRelease?.versions[domain] || draftRelease?.versions[domain]),
       hasDraftChanges: changed.includes(domain),
-      validation:
-        domain === "pricing-billing" && pricingEvidenceValidation
-          ? pricingEvidenceValidation
-          : domain in phase6DraftByDomain && phase6DraftByDomain[domain as keyof typeof phase6DraftByDomain]
-            ? configurationValidationResult(phase6DraftEvidence.issues.filter((issue) => issue.domain === domain))
-            : validation
-              ? configurationValidationResult(validation.issues.filter((issue) => issue.domain === domain))
-              : undefined,
+      validation: validationForDomain(domain),
       adminRoute: routeFor(domain),
     })),
   )
@@ -548,7 +568,11 @@ export async function validateDraftRelease(releaseId: string, actorId: string, d
       }
       return { release: updated, result, snapshot }
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   )
 }
 
@@ -595,7 +619,11 @@ function pricingExamples(release: ReleaseAggregate) {
       : config.mixedDurationStrategy === "LOWEST_VALID_TOTAL"
         ? "LOWEST_VALID_PRICE"
         : "DAILY_ONLY"
-  return [1, 7, 10, 30].map((days) => {
+  const configuredMinimumDays = config.minimumChargeDays
+  const exampleDays = [...new Set([configuredMinimumDays, 7, 10, 30])].filter(
+    (days) => days >= configuredMinimumDays,
+  )
+  return exampleDays.map((days) => {
     const pickupAt = new Date("2030-01-01T10:00:00.000Z")
     const returnAt = new Date(pickupAt.getTime() + days * 86_400_000)
     const quote = calculatePricing({
@@ -614,7 +642,10 @@ function pricingExamples(release: ReleaseAggregate) {
       persistentStrategy: config.mixedDurationStrategy,
       monthDefinition: config.rentalMonthDefinition,
       billableDayMethod: config.billableDayRule,
-      minimumRentalMinutes: config.minimumRentalMinutes,
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        config.minimumRentalMinutes,
+        config.minimumChargeDays,
+      ),
       minimumChargeDays: config.minimumChargeDays,
       gracePeriodMinutes: config.gracePeriodMinutes,
       taxTreatment: config.pricesIncludeTax ? "TAX_INCLUDED" : "TAX_EXCLUDED",
@@ -829,7 +860,11 @@ export async function activateDraftRelease(input: {
           status: "ACTIVE" as const,
         }
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 10_000,
+        timeout: 30_000,
+      },
     )
   } catch (error) {
     if (error instanceof ConfigurationWorkflowError) throw error

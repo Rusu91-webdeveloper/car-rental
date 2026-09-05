@@ -12,7 +12,7 @@ import { DateFilter } from "@/components/date-filter"
 import { NavigationMenu } from "@/components/navigation-menu"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { ClientOnly } from "@/components/client-only"
-import { config } from "@/lib/config"
+import { BrandMark } from "@/components/brand-mark"
 import { formatCents } from "@/lib/money"
 import { filterCarsByAvailability } from "@/app/actions/cars"
 import { useRouter, usePathname } from "@/navigation"
@@ -22,7 +22,8 @@ interface Car {
   name: string
   nameDe?: string | null
   category: string
-  price: number
+  price: number | null
+  pricingPublished: boolean
   image: string
   status: string
   subtitle?: string | null
@@ -45,11 +46,15 @@ export function HomeClient({
   user,
   savedCarIds,
   signInUrl,
+  pickupLocation,
+  businessTimeZone,
 }: {
   cars: Car[]
   user: { name: string; email: string; role: string } | null
   savedCarIds: string[]
   signInUrl: string
+  pickupLocation: string | null
+  businessTimeZone: string
 }) {
   const t = useTranslations()
   const locale = useLocale()
@@ -116,7 +121,7 @@ export function HomeClient({
 
         if (result.error) {
           console.error(result.error)
-          setFilteredCars(filtered)
+          setFilteredCars([])
           return
         }
 
@@ -134,8 +139,11 @@ export function HomeClient({
   }
 
   const featuredCar = cars[0]
-  const totalCars = cars.length
-  const categoryCount = new Set(cars.map((car) => car.category)).size
+  const bookableCars = cars.filter(
+    (car) => car.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK"),
+  )
+  const totalCars = bookableCars.length
+  const categoryCount = new Set(bookableCars.map((car) => car.category)).size
   const averageRating = cars.length
     ? cars.reduce((sum, car) => sum + car.rating, 0) / cars.length
     : 0
@@ -152,7 +160,7 @@ export function HomeClient({
     ? getLocalizedText(featuredCar.subtitle ?? "", featuredCar.subtitleDe)
     : ""
   const featuredCategoryKey = featuredCar ? featuredCar.category.toLowerCase() : ""
-  const featuredCategoryLabel = featuredCar ? t(`categories.${featuredCategoryKey}` as any) : ""
+  const featuredCategoryLabel = featuredCar ? t(`categories.${featuredCategoryKey}`) : ""
   const highlightItems = [
     {
       key: "insurance",
@@ -195,164 +203,250 @@ export function HomeClient({
       ),
     },
   ]
-  const trustHeadline =
-    locale === "de" ? "Premium Mobilitat fur Deutschland" : "Premium Mobility for Germany"
+  const trustHeadline = locale === "de" ? "Verlässlich unterwegs" : "Reliable on every journey"
   const trustDescription =
     locale === "de"
-      ? "Stilvolles Flotten-Design, transparente Preise und schnelle Verfugbarkeit fur Ihre Fahrten."
-      : "Elegant fleet design, transparent pricing, and fast availability for your trips."
-  const curatedLabel = locale === "de" ? "Kuratiertes Fahrerlebnis" : "Curated Driving Experience"
+      ? "Gepflegte Fahrzeuge, nachvollziehbare Preise und ein persönlicher Ansprechpartner."
+      : "Well-kept vehicles, understandable pricing and a personal point of contact."
+  const curatedLabel = locale === "de" ? "Für Ihren Anlass" : "Made for your plans"
   const curatedDescription =
     locale === "de"
-      ? "Entdecken Sie handverlesene Fahrzeuge fur Business, Urlaub und besondere Momente."
-      : "Discover handpicked vehicles for business, holidays, and unforgettable moments."
+      ? "Passende Fahrzeuge für Business, Alltag, Urlaub und besondere Momente."
+      : "The right vehicles for business, everyday life, holidays and special moments."
   const noFeaturedVehicleText =
-    locale === "de" ? "Neue Fahrzeuge folgen in Kurze." : "New vehicles are arriving soon."
-  const inventoryLabel = locale === "de" ? "Live-Inventar" : "Live Inventory"
+    locale === "de" ? "Neue Fahrzeuge folgen in Kürze." : "New vehicles are arriving soon."
+  const inventoryLabel = locale === "de" ? "Ihre Mietdaten" : "Your rental dates"
   const availabilityLabel =
-    locale === "de" ? "Verfugbarkeit fur Ihre Reisedaten" : "Availability for your travel dates"
-  const premiumCollectionLabel = locale === "de" ? "Premium Kollektion" : "Premium Collection"
+    locale === "de" ? "Verfügbarkeit für Ihren gewünschten Zeitraum" : "Availability for your preferred dates"
+  const premiumCollectionLabel = locale === "de" ? "Darauf können Sie zählen" : "What you can count on"
   const ctaBannerTitle =
-    locale === "de" ? "Bereit fur Ihre nachste Premium-Fahrt?" : "Ready for your next premium drive?"
+    locale === "de" ? "Bereit für Ihre nächste Fahrt?" : "Ready for your next drive?"
   const ctaBannerSubtitle =
     locale === "de"
-      ? "Wahlen Sie Ihr Fahrzeug, sichern Sie Ihre Daten und starten Sie stressfrei."
-      : "Choose your vehicle, lock your dates, and get on the road with zero friction."
-  const ctaBannerButton = locale === "de" ? "Fahrzeugauswahl starten" : "Start Selecting Cars"
+      ? "Wählen Sie Ihr Fahrzeug und senden Sie Ihre Buchungsanfrage in wenigen Schritten."
+      : "Choose your vehicle and send your booking request in just a few steps."
+  const ctaBannerButton = locale === "de" ? "Fahrzeug auswählen" : "Choose a vehicle"
+  const mobileLocationLabel = locale === "de" ? "Abholort" : "Pick-up location"
+  const mobileLocation =
+    pickupLocation ??
+    (locale === "de" ? "Abholdetails bei der Buchung" : "Pick-up details confirmed during booking")
+  const mobileSearchLabel = locale === "de" ? "Verfügbare Fahrzeuge finden" : "Find available cars"
+  const mobileCategoryOptions = [
+    { value: "ALL", label: t("categories.all") },
+    { value: "SUV", label: t("categories.suv") },
+    { value: "LUXURY", label: t("categories.luxury") },
+    { value: "ELECTRIC", label: t("categories.electric") },
+  ]
+
+  const scrollToInventory = () => {
+    document.getElementById("available-cars")?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.12),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(14,165,233,0.12),transparent_55%)] pb-24">
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-6">
-            <NavigationMenu user={user} isAdmin={user?.role === "ADMIN"} signInUrl={signInUrl} />
-            <Link href="/" className="group flex items-center gap-2 font-semibold text-primary">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" />
-                </svg>
-              </span>
-              <span className="hidden text-lg tracking-tight sm:inline">RentCar</span>
+    <div className="qujo-page pb-24">
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#13251d]/95 backdrop-blur-xl md:border-black/[0.06] md:bg-[#f8f7f2]/90">
+        <div className="qujo-container flex h-[4.6rem] items-center justify-between">
+          <BrandMark inverted className="md:hidden" />
+          <BrandMark className="hidden md:inline-flex" />
+
+          <nav className="hidden items-center gap-7 text-sm font-semibold md:flex" aria-label={t("navigation.primary")}>
+            <Link href="/cars" className="text-foreground/65 transition-colors hover:text-foreground">
+              {t("navigation.cars")}
             </Link>
-          </div>
+            <Link href="/about" className="text-foreground/65 transition-colors hover:text-foreground">
+              {t("navigation.about")}
+            </Link>
+            <Link href="/help" className="text-foreground/65 transition-colors hover:text-foreground">
+              {t("navigation.help")}
+            </Link>
+          </nav>
 
           <div className="flex items-center gap-2">
             <ClientOnly>
               <LanguageSwitcher />
             </ClientOnly>
-            <Link href={user ? "/profile" : signInUrl}>
-              <button className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/70 transition-colors hover:bg-muted">
+            <Link href={user ? "/profile" : signInUrl} className="hidden sm:block">
+              <button className="flex h-10 items-center justify-center rounded-full border border-black/10 bg-white px-3.5 text-sm font-semibold transition-colors hover:border-black/20 hover:bg-[#f3f1e9]">
                 {user ? (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-700 text-sm font-semibold text-white">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                 ) : (
-                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      fill="#34A853"
-                    />
-                    <path
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      fill="#EA4335"
-                    />
-                  </svg>
+                  <span>{locale === "de" ? "Anmelden" : "Sign in"}</span>
                 )}
               </button>
             </Link>
+            <NavigationMenu user={user} isAdmin={user?.role === "ADMIN"} signInUrl={signInUrl} />
           </div>
         </div>
       </header>
 
       <main className="relative overflow-hidden">
-        <div
-          className="pointer-events-none absolute right-[-10%] top-[-10%] h-[28rem] w-[28rem] rounded-full bg-primary/15 blur-3xl"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none absolute bottom-[-15%] left-[-12%] h-[30rem] w-[30rem] rounded-full bg-sky-300/20 blur-3xl"
-          aria-hidden="true"
-        />
+        <section className="relative overflow-hidden bg-[#13251d] pb-20 text-white md:hidden">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%]" aria-hidden="true">
+            {featuredCar ? (
+              <img
+                src={featuredCar.image || "/placeholder.jpg"}
+                alt=""
+                className="h-full w-full object-cover object-center"
+              />
+            ) : (
+              <div className="h-full w-full bg-[#1a3026]" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#13251d] via-[#13251d]/35 to-black/15" />
+          </div>
 
-        <section className="px-4 pb-8 pt-8 sm:pt-10">
-          <div className="mx-auto max-w-6xl space-y-8">
-            <div className="grid gap-7 lg:grid-cols-[1.1fr,0.9fr]">
+          <div className="relative mx-auto min-h-[43rem] max-w-lg px-4 pt-7">
+            <div className="inline-flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[#cbe85d]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#cbe85d]" aria-hidden="true" />
+              {t("home.kicker")}
+            </div>
+            <h1 className="mt-3 max-w-[20rem] text-[2.45rem] font-black leading-[0.98] tracking-[-0.06em]">
+              {t("home.title")}
+            </h1>
+
+            <div className="mt-6 rounded-[1.65rem] border border-white/15 bg-white p-4 text-foreground shadow-[0_28px_70px_-28px_rgba(0,0,0,0.75)]">
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={locale === "de" ? "Fahrzeugklasse" : "Vehicle class"}>
+                {mobileCategoryOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedCategory(option.value)}
+                    aria-pressed={selectedCategory === option.value}
+                    className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold transition-colors ${
+                      selectedCategory === option.value
+                        ? "bg-[#13251d] text-white"
+                        : "bg-[#f1f2ed] text-foreground/70 hover:bg-[#e7e9e2]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-black/10 bg-white px-4">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef2e8] text-primary" aria-hidden="true">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21s7-5.2 7-12a7 7 0 10-14 0c0 6.8 7 12 7 12z" />
+                    <circle cx="12" cy="9" r="2.25" strokeWidth="2" />
+                  </svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium text-muted-foreground">{mobileLocationLabel}</span>
+                  <span className="mt-0.5 block truncate text-[0.95rem] font-bold">{mobileLocation}</span>
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-[#f7f7f3] p-3">
+                <ClientOnly>
+                  <DateFilter
+                    businessTimeZone={businessTimeZone}
+                    pickupDate={pickupDateParam}
+                    dropoffDate={dropoffDateParam}
+                    onPickupDateChange={handlePickupDateChange}
+                    onDropoffDateChange={handleDropoffDateChange}
+                    onClear={handleClearDates}
+                    compact
+                  />
+                </ClientOnly>
+              </div>
+
+              <button
+                type="button"
+                onClick={scrollToInventory}
+                className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#cbe85d] px-5 text-sm font-extrabold text-[#13251d] shadow-[0_14px_30px_-18px_rgba(76,104,29,0.8)] transition-transform active:scale-[0.99]"
+              >
+                {mobileSearchLabel}
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M5 12h14m-5-5 5 5-5 5" />
+                </svg>
+              </button>
+
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 px-1 text-xs font-medium text-foreground/65">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-primary text-[0.6rem] text-white">✓</span>
+                  {t("home.highlights.insurance")}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="grid h-4 w-4 place-items-center rounded-full bg-primary text-[0.6rem] text-white">✓</span>
+                  {t("home.highlights.support")}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="hidden px-4 pb-8 pt-5 sm:px-6 sm:pt-7 md:block lg:px-8">
+          <div className="mx-auto max-w-7xl space-y-7">
+            <div className="grid gap-8 overflow-hidden rounded-[2rem] bg-[#13251d] p-6 text-white shadow-[0_32px_80px_-42px_rgba(19,37,29,0.8)] sm:p-9 lg:grid-cols-[1.08fr_0.92fr] lg:p-11">
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-background/75 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.26em] text-primary">
-                  <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.23em] text-[#cbe85d]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#cbe85d]" aria-hidden="true" />
                   {t("home.kicker")}
                 </div>
-                <h1 className="text-balance text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
+                <h1 className="max-w-3xl text-balance text-4xl font-extrabold leading-[0.98] tracking-[-0.055em] sm:text-5xl lg:text-[4.15rem]">
                   {t("home.title")}
                 </h1>
-                <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">{t("home.subtitle")}</p>
+                <p className="max-w-2xl text-base leading-relaxed text-white/66 sm:text-lg">{t("home.subtitle")}</p>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{trustHeadline}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">{trustDescription}</p>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#cbe85d]">{trustHeadline}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-white/60">{trustDescription}</p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/80 p-4 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{curatedLabel}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">{curatedDescription}</p>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#cbe85d]">{curatedLabel}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-white/60">{curatedDescription}</p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <Link
                     href="/cars"
-                    className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-primary/30 transition-transform duration-300 hover:-translate-y-0.5 hover:bg-primary-hover"
+                    className="inline-flex items-center justify-center rounded-xl bg-[#cbe85d] px-5 py-3 text-sm font-bold text-[#13251d] transition-transform duration-300 hover:-translate-y-0.5 hover:bg-[#d9f477]"
                   >
                     {t("home.ctaPrimary")}
                   </Link>
                   <Link
                     href="/about"
-                    className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+                    className="inline-flex items-center justify-center rounded-xl border border-white/18 bg-white/[0.06] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                   >
                     {t("home.ctaSecondary")}
                   </Link>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                  <div className="border-l border-white/14 px-3 sm:px-4">
                     <p className="text-lg font-bold sm:text-2xl">{formattedCarCount}</p>
-                    <p className="text-xs text-muted-foreground">{t("home.stats.cars")}</p>
+                    <p className="text-xs text-white/50">{t("home.stats.cars")}</p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                  <div className="border-l border-white/14 px-3 sm:px-4">
                     <p className="text-lg font-bold sm:text-2xl">{formattedCategoryCount}</p>
-                    <p className="text-xs text-muted-foreground">{t("home.stats.categories")}</p>
+                    <p className="text-xs text-white/50">{t("home.stats.categories")}</p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/90 p-3 shadow-sm sm:p-4">
+                  <div className="border-l border-white/14 px-3 sm:px-4">
                     <div className="flex items-center gap-1 text-lg font-bold sm:text-2xl">
                       <span>{formattedRating}</span>
                       <svg className="h-4 w-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.448a1 1 0 00-.364 1.118l1.287 3.956c.3.921-.755 1.688-1.54 1.118l-3.37-2.448a1 1 0 00-1.176 0l-3.37 2.448c-.784.57-1.838-.197-1.539-1.118l1.286-3.956a1 1 0 00-.364-1.118L2.02 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.286-3.957z" />
                       </svg>
                     </div>
-                    <p className="text-xs text-muted-foreground">{t("home.stats.rating")}</p>
+                    <p className="text-xs text-white/50">{t("home.stats.rating")}</p>
                   </div>
                 </div>
               </div>
 
               <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4" style={{ animationDelay: "120ms" }}>
-                <div className="relative overflow-hidden rounded-[1.8rem] border border-border/60 bg-card shadow-2xl shadow-primary/15">
+                <div className="relative min-h-[28rem] overflow-hidden rounded-[1.55rem] border border-white/10 bg-[#1a3026] shadow-2xl">
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
                   {featuredCar ? (
                     <img
                       src={featuredCar.image || "/placeholder.jpg"}
                       alt={featuredName}
-                      className="h-[26rem] w-full object-cover"
+                      className="h-[29rem] w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-[26rem] items-center justify-center bg-muted text-muted-foreground">
+                    <div className="flex h-[29rem] items-center justify-center bg-white/5 text-white/60">
                       {noFeaturedVehicleText}
                     </div>
                   )}
@@ -366,8 +460,12 @@ export function HomeClient({
                       <div>
                         <p className="text-xs uppercase tracking-[0.16em] text-white/70">{featuredCategoryLabel}</p>
                         <p className="text-xl font-semibold">
-                          {featuredCar ? formatCents(featuredCar.price) : ""}
-                          <span className="ml-1 text-sm text-white/80">/ {t("car.pricePerDay")}</span>
+                          {featuredCar?.pricingPublished && featuredCar.price !== null
+                            ? formatCents(featuredCar.price)
+                            : t("car.priceComingSoon")}
+                          {featuredCar?.pricingPublished ? (
+                            <span className="ml-1 text-sm text-white/80">/ {t("car.pricePerDay")}</span>
+                          ) : null}
                         </p>
                       </div>
                       {featuredCar ? (
@@ -384,8 +482,8 @@ export function HomeClient({
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
-              <div className="rounded-3xl border border-border/60 bg-background/85 p-5 shadow-xl backdrop-blur">
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="qujo-panel p-5 sm:p-6">
                 <div className="mb-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{inventoryLabel}</p>
                   <h2 className="mt-1 text-xl font-bold">{t("home.searchTitle")}</h2>
@@ -393,6 +491,7 @@ export function HomeClient({
                 </div>
                 <ClientOnly>
                   <DateFilter
+                    businessTimeZone={businessTimeZone}
                     pickupDate={pickupDateParam}
                     dropoffDate={dropoffDateParam}
                     onPickupDateChange={handlePickupDateChange}
@@ -408,18 +507,18 @@ export function HomeClient({
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-border/60 bg-gradient-to-br from-background to-primary/5 p-5 shadow-lg">
+              <div className="qujo-panel bg-[#eef2e8] p-5 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{premiumCollectionLabel}</p>
                 <div className="mt-3 space-y-2">
                   {highlightItems.map((item) => (
                     <div
                       key={item.key}
-                      className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/70 p-3"
+                      className="flex items-center gap-3 rounded-xl border border-black/[0.06] bg-white/70 p-3"
                     >
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#13251d] text-[#cbe85d]">
                         {item.icon}
                       </span>
-                      <span className="text-sm font-medium">{t(`home.highlights.${item.key}` as any)}</span>
+                      <span className="text-sm font-medium">{t(`home.highlights.${item.key}`)}</span>
                     </div>
                   ))}
                 </div>
@@ -428,14 +527,14 @@ export function HomeClient({
           </div>
         </section>
 
-        <section className="px-4 pb-4">
-          <div className="mx-auto max-w-6xl rounded-3xl border border-border/60 bg-background/70 p-2 backdrop-blur">
+        <section className="hidden px-4 pb-4 md:block">
+          <div className="mx-auto max-w-7xl rounded-2xl border border-black/[0.07] bg-white p-2 shadow-sm">
             <CategoryFilter selected={selectedCategory} onSelect={setSelectedCategory} />
           </div>
         </section>
 
-        <section className="px-4 pb-10">
-          <div className="mx-auto max-w-6xl">
+        <section id="available-cars" className="scroll-mt-24 px-4 pb-10 pt-7 md:pt-0">
+          <div className="mx-auto max-w-7xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-bold sm:text-2xl">{t("home.popularCars")}</h2>
               <Link href="/cars" className="inline-flex items-center gap-2 text-primary text-sm font-semibold">
@@ -468,16 +567,16 @@ export function HomeClient({
         </section>
 
         <section className="px-4 pb-10">
-          <div className="mx-auto max-w-6xl rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/10 via-sky-100/40 to-transparent p-6 sm:p-8">
+          <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.6rem] bg-[#13251d] p-6 text-white sm:p-8">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("home.featured.title")}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#cbe85d]">{t("home.featured.title")}</p>
                 <h3 className="mt-1 text-2xl font-black sm:text-3xl">{ctaBannerTitle}</h3>
-                <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{ctaBannerSubtitle}</p>
+                <p className="mt-2 max-w-2xl text-sm text-white/60 sm:text-base">{ctaBannerSubtitle}</p>
               </div>
               <Link
                 href="/cars"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-transform hover:-translate-y-0.5 hover:bg-primary-hover"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#cbe85d] px-5 py-3 text-sm font-bold text-[#13251d] transition-transform hover:-translate-y-0.5 hover:bg-[#d9f477]"
               >
                 {ctaBannerButton}
               </Link>

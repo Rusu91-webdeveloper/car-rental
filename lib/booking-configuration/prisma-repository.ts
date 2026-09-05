@@ -1,10 +1,19 @@
 import type { ConfigurationDbClient } from "@/lib/business-configuration/prisma-repository"
 import type {
   BookingWorkflowConfiguration,
+  BusinessHoursException,
   CustomerDriverRequirementsConfiguration,
+  HandoverPolicy,
   InsuranceConfiguration,
   LegalAcceptanceConfiguration,
+  PaymentConfiguration,
 } from "@/lib/business-configuration/domains"
+import type { WeeklyOpeningHours } from "@/lib/business-configuration/domains"
+import {
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
 
 export interface ActiveLegalDocumentRecord {
   id: string
@@ -29,7 +38,14 @@ export interface ActivePhase6Record {
   releaseNumber: number
   releaseValidationStatus: string
   businessTimeZone: string
+  weeklyOpeningHours: WeeklyOpeningHours
+  openingHoursExceptions: BusinessHoursException[]
+  handoverPolicy: HandoverPolicy
   currency: string
+  minimumRentalMinutes: number
+  minimumChargeDays: number
+  gracePeriodMinutes: number
+  preparationBufferMinutes: number
   insuranceVersionId: string
   insuranceVersionStatus: string
   insuranceValidationStatus: string
@@ -42,6 +58,10 @@ export interface ActivePhase6Record {
   workflowVersionStatus: string
   workflowValidationStatus: string
   workflow: BookingWorkflowConfiguration
+  paymentVersionId: string
+  paymentVersionStatus: string
+  paymentValidationStatus: string
+  payment: PaymentConfiguration
   legalVersionId: string
   legalVersionStatus: string
   legalValidationStatus: string
@@ -60,6 +80,7 @@ export class PrismaBookingConfigurationRepository {
       where: { status: "ACTIVE" },
       include: {
         generalRentalConfig: true,
+        pricingBillingConfig: true,
         insuranceConfig: {
           include: {
             version: true,
@@ -71,6 +92,7 @@ export class PrismaBookingConfigurationRepository {
         },
         customerDriverConfig: { include: { version: true, fieldRules: true } },
         bookingWorkflowConfig: { include: { version: true, stepRules: true } },
+        paymentConfig: { include: { version: true, methods: true, instructions: true } },
         legalAcceptanceConfig: {
           include: {
             version: true,
@@ -91,7 +113,14 @@ export class PrismaBookingConfigurationRepository {
       releaseNumber: release.releaseNumber,
       releaseValidationStatus: release.validationStatus,
       businessTimeZone: release.generalRentalConfig.businessTimeZone,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(release.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(release.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy),
       currency: release.generalRentalConfig.currency,
+      minimumRentalMinutes: release.pricingBillingConfig.minimumRentalMinutes,
+      minimumChargeDays: release.pricingBillingConfig.minimumChargeDays,
+      gracePeriodMinutes: release.pricingBillingConfig.gracePeriodMinutes,
+      preparationBufferMinutes: release.pricingBillingConfig.preparationBufferMinutes,
       insuranceVersionId: release.insuranceConfigVersionId,
       insuranceVersionStatus: release.insuranceConfig.version.status,
       insuranceValidationStatus: release.insuranceConfig.version.validationStatus,
@@ -130,6 +159,18 @@ export class PrismaBookingConfigurationRepository {
           requirement: mode,
           displayOrder,
         })),
+      },
+      paymentVersionId: release.paymentConfigVersionId,
+      paymentVersionStatus: release.paymentConfig.version.status,
+      paymentValidationStatus: release.paymentConfig.version.validationStatus,
+      payment: {
+        defaultMethod: release.paymentConfig.defaultMethod,
+        confirmationMode: release.paymentConfig.confirmationMode,
+        depositMode: release.paymentConfig.depositType,
+        depositValue: release.paymentConfig.depositValue,
+        remainingBalanceRule: release.paymentConfig.remainingBalanceRule,
+        methods: release.paymentConfig.methods,
+        instructions: release.paymentConfig.instructions,
       },
       legalVersionId: release.legalAcceptanceConfigVersionId,
       legalVersionStatus: release.legalAcceptanceConfig.version.status,

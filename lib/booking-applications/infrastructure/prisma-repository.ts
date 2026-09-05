@@ -8,6 +8,25 @@ import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-el
 import { PrismaBookingConfigurationRepository } from "@/lib/booking-configuration/prisma-repository"
 import { quoteConfiguredVehicleRental } from "@/lib/booking-configuration/quote-service"
 import { PrismaPricingContextRepository } from "@/lib/pricing/prisma-repository"
+import { enqueueInitialBookingNotifications } from "@/lib/booking-notifications"
+import {
+  hasBankTransferLeadTime,
+  requiresAdvanceBankTransfer,
+  resolveAdvancePaymentDueAt,
+} from "@/lib/booking-payment-timing"
+import {
+  hasMinimumPickupLeadTime,
+  isHandoverTimeAllowed,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import {
+  effectiveMinimumRentalMinutes,
+  isRentalDurationTooShort,
+} from "@/lib/booking-configuration/minimum-rental"
+import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
+import { calculateConfiguredDeposit, resolveBookingPaymentPolicy } from "@/lib/booking-payment-policy"
 import type { BookingPricingQuote } from "@/lib/pricing/types"
 import type {
   ApplicationMutationInput,
@@ -15,8 +34,14 @@ import type {
   BookingApplicationView,
   CreateBookingApplicationInput,
 } from "../domain"
+import {
+  bookingApplicationExpiresAt,
+  isApplicationFinalizationTimeValid,
+  isCarLifecycleBookable,
+} from "../domain"
 import { applicationError, BookingApplicationError } from "../errors"
 import { mapApplicationLocationToBooking } from "../mapping"
+import { selectLatestDocumentAttempts } from "../document-view"
 import type { BookingApplicationRepository } from "../repository"
 
 type Db = PrismaClient | Prisma.TransactionClient
@@ -27,8 +52,6 @@ const ACTIVE = [
   "CUSTOMER_ACTION_REQUIRED",
   "READY_TO_FINALIZE",
 ] as const
-const HOUR = 3_600_000
-const DAY = 24 * HOUR
 
 const applicationInclude = {
   customerDriver: true,
@@ -46,12 +69,13 @@ const applicationInclude = {
   documentUploadSession: {
     include: {
       customerDocuments: {
-        where: { isCurrent: true },
+        where: { deletionStatus: { not: "DELETED" as const } },
         include: { documentType: true },
         orderBy: [
           { documentTypeId: "asc" as const },
           { slotNumber: "asc" as const },
           { side: "asc" as const },
+          { attemptNumber: "desc" as const },
         ],
       },
     },
@@ -82,6 +106,7 @@ function mapView(row: LoadedApplication): BookingApplicationView {
     locale: row.locale,
     pickupAt: row.pickupAt,
     returnAt: row.returnAt,
+    businessTimeZone: row.businessTimeZone,
     pickupLocation: row.pickupLocation,
     returnLocation: row.returnLocation,
     status: row.status,
@@ -128,7 +153,7 @@ function mapView(row: LoadedApplication): BookingApplicationView {
         }
       : undefined,
     documents:
-      row.documentUploadSession?.customerDocuments.map((document) => ({
+      selectLatestDocumentAttempts(row.documentUploadSession?.customerDocuments ?? []).map((document) => ({
         id: document.id,
         documentTypeId: document.documentTypeId,
         documentTypeKey: document.documentType.key,
@@ -203,7 +228,7 @@ async function touch(
 
 function configuredPaymentMethod(method: "TRANSFER" | "PAY_AT_PICKUP") {
   return method === "TRANSFER"
-    ? (["BANK_TRANSFER", "BOOKING_REQUEST"] as const)
+    ? (["BANK_TRANSFER"] as const)
     : (["CASH_ON_PICKUP"] as const)
 }
 
@@ -298,12 +323,7 @@ async function refreshPaymentDeposit(
 ) {
   if (!row.paymentSelection) return
   const selection = row.paymentSelection
-  const amount =
-    selection.depositType === "NONE"
-      ? 0
-      : selection.depositType === "FIXED_AMOUNT"
-        ? selection.depositValue
-        : Math.round((quote.grandTotal * selection.depositValue) / 10_000)
+  const amount = calculateConfiguredDeposit(quote.grandTotal, selection.depositType, selection.depositValue)
   await db.bookingApplicationPaymentSelection.update({
     where: { bookingApplicationId: row.id },
     data: {
@@ -343,16 +363,103 @@ export class PrismaBookingApplicationRepository
         }
         const release = await tx.businessConfigurationRelease.findFirst({
           where: { status: "ACTIVE" },
-          include: { generalRentalConfig: true },
+          include: {
+            generalRentalConfig: true,
+            pricingBillingConfig: true,
+            paymentConfig: { include: { methods: true } },
+          },
         })
         if (!release)
           applicationError(
             "APPLICATION_CONFIGURATION_UNAVAILABLE",
             "No active booking configuration is available.",
           )
-        const expiresAt = new Date(
-          Date.now() + Math.min(7 * DAY, Math.max(HOUR, input.expiresInMs ?? 2 * DAY)),
+        const weeklyOpeningHours = normalizeWeeklyOpeningHours(
+          release.generalRentalConfig.weeklyOpeningHours,
         )
+        const openingHoursExceptions = normalizeOpeningHoursExceptions(
+          release.generalRentalConfig.openingHoursExceptions,
+        )
+        const handoverPolicy = normalizeHandoverPolicy(release.generalRentalConfig.handoverPolicy)
+        if (!isHandoverTimeAllowed(input.pickupAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "PICKUP"))
+          applicationError(
+            "APPLICATION_OUTSIDE_OPENING_HOURS",
+            "Pick-up must be during the rental company's opening hours.",
+          )
+        if (!isHandoverTimeAllowed(input.returnAt, release.generalRentalConfig.businessTimeZone, weeklyOpeningHours, openingHoursExceptions, handoverPolicy, "RETURN"))
+          applicationError(
+            "APPLICATION_OUTSIDE_OPENING_HOURS",
+            "Return must be during the rental company's opening hours.",
+          )
+        if (!hasMinimumPickupLeadTime(input.pickupAt, handoverPolicy))
+          applicationError(
+            "APPLICATION_INSUFFICIENT_LEAD_TIME",
+            "Pick-up does not meet the rental company's minimum advance-booking time.",
+          )
+        const minimumRentalMinutes = effectiveMinimumRentalMinutes(
+          release.pricingBillingConfig.minimumRentalMinutes,
+          release.pricingBillingConfig.minimumChargeDays,
+        )
+        if (isRentalDurationTooShort(input.pickupAt, input.returnAt, minimumRentalMinutes))
+          applicationError(
+            "APPLICATION_NOT_READY",
+            "The selected rental is shorter than the configured minimum rental period.",
+          )
+        await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${input.carId} FOR UPDATE`
+        const car = await tx.car.findUnique({
+          where: { id: input.carId },
+          select: { isDeleted: true, status: true },
+        })
+        if (!car || !isCarLifecycleBookable(car))
+          applicationError(
+            "APPLICATION_VEHICLE_UNAVAILABLE",
+            "The vehicle is not currently available for booking.",
+          )
+        if (!(await isCarAvailable(input.carId, input.pickupAt, input.returnAt, { db: tx })))
+          applicationError(
+            "APPLICATION_VEHICLE_UNAVAILABLE",
+            "The vehicle is no longer available for the selected period.",
+          )
+        // Capacity is shared across the fleet, so serialize the final check for
+        // concurrent applications involving different cars.
+        // `$queryRaw` attempts to deserialize PostgreSQL's `void` return value
+        // and fails with Prisma P2010. We only need the lock side effect.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(2026072821)`
+        const capacity = await evaluateRentalHandoverCapacity({
+          db: tx,
+          pickupAt: input.pickupAt,
+          returnAt: input.returnAt,
+          policy: handoverPolicy,
+        })
+        if (!capacity.pickupAvailable)
+          applicationError(
+            "APPLICATION_HANDOVER_CAPACITY_REACHED",
+            "The selected pick-up slot has reached its handover capacity.",
+          )
+        if (!capacity.returnAvailable)
+          applicationError(
+            "APPLICATION_HANDOVER_CAPACITY_REACHED",
+            "The selected return slot has reached its handover capacity.",
+          )
+        const requiredMode = input.paymentMethod === "TRANSFER" ? "BANK_TRANSFER" : "CASH_ON_PICKUP"
+        if (!release.paymentConfig.methods.some((method) => method.method === requiredMode && method.enabled))
+          applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
+        if (
+          requiresAdvanceBankTransfer({
+            paymentMethod: input.paymentMethod,
+            depositType: release.paymentConfig.depositType,
+          }) &&
+          !hasBankTransferLeadTime(input.pickupAt)
+        )
+          applicationError(
+            "APPLICATION_PAYMENT_INVALID",
+            "An advance bank transfer requires at least 48 hours before pick-up. Choose an available payment method or select a later pick-up time.",
+          )
+        const expiresAt = bookingApplicationExpiresAt({
+          now: new Date(),
+          pickupAt: input.pickupAt,
+          requestedLifetimeMs: input.expiresInMs,
+        })
         const created = await tx.bookingApplication.create({
           data: {
             customerUserId: input.customerUserId,
@@ -584,12 +691,7 @@ export class PrismaBookingApplicationRepository
       if (!config || !method)
         applicationError("APPLICATION_PAYMENT_INVALID", "Selected payment method is unavailable.")
       const total = row.pricingQuotes[0]?.grandTotal ?? 0
-      const deposit =
-        config.depositType === "NONE"
-          ? 0
-          : config.depositType === "FIXED_AMOUNT"
-            ? config.depositValue
-            : Math.round((total * config.depositValue) / 10_000)
+      const deposit = calculateConfiguredDeposit(total, config.depositType, config.depositValue)
       const methodInstructions = config.instructions.filter(
         (value) => value.method === method.method,
       )
@@ -611,6 +713,9 @@ export class PrismaBookingApplicationRepository
           quotedDepositAmount: deposit,
           quotedDepositRateBps:
             config.depositType === "PERCENTAGE_BPS" ? config.depositValue : null,
+          remainingBalanceRule: config.remainingBalanceRule,
+          instructionLocale: instruction?.locale,
+          instructionText: instruction?.instructions,
           currency: row.pricingQuotes[0]?.currency ?? "EUR",
           selectedAt: new Date(),
         },
@@ -622,6 +727,9 @@ export class PrismaBookingApplicationRepository
           quotedDepositAmount: deposit,
           quotedDepositRateBps:
             config.depositType === "PERCENTAGE_BPS" ? config.depositValue : null,
+          remainingBalanceRule: config.remainingBalanceRule,
+          instructionLocale: instruction?.locale,
+          instructionText: instruction?.instructions,
           currency: row.pricingQuotes[0]?.currency ?? "EUR",
           selectedAt: new Date(),
           revision: revision + 1,
@@ -747,8 +855,9 @@ export class PrismaBookingApplicationRepository
         applicationError("APPLICATION_REVISION_CONFLICT", "Application revision is stale.")
       const hasPending = row.documentUploadSession?.customerDocuments.some(
         (document) =>
-          document.isCurrent &&
-          ["PENDING_REVIEW", "APPROVED"].includes(document.manualReviewStatus),
+          document.deletionStatus === "RETAINED" &&
+          (document.manualReviewStatus === "PENDING_REVIEW" ||
+            (document.isCurrent && document.manualReviewStatus === "APPROVED")),
       )
       if (!hasPending)
         applicationError(
@@ -757,6 +866,118 @@ export class PrismaBookingApplicationRepository
         )
       await touch(tx, input, { status: "AWAITING_DOCUMENT_REVIEW" })
       return mapView((await load(tx, row.id))!)
+    })
+  }
+
+  async reconcileConfirmedQuoteAfterReview(applicationId: string) {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "BookingApplication" WHERE id = ${applicationId} FOR UPDATE`
+      const row = await load(tx, applicationId)
+      if (!row)
+        applicationError("APPLICATION_NOT_FOUND", "Application not found.")
+      if (row.status !== "AWAITING_DOCUMENT_REVIEW")
+        return "NOT_APPLICABLE" as const
+
+      const current = row.pricingQuotes[0]
+      const now = new Date()
+      if (row.expiresAt <= now)
+        return "NOT_APPLICABLE" as const
+      if (current?.expiresAt && current.expiresAt > now)
+        return "VALID" as const
+      if (
+        !current?.confirmedAt ||
+        current.confirmedByUserId !== row.customerUserId
+      )
+        return "NOT_APPLICABLE" as const
+
+      const activeRelease = await tx.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      })
+      if (activeRelease?.id !== row.configurationReleaseId) {
+        await tx.bookingApplication.update({
+          where: { id: row.id },
+          data: {
+            status: "CUSTOMER_ACTION_REQUIRED",
+            actionRequiredReason: "CONFIGURATION_CHANGED",
+            actionRequiredAt: now,
+            revision: { increment: 1 },
+          },
+        })
+        await tx.auditEvent.create({
+          data: {
+            category: "BOOKING",
+            action: "booking_application.review_quote_configuration_changed",
+            targetType: "BookingApplication",
+            targetId: row.id,
+            configurationReleaseId: row.configurationReleaseId,
+          },
+        })
+        return "CUSTOMER_ACTION_REQUIRED" as const
+      }
+
+      const configured = await authoritativeQuote(tx, row)
+      const priceUnchanged =
+        current.grandTotal === configured.quote.grandTotal &&
+        current.configurationReleaseId ===
+          configured.quote.source.configurationReleaseId
+
+      await tx.bookingApplicationPricingQuote.update({
+        where: { id: current.id },
+        data: { isCurrent: false },
+      })
+      const renewed = await tx.bookingApplicationPricingQuote.create({
+        data: quoteData(
+          row,
+          configured.quote,
+          current.quoteVersion + 1,
+          current.id,
+          priceUnchanged,
+        ),
+      })
+      await refreshPaymentDeposit(tx, row, configured.quote)
+
+      if (!priceUnchanged) {
+        await tx.bookingApplication.update({
+          where: { id: row.id },
+          data: {
+            status: "CUSTOMER_ACTION_REQUIRED",
+            actionRequiredReason: "PRICE_CHANGED",
+            actionRequiredAt: now,
+            revision: { increment: 1 },
+          },
+        })
+        await tx.auditEvent.create({
+          data: {
+            category: "BOOKING",
+            action: "booking_application.review_quote_price_changed",
+            targetType: "BookingApplication",
+            targetId: row.id,
+            configurationReleaseId: row.configurationReleaseId,
+            metadata: {
+              previousQuoteVersion: current.quoteVersion,
+              renewedQuoteVersion: renewed.quoteVersion,
+            },
+          },
+        })
+        return "CUSTOMER_ACTION_REQUIRED" as const
+      }
+
+      await tx.auditEvent.create({
+        data: {
+          category: "BOOKING",
+          action: "booking_application.confirmed_quote_renewed_after_review",
+          targetType: "BookingApplication",
+          targetId: row.id,
+          configurationReleaseId: row.configurationReleaseId,
+          metadata: {
+            previousQuoteVersion: current.quoteVersion,
+            renewedQuoteVersion: renewed.quoteVersion,
+            grandTotalUnchanged: true,
+          },
+        },
+      })
+      return "RENEWED" as const
     })
   }
 
@@ -851,7 +1072,7 @@ export class PrismaBookingApplicationRepository
   ) {
     const reason = input.reason as Prisma.BookingApplicationUpdateManyMutationInput["actionRequiredReason"]
     await touch(this.db, input, {
-      status: "CUSTOMER_ACTION_REQUIRED",
+      status: input.reason === "DOCUMENT_REPLACEMENT_REQUIRED" ? "AWAITING_DOCUMENT_UPLOAD" : "CUSTOMER_ACTION_REQUIRED",
       actionRequiredReason: reason,
       actionRequiredAt: new Date(),
     })
@@ -898,14 +1119,41 @@ export class PrismaBookingApplicationRepository
           if (row.customerUserId !== input.customerUserId)
             applicationError("APPLICATION_ACCESS_DENIED", "Application belongs to another customer.")
           if (row.status === "FINALIZED") return mapView(row)
+          if (!isApplicationFinalizationTimeValid(row))
+            applicationError(
+              "APPLICATION_EXPIRED",
+              "This application expired before the rental could be finalized.",
+            )
           if (row.revision !== input.expectedRevision || row.status !== "READY_TO_FINALIZE")
             applicationError("APPLICATION_REVISION_CONFLICT", "Application is not at the expected ready revision.")
           await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${row.carId} FOR UPDATE`
-          if (!(await isCarAvailable(row.carId, row.pickupAt, row.returnAt, undefined, tx)))
+          const car = await tx.car.findUnique({
+            where: { id: row.carId },
+            select: { isDeleted: true, status: true },
+          })
+          if (!car || !isCarLifecycleBookable(car))
+            applicationError(
+              "APPLICATION_VEHICLE_UNAVAILABLE",
+              "The vehicle is not currently available for booking.",
+            )
+          if (!(await isCarAvailable(row.carId, row.pickupAt, row.returnAt, {
+            excludeBookingApplicationId: row.id,
+            db: tx,
+          })))
             applicationError("APPLICATION_VEHICLE_UNAVAILABLE", "The vehicle is no longer available.")
           const activeRelease = await tx.businessConfigurationRelease.findFirst({
             where: { status: "ACTIVE" },
-            select: { id: true },
+            select: {
+              id: true,
+              generalRentalConfig: {
+                select: {
+                  businessTimeZone: true,
+                  weeklyOpeningHours: true,
+                  openingHoursExceptions: true,
+                  handoverPolicy: true,
+                },
+              },
+            },
           })
           if (activeRelease?.id !== row.configurationReleaseId) {
             await tx.bookingApplication.update({
@@ -919,6 +1167,38 @@ export class PrismaBookingApplicationRepository
             })
             return mapView((await load(tx, row.id))!)
           }
+          const weeklyOpeningHours = normalizeWeeklyOpeningHours(
+            activeRelease.generalRentalConfig.weeklyOpeningHours,
+          )
+          const openingHoursExceptions = normalizeOpeningHoursExceptions(
+            activeRelease.generalRentalConfig.openingHoursExceptions,
+          )
+          const handoverPolicy = normalizeHandoverPolicy(
+            activeRelease.generalRentalConfig.handoverPolicy,
+          )
+          if (
+            !isHandoverTimeAllowed(
+              row.pickupAt,
+              activeRelease.generalRentalConfig.businessTimeZone,
+              weeklyOpeningHours,
+              openingHoursExceptions,
+              handoverPolicy,
+              "PICKUP",
+            ) ||
+            !isHandoverTimeAllowed(
+              row.returnAt,
+              activeRelease.generalRentalConfig.businessTimeZone,
+              weeklyOpeningHours,
+              openingHoursExceptions,
+              handoverPolicy,
+              "RETURN",
+            ) ||
+            !hasMinimumPickupLeadTime(row.pickupAt, handoverPolicy)
+          )
+            applicationError(
+              "APPLICATION_EXPIRED",
+              "The rental timing is no longer valid. Start a new booking application.",
+            )
           const calculated = await authoritativeQuote(tx, row)
           const accepted = row.pricingQuotes[0]
           if (!accepted || accepted.grandTotal !== calculated.quote.grandTotal) {
@@ -949,6 +1229,39 @@ export class PrismaBookingApplicationRepository
           const payment = row.paymentSelection
           if (!customer?.firstName || !customer.lastName || !customer.email || !insurance || !payment)
             applicationError("APPLICATION_NOT_READY", "Application evidence is incomplete.")
+          const policy = resolveBookingPaymentPolicy({
+            total: calculated.quote.grandTotal,
+            paymentMethod: row.paymentMethod,
+            depositType: payment.depositType,
+            depositValue: payment.depositValue,
+          })
+          const { depositAmount, advancePaymentAmount, requiresAdvance, remainingBalanceRule } = policy
+          const paymentDueAt = requiresAdvance
+            ? resolveAdvancePaymentDueAt({ pickupAt: row.pickupAt })
+            : null
+          if (requiresAdvance && !paymentDueAt)
+            applicationError(
+              "APPLICATION_PAYMENT_INVALID",
+              "There is no longer enough time to verify an advance bank transfer before pick-up. Start a new booking with an available payment method or a later pick-up time.",
+            )
+          const company = await tx.companySettings.findUnique({ where: { id: "company-settings" } })
+          if (requiresAdvance && (!company?.accountName.trim() || !company.iban?.trim()))
+            applicationError(
+              "APPLICATION_PAYMENT_INVALID",
+              "The owner must configure an account holder and IBAN before advance payments can be accepted.",
+            )
+          if (
+            !company?.companyName.trim() ||
+            !company.companyEmail.trim() ||
+            !company.companyPhone?.trim() ||
+            !company.companyAddress?.trim() ||
+            !company.companyZipCode?.trim() ||
+            !company.companyCity?.trim() ||
+            !company.companyCountry?.trim()
+          ) applicationError(
+            "APPLICATION_PAYMENT_INVALID",
+            "The owner must complete the company contact and pickup address before bookings can be confirmed.",
+          )
           const booking = await tx.booking.create({
             data: {
               userId: row.customerUserId,
@@ -956,19 +1269,57 @@ export class PrismaBookingApplicationRepository
               locale: row.locale,
               pickupDate: row.pickupAt,
               dropoffDate: row.returnAt,
+              businessTimeZone: row.businessTimeZone,
               location: mapApplicationLocationToBooking(row),
               pricePerDay: calculated.quote.sourceDailyRate,
               totalDays: calculated.quote.chargeableDuration.chargeableDays,
               totalPrice: calculated.quote.grandTotal,
-              depositAmount: payment.quotedDepositAmount,
+              depositAmount,
+              advancePaymentAmount,
               guaranteeAmount: calculated.quote.payment.guaranteeAmount,
               transferCode: randomBytes(4).toString("hex").toUpperCase(),
               bookingNumber: `BK${Date.now().toString().slice(-8)}${randomBytes(2).toString("hex").toUpperCase()}`,
-              status: "PENDING",
+              status: requiresAdvance ? "PENDING" : "CONFIRMED",
               paymentStatus: "PENDING",
               paymentMethod: row.paymentMethod,
+              confirmedAt: requiresAdvance ? null : new Date(),
+              paymentDueAt,
             },
           })
+          await tx.bookingPaymentPolicySnapshot.create({
+            data: {
+              bookingId: booking.id,
+              paymentConfigVersionId: payment.paymentConfigVersionId,
+              configuredPaymentMode: payment.configuredPaymentMode,
+              bookingPaymentMethod: payment.bookingPaymentMethod,
+              depositType: payment.depositType,
+              depositValue: payment.depositValue,
+              depositRateBps: payment.quotedDepositRateBps,
+              depositAmount,
+              advancePaymentAmount,
+              remainingBalanceRule,
+              instructionLocale: payment.instructionLocale ?? row.locale,
+              instructionText: payment.instructionText,
+              accountName: company?.accountName,
+              iban: company?.iban,
+              bic: company?.swiftCode,
+              bankName: company?.bankName,
+              companyName: company?.companyName,
+              companyEmail: company?.companyEmail,
+              companyPhone: company?.companyPhone,
+              companyAddress: company?.companyAddress,
+              companyPostalCode: company?.companyZipCode,
+              companyCity: company?.companyCity,
+              companyCountry: company?.companyCountry,
+            },
+          })
+          await enqueueInitialBookingNotifications(
+            tx,
+            booking.id,
+            booking.bookingNumber,
+            booking.paymentMethod,
+            requiresAdvance,
+          )
           await tx.bookingPricingSnapshot.create({
             data: {
               bookingId: booking.id,
@@ -1097,7 +1448,11 @@ export class PrismaBookingApplicationRepository
           })
           return mapView((await load(tx, row.id))!)
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 10_000,
+          timeout: 30_000,
+        },
       )
     } catch (error) {
       if (error instanceof BookingApplicationError) throw error

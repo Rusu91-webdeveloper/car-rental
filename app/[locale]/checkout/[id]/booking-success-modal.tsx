@@ -3,6 +3,7 @@
 import { formatCents } from "@/lib/money"
 import { Button } from "@/components/ui/button"
 import { BOOKING_PAYMENT_WINDOW_HOURS } from "@/lib/constants"
+import { useTranslations } from "next-intl"
 
 interface BookingSuccessModalProps {
   bookingNumber: string
@@ -51,6 +52,7 @@ export function BookingSuccessModal({
   paymentDetails,
   onClose,
 }: BookingSuccessModalProps) {
+  const t = useTranslations("checkout")
   const depositPercent = Math.round(depositRateBps / 100)
   const guaranteePercent = Math.round(guaranteeRateBps / 100)
   const remainingAtPickup = Math.max(totalPrice - depositAmount, 0)
@@ -310,8 +312,8 @@ export function BookingSuccessModal({
             View My Bookings
           </Button>
 
-          <p className="text-xs text-center text-muted-foreground">
-            A confirmation email has been sent with all the details above.
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+            {t("confirmationEmail")}
           </p>
         </div>
       </div>

@@ -7,6 +7,19 @@ import { createAdminUserSchema, setUserActiveStatusSchema } from "@/lib/validati
 import { isCarAvailable } from "@/lib/availability"
 import { Prisma } from "@prisma/client"
 import { z } from "zod"
+import {
+  hasMinimumPickupLeadTime,
+  isHandoverTimeAllowed,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import { evaluateRentalHandoverCapacity } from "@/lib/handover-capacity"
+import { isCarLifecycleBookable } from "@/lib/booking-applications/domain"
+import {
+  effectiveMinimumRentalMinutes,
+  isRentalDurationTooShort,
+} from "@/lib/booking-configuration/minimum-rental"
 
 const MANUAL_RESERVATION_PREFIX = "manual_reservation::"
 
@@ -57,13 +70,17 @@ export async function getAdminStats() {
     await requireAdmin()
     await runBookingLifecycleMaintenance()
 
-    const [totalBookings, totalCars, totalUsers, totalRevenue, recentBookings] = await Promise.all([
+    const [totalBookings, totalCars, totalUsers, receivedRevenue, refundedRevenue, recentBookings] = await Promise.all([
       prisma.booking.count(),
       prisma.car.count({ where: { isDeleted: false } }),
       prisma.user.count(),
-      prisma.booking.aggregate({
-        where: { paymentStatus: "PAID" },
-        _sum: { totalPrice: true },
+      prisma.payment.aggregate({
+        where: { status: "PAID", kind: "RECEIPT" },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: { status: "REFUNDED", kind: "REFUND" },
+        _sum: { amount: true },
       }),
       prisma.booking.findMany({
         take: 10,
@@ -85,7 +102,7 @@ export async function getAdminStats() {
         totalBookings,
         totalCars,
         totalUsers,
-        totalRevenue: totalRevenue._sum.totalPrice || 0,
+        totalRevenue: (receivedRevenue._sum.amount || 0) - (refundedRevenue._sum.amount || 0),
       },
       bookingsByStatus,
       recentBookings,
@@ -401,14 +418,46 @@ export async function createManualReservation(data: unknown) {
     const pickupDate = new Date(validated.pickupDate)
     const dropoffDate = new Date(validated.dropoffDate)
 
-    const car = await prisma.car.findUnique({
-      where: { id: validated.carId },
-      select: { id: true, name: true, isDeleted: true },
-    })
+    const [car, activeRelease] = await Promise.all([
+      prisma.car.findUnique({
+        where: { id: validated.carId },
+        select: { id: true, name: true, isDeleted: true, status: true },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: {
+          generalRentalConfig: { select: {
+            businessTimeZone: true,
+            weeklyOpeningHours: true,
+            openingHoursExceptions: true,
+            handoverPolicy: true,
+          } },
+          pricingBillingConfig: {
+            select: { minimumRentalMinutes: true, minimumChargeDays: true },
+          },
+        },
+      }),
+    ])
 
-    if (!car || car.isDeleted) {
-      return { error: "Car not found" }
+    if (!car || !isCarLifecycleBookable(car)) {
+      return { error: "Car is not currently bookable" }
     }
+    if (!activeRelease) return { error: "Active booking configuration not found" }
+    const weeklyOpeningHours = normalizeWeeklyOpeningHours(activeRelease.generalRentalConfig.weeklyOpeningHours)
+    const exceptions = normalizeOpeningHoursExceptions(activeRelease.generalRentalConfig.openingHoursExceptions)
+    const handoverPolicy = normalizeHandoverPolicy(activeRelease.generalRentalConfig.handoverPolicy)
+    if (!isHandoverTimeAllowed(pickupDate, activeRelease.generalRentalConfig.businessTimeZone, weeklyOpeningHours, exceptions, handoverPolicy, "PICKUP"))
+      return { error: "Pick-up must be during the configured pickup windows" }
+    if (!isHandoverTimeAllowed(dropoffDate, activeRelease.generalRentalConfig.businessTimeZone, weeklyOpeningHours, exceptions, handoverPolicy, "RETURN"))
+      return { error: "Return must be during the configured return windows" }
+    if (!hasMinimumPickupLeadTime(pickupDate, handoverPolicy))
+      return { error: "Pick-up does not meet the configured minimum booking notice" }
+    const minimumRentalMinutes = effectiveMinimumRentalMinutes(
+      activeRelease.pricingBillingConfig.minimumRentalMinutes,
+      activeRelease.pricingBillingConfig.minimumChargeDays,
+    )
+    if (isRentalDurationTooShort(pickupDate, dropoffDate, minimumRentalMinutes))
+      return { error: "The reservation is shorter than the configured minimum rental period" }
 
     const reservationReason = encodeManualReservationReason({
       customerName: validated.customerName,
@@ -419,11 +468,23 @@ export async function createManualReservation(data: unknown) {
     const blockedDate = await prisma.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${validated.carId} FOR UPDATE`
-        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, undefined, tx)
+        const lockedCar = await tx.car.findUnique({
+          where: { id: validated.carId },
+          select: { isDeleted: true, status: true },
+        })
+        if (!lockedCar || !isCarLifecycleBookable(lockedCar)) {
+          throw new Error("Car is not currently bookable")
+        }
+        const stillAvailable = await isCarAvailable(validated.carId, pickupDate, dropoffDate, { db: tx })
 
         if (!stillAvailable) {
           throw new Error("Car is not available for the selected date range")
         }
+
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(2026072821)`
+        const capacity = await evaluateRentalHandoverCapacity({ db: tx, pickupAt: pickupDate, returnAt: dropoffDate, policy: handoverPolicy })
+        if (!capacity.pickupAvailable) throw new Error("The selected pick-up slot has reached its handover capacity")
+        if (!capacity.returnAvailable) throw new Error("The selected return slot has reached its handover capacity")
 
         const createdBlockedDate = await tx.blockedDate.create({
           data: {

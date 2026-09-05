@@ -89,15 +89,16 @@ adminEmails: [
 
 ### Step 3: Set Up Email (Optional but Recommended)
 
-For automated emails, you need an email service. **Resend** is recommended (free tier available).
+For automated emails, use a dedicated Gmail or Google Workspace mailbox.
 
-1. Go to https://resend.com and create account
-2. Get your API key
+1. Enable 2-Step Verification on the Google account.
+2. Create a 16-character Google App Password.
 3. Add to `.env.local`:
 
 ```env
-RESEND_API_KEY=re_your_api_key_here
-EMAIL_FROM="Your Car Rental <noreply@yourdomain.com>"
+GMAIL_SMTP_USER=bookings@example.com
+GMAIL_SMTP_APP_PASSWORD=<16-character-google-app-password>
+EMAIL_FROM="Qujo Autovermietung GmbH <bookings@example.com>"
 ```
 
 **Without email setup**: System still works, but no automated emails are sent. You'll need to manually contact customers.
@@ -229,4 +230,3 @@ Check the full documentation in `MANUAL_PAYMENT_SYSTEM.md`
 
 **System Status**: 🟢 **READY FOR PRODUCTION**  
 **Created**: ${new Date().toLocaleDateString()}
-

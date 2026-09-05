@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import Link from "@/navigation"
-import { useRouter, usePathname } from "@/navigation"
+import { usePathname } from "@/navigation"
 import { locales } from "@/i18n"
 import { signOut } from "next-auth/react"
-import { useTranslations, useLocale } from "next-intl"
+import { useTranslations } from "next-intl"
+import { useLocaleSwitch } from "@/hooks/use-locale-switch"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -19,6 +20,21 @@ interface NavigationMenuProps {
   user: { name: string; email: string } | null
   isAdmin: boolean
   signInUrl: string
+}
+
+function NavigationIcon({ children, active }: { children: React.ReactNode; active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors duration-200",
+        active
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-border/60 bg-background text-muted-foreground group-hover:border-border group-hover:text-foreground",
+      )}
+    >
+      {children}
+    </span>
+  )
 }
 
 function NavigationMenu({ user, isAdmin, signInUrl }: NavigationMenuProps) {
@@ -42,8 +58,7 @@ function NavigationMenuContent({
   handleLogout: () => void
 }) {
   const t = useTranslations()
-  const locale = useLocale()
-  const router = useRouter()
+  const { locale, switchLocale } = useLocaleSwitch()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -52,27 +67,7 @@ function NavigationMenuContent({
     de: "Deutsch",
   }
 
-  const switchLocale = (newLocale: string) => {
-    if (newLocale === locale) {
-      return
-    }
-    router.push(pathname, { locale: newLocale })
-  }
-
   const isActive = (path: string) => pathname === path
-
-  const Icon = ({ children, active }: { children: React.ReactNode; active: boolean }) => (
-    <span
-      className={cn(
-        "grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors duration-200",
-        active
-          ? "border-primary/30 bg-primary/10 text-primary"
-          : "border-border/60 bg-background text-muted-foreground group-hover:border-border group-hover:text-foreground"
-      )}
-    >
-      {children}
-    </span>
-  )
 
   const menuItemClasses = (active: boolean, tone: "default" | "admin" = "default") =>
     cn(
@@ -92,7 +87,7 @@ function NavigationMenuContent({
             "hover:bg-background hover:shadow-md",
             open && "border-primary/35 bg-primary/5 shadow-primary/20"
           )}
-          aria-label="Open navigation menu"
+          aria-label={t("navigation.openMenu")}
           aria-expanded={open}
         >
           <span className="relative block h-4 w-5" aria-hidden="true">
@@ -128,7 +123,7 @@ function NavigationMenuContent({
             onClick={() => setOpen(false)}
             className={menuItemClasses(isActive("/"))}
           >
-            <Icon active={isActive("/")}>
+            <NavigationIcon active={isActive("/")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -137,7 +132,7 @@ function NavigationMenuContent({
                   d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
                 />
               </svg>
-            </Icon>
+            </NavigationIcon>
             <span className="font-medium">{t("navigation.home")}</span>
           </Link>
         </DropdownMenuItem>
@@ -148,7 +143,7 @@ function NavigationMenuContent({
             onClick={() => setOpen(false)}
             className={menuItemClasses(isActive("/cars"))}
           >
-            <Icon active={isActive("/cars")}>
+            <NavigationIcon active={isActive("/cars")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -157,7 +152,7 @@ function NavigationMenuContent({
                   d="M5 16l-1 4a1 1 0 001 1h1m0 0h12m-12 0a2 2 0 104 0m8 0a2 2 0 104 0m-1-4l-1-4m-14 4h16M6 8h12l1 4H5l1-4z"
                 />
               </svg>
-            </Icon>
+            </NavigationIcon>
             <span className="font-medium">{t("navigation.cars")}</span>
           </Link>
         </DropdownMenuItem>
@@ -172,7 +167,7 @@ function NavigationMenuContent({
                 onClick={() => setOpen(false)}
                 className={menuItemClasses(isActive("/bookings"))}
               >
-                <Icon active={isActive("/bookings")}>
+                <NavigationIcon active={isActive("/bookings")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -181,7 +176,7 @@ function NavigationMenuContent({
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                     />
                   </svg>
-                </Icon>
+                </NavigationIcon>
                 <span className="font-medium">{t("bookings.title")}</span>
               </Link>
             </DropdownMenuItem>
@@ -192,7 +187,7 @@ function NavigationMenuContent({
                 onClick={() => setOpen(false)}
                 className={menuItemClasses(isActive("/saved"))}
               >
-                <Icon active={isActive("/saved")}>
+                <NavigationIcon active={isActive("/saved")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -201,7 +196,7 @@ function NavigationMenuContent({
                       d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
                     />
                   </svg>
-                </Icon>
+                </NavigationIcon>
                 <span className="font-medium">{t("saved.title")}</span>
               </Link>
             </DropdownMenuItem>
@@ -212,7 +207,7 @@ function NavigationMenuContent({
                 onClick={() => setOpen(false)}
                 className={menuItemClasses(isActive("/profile"))}
               >
-                <Icon active={isActive("/profile")}>
+                <NavigationIcon active={isActive("/profile")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -221,7 +216,7 @@ function NavigationMenuContent({
                       d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                     />
                   </svg>
-                </Icon>
+                </NavigationIcon>
                 <span className="font-medium">{t("navigation.profile")}</span>
               </Link>
             </DropdownMenuItem>
@@ -236,7 +231,7 @@ function NavigationMenuContent({
             onClick={() => setOpen(false)}
             className={menuItemClasses(isActive("/about"))}
           >
-            <Icon active={isActive("/about")}>
+            <NavigationIcon active={isActive("/about")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -245,7 +240,7 @@ function NavigationMenuContent({
                   d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-            </Icon>
+            </NavigationIcon>
             <span className="font-medium">{t("navigation.about")}</span>
           </Link>
         </DropdownMenuItem>
@@ -256,7 +251,7 @@ function NavigationMenuContent({
             onClick={() => setOpen(false)}
             className={menuItemClasses(isActive("/contact"))}
           >
-            <Icon active={isActive("/contact")}>
+            <NavigationIcon active={isActive("/contact")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -265,7 +260,7 @@ function NavigationMenuContent({
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
-            </Icon>
+            </NavigationIcon>
             <span className="font-medium">{t("navigation.contact")}</span>
           </Link>
         </DropdownMenuItem>
@@ -276,7 +271,7 @@ function NavigationMenuContent({
             onClick={() => setOpen(false)}
             className={menuItemClasses(isActive("/help"))}
           >
-            <Icon active={isActive("/help")}>
+            <NavigationIcon active={isActive("/help")}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -285,7 +280,7 @@ function NavigationMenuContent({
                   d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-            </Icon>
+            </NavigationIcon>
             <span className="font-medium">{t("navigation.help")}</span>
           </Link>
         </DropdownMenuItem>
@@ -300,7 +295,7 @@ function NavigationMenuContent({
                 onClick={() => setOpen(false)}
                 className={menuItemClasses(isActive("/admin"), "admin")}
               >
-                <Icon active={isActive("/admin")}>
+                <NavigationIcon active={isActive("/admin")}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -315,7 +310,7 @@ function NavigationMenuContent({
                       d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                     />
                   </svg>
-                </Icon>
+                </NavigationIcon>
                 <span className="font-semibold">{t("admin.title")}</span>
               </Link>
             </DropdownMenuItem>

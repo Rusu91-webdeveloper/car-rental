@@ -76,6 +76,29 @@ export class VercelBlobPrivateStorageAdapter implements PrivateDocumentStorage {
           !this.config.privateAccessAttested ||
           !this.config.regionAttested));
     if (invalid)
+      console.warn(
+        "[private-documents] Blob provider configuration unavailable",
+        {
+          expectedStorePresent: Boolean(this.config.expectedStoreId),
+          storeIdsMatch:
+            Boolean(this.config.expectedStoreId) &&
+            this.config.expectedStoreId === this.config.actualStoreId,
+          regionMatches: this.config.expectedRegion === "fra1",
+          maximumUploadBytesValid: Number.isFinite(
+            this.config.maximumUploadBytes,
+          ),
+          uploadGrantSecondsValid: Number.isFinite(
+            this.config.uploadGrantSeconds,
+          ),
+          featureEnabled: this.config.featureEnabled,
+          vercelRuntime: this.config.vercelRuntime,
+          oidcAvailable: this.config.oidcAvailable,
+          staticTokenAvailable: this.config.staticTokenAvailable,
+          privateAccessAttested: this.config.privateAccessAttested,
+          regionAttested: this.config.regionAttested,
+        },
+      );
+    if (invalid)
       documentError(
         "DOCUMENT_PROVIDER_STORE_UNAVAILABLE",
         "Private object provider configuration is incomplete.",

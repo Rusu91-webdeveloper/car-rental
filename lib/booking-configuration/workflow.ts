@@ -1,6 +1,7 @@
 import type {
   BookingStepConfiguration,
   BookingWorkflowConfiguration,
+  DocumentPolicyConfiguration,
   InsuranceConfiguration,
   LegalAcceptanceConfiguration,
 } from "@/lib/business-configuration/domains"
@@ -19,6 +20,70 @@ const labels = {
   CONFIRMATION: "Confirmation",
 } as const
 const unavailable = new Set<BookingStepConfiguration["step"]>()
+
+export function synchronizeInsuranceBookingStep(
+  workflow: BookingWorkflowConfiguration,
+  insurance: InsuranceConfiguration,
+): BookingWorkflowConfiguration {
+  const requirement = !insurance.enabled
+    ? "HIDDEN"
+    : insurance.selectionMode === "MANDATORY"
+      ? "REQUIRED"
+      : "OPTIONAL"
+  const current = workflow.steps.find(({ step }) => step === "INSURANCE")
+  if (!current || current.requirement === requirement) return workflow
+
+  return {
+    ...workflow,
+    steps: workflow.steps.map((step) =>
+      step.step === "INSURANCE" ? { ...step, requirement } : step,
+    ),
+  }
+}
+
+export function synchronizeConfiguredBookingSteps(
+  workflow: BookingWorkflowConfiguration,
+  input: {
+    insurance: InsuranceConfiguration
+    documents: DocumentPolicyConfiguration
+    legal: LegalAcceptanceConfiguration
+  },
+): BookingWorkflowConfiguration {
+  const documentRequirement = input.documents.requirements.some(
+    ({ requirement }) => requirement === "REQUIRED",
+  )
+    ? "REQUIRED"
+    : input.documents.requirements.some(({ requirement }) => requirement === "OPTIONAL")
+      ? "OPTIONAL"
+      : "HIDDEN"
+  const legalRequirement = !input.legal.bookingEnforcementEnabled
+    ? "HIDDEN"
+    : [input.legal.termsAcceptance, input.legal.privacyAcknowledgment].includes("REQUIRED")
+      ? "REQUIRED"
+      : "OPTIONAL"
+  const insuranceRequirement = !input.insurance.enabled
+    ? "HIDDEN"
+    : input.insurance.selectionMode === "MANDATORY"
+      ? "REQUIRED"
+      : "OPTIONAL"
+  const requirements = new Map<BookingStepConfiguration["step"], BookingStepConfiguration["requirement"]>([
+    ["INSURANCE", insuranceRequirement],
+    ["DOCUMENTS", documentRequirement],
+    ["LEGAL_ACCEPTANCE", legalRequirement],
+  ])
+  const changed = workflow.steps.some(
+    (step) => requirements.has(step.step) && requirements.get(step.step) !== step.requirement,
+  )
+  if (!changed) return workflow
+
+  return {
+    ...workflow,
+    steps: workflow.steps.map((step) => {
+      const requirement = requirements.get(step.step)
+      return requirement ? { ...step, requirement } : step
+    }),
+  }
+}
 
 export function validateBookingWorkflow(input: {
   workflow: BookingWorkflowConfiguration
@@ -63,17 +128,19 @@ export function validateBookingWorkflow(input: {
         step as BookingStepConfiguration["step"],
         `${labels[step as keyof typeof labels]} is available in a later phase and must remain hidden.`,
       )
-  const legalStep = byStep.get("LEGAL_ACCEPTANCE")
-  const legalEnabled = input.legal?.bookingEnforcementEnabled === true
-  const legalRequired =
-    legalEnabled &&
-    [input.legal?.termsAcceptance, input.legal?.privacyAcknowledgment].includes("REQUIRED")
-  if (!legalEnabled && legalStep?.requirement !== "HIDDEN")
-    blocker("LEGAL_WORKFLOW_CONFLICT", "LEGAL_ACCEPTANCE", "Legal booking enforcement is disabled, so its step must be hidden.")
-  if (legalEnabled && legalStep?.requirement === "HIDDEN")
-    blocker("LEGAL_WORKFLOW_CONFLICT", "LEGAL_ACCEPTANCE", "Legal booking enforcement is enabled, so its step must be visible.")
-  if (legalRequired && legalStep?.requirement !== "REQUIRED")
-    blocker("LEGAL_STEP_REQUIRED", "LEGAL_ACCEPTANCE", "Required legal acknowledgement must use a required step.")
+  if (input.legal) {
+    const legalStep = byStep.get("LEGAL_ACCEPTANCE")
+    const legalEnabled = input.legal.bookingEnforcementEnabled === true
+    const legalRequired =
+      legalEnabled &&
+      [input.legal.termsAcceptance, input.legal.privacyAcknowledgment].includes("REQUIRED")
+    if (!legalEnabled && legalStep?.requirement !== "HIDDEN")
+      blocker("LEGAL_WORKFLOW_CONFLICT", "LEGAL_ACCEPTANCE", "Legal booking enforcement is disabled, so its step must be hidden.")
+    if (legalEnabled && legalStep?.requirement === "HIDDEN")
+      blocker("LEGAL_WORKFLOW_CONFLICT", "LEGAL_ACCEPTANCE", "Legal booking enforcement is enabled, so its step must be visible.")
+    if (legalRequired && legalStep?.requirement !== "REQUIRED")
+      blocker("LEGAL_STEP_REQUIRED", "LEGAL_ACCEPTANCE", "Required legal acknowledgement must use a required step.")
+  }
   const insuranceStep = byStep.get("INSURANCE")
   if (input.insurance.enabled && insuranceStep?.requirement === "HIDDEN")
     blocker("INSURANCE_STEP_REQUIRED", "INSURANCE", "Insurance is enabled, so the Insurance step must be present.")

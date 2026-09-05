@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { LinkLoadingIndicator } from "@/components/admin/link-loading-indicator"
 import { cn } from "@/lib/utils"
 
 const stateMeta: Record<
@@ -62,23 +63,23 @@ const stateMeta: Record<
   },
 }
 
-function continueLabel(step: OwnerSettingsStep) {
-  if (step.state === "attention") return "Fix and continue"
-  if (step.state === "review") return "Review and continue"
-  if (step.state === "in-progress") return "Continue"
-  return "Start this step"
+function continueLabel(step: OwnerSettingsStep, de: boolean) {
+  if (step.state === "attention") return de ? "Korrigieren und weiter" : "Fix and continue"
+  if (step.state === "review") return de ? "Prüfen und weiter" : "Review and continue"
+  if (step.state === "in-progress") return de ? "Fortfahren" : "Continue"
+  return de ? "Diesen Schritt starten" : "Start this step"
 }
 
 function editHref(href: string) {
   return `${href}${href.includes("?") ? "&" : "?"}edit=1`
 }
 
-function PhaseRail({ guide }: { guide: OwnerSettingsGuide }) {
+function PhaseRail({ guide, de }: { guide: OwnerSettingsGuide; de: boolean }) {
   return (
     <Card className="gap-0 py-0 shadow-none lg:sticky lg:top-6">
       <CardHeader className="border-b px-5 py-5">
-        <CardTitle className="text-sm">Your setup</CardTitle>
-        <CardDescription>Complete each part in order.</CardDescription>
+        <CardTitle className="text-sm">{de ? "Ihre Einrichtung" : "Your setup"}</CardTitle>
+        <CardDescription>{de ? "Schließen Sie jeden Bereich der Reihe nach ab." : "Complete each part in order."}</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <ol>
@@ -109,7 +110,7 @@ function PhaseRail({ guide }: { guide: OwnerSettingsGuide }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm font-medium", active && "text-primary")}>{phase.label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{completed} of {steps.length} complete</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{de ? `${completed} von ${steps.length} abgeschlossen` : `${completed} of ${steps.length} complete`}</p>
                 </div>
               </li>
             )
@@ -120,14 +121,14 @@ function PhaseRail({ guide }: { guide: OwnerSettingsGuide }) {
   )
 }
 
-function CompletedSettings({ steps }: { steps: OwnerSettingsStep[] }) {
+function CompletedSettings({ steps, de = false }: { steps: OwnerSettingsStep[]; de?: boolean }) {
   if (steps.length === 0) return null
 
   return (
     <Card className="gap-0 py-0 shadow-none">
       <CardHeader className="border-b px-5 py-5 sm:px-6">
-        <CardTitle className="text-base">Completed settings</CardTitle>
-        <CardDescription>You can change these at any time.</CardDescription>
+        <CardTitle className="text-base">{de ? "Abgeschlossene Einstellungen" : "Completed settings"}</CardTitle>
+        <CardDescription>{de ? "Sie können diese jederzeit ändern." : "You can change these at any time."}</CardDescription>
       </CardHeader>
       <CardContent className="divide-y p-0">
         {steps.map((step) => (
@@ -137,11 +138,11 @@ function CompletedSettings({ steps }: { steps: OwnerSettingsStep[] }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{step.title}</p>
-              <p className="truncate text-xs text-muted-foreground">Complete</p>
+              <p className="truncate text-xs text-muted-foreground">{de ? "Abgeschlossen" : "Complete"}</p>
             </div>
             <Button asChild variant="ghost" size="sm">
               <Link href={editHref(step.href)}>
-                <Pencil className="h-3.5 w-3.5" /> Edit
+                <Pencil className="h-3.5 w-3.5" /> {de ? "Bearbeiten" : "Edit"} <LinkLoadingIndicator />
               </Link>
             </Button>
           </div>
@@ -151,7 +152,7 @@ function CompletedSettings({ steps }: { steps: OwnerSettingsStep[] }) {
   )
 }
 
-function SetupComplete({ guide }: { guide: OwnerSettingsGuide }) {
+function SetupComplete({ guide, de }: { guide: OwnerSettingsGuide; de: boolean }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <Card className="border-emerald-200 bg-emerald-50/40 text-center">
@@ -159,26 +160,34 @@ function SetupComplete({ guide }: { guide: OwnerSettingsGuide }) {
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
             <CheckCircle2 className="h-7 w-7" />
           </span>
-          <CardTitle className="mt-2 text-2xl">Your business settings are complete</CardTitle>
+          <CardTitle className="mt-2 text-2xl">{de ? "Ihre Unternehmenseinstellungen sind vollständig" : "Your business settings are complete"}</CardTitle>
           <CardDescription className="mx-auto max-w-xl text-sm leading-6">
-            Everything required has been set up. You can return here whenever you need to make a change.
+            {de ? "Alle erforderlichen Einstellungen wurden vorgenommen. Sie können jederzeit zurückkehren, um Änderungen vorzunehmen." : "Everything required has been set up. You can return here whenever you need to make a change."}
           </CardDescription>
         </CardHeader>
       </Card>
-      <CompletedSettings steps={guide.steps} />
+      <CompletedSettings steps={guide.steps} de={de} />
     </div>
   )
 }
 
-export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
+export function BusinessSetupGuide({ guide, locale }: { guide: OwnerSettingsGuide; locale?: string }) {
+  const de = locale === "de"
   const currentStep = guide.nextStep
-  if (!currentStep) return <SetupComplete guide={guide} />
+  if (!currentStep) return <SetupComplete guide={guide} de={de} />
 
   const currentIndex = guide.steps.findIndex((step) => step.id === currentStep.id)
   const previousStep = currentIndex > 0 ? guide.steps[currentIndex - 1] : null
   const completedSteps = guide.steps.filter((step) => step.state === "complete")
   const upcomingSteps = guide.steps.slice(currentIndex + 1, currentIndex + 3)
   const meta = stateMeta[currentStep.state]
+  const stateLabel = de ? {
+    complete: "Abgeschlossen",
+    attention: "Aufmerksamkeit erforderlich",
+    review: "Bitte prüfen",
+    "in-progress": "Begonnen",
+    "not-started": "Nicht begonnen",
+  }[currentStep.state] : meta.label
   const StatusIcon = meta.icon
 
   return (
@@ -187,25 +196,25 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
         <CardContent className="space-y-3 px-5 sm:px-6">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-primary">Business setup</p>
-              <p className="mt-1 text-sm text-muted-foreground">Step {currentIndex + 1} of {guide.total}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">{de ? "Unternehmenseinrichtung" : "Business setup"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{de ? `Schritt ${currentIndex + 1} von ${guide.total}` : `Step ${currentIndex + 1} of ${guide.total}`}</p>
             </div>
             <p className="text-2xl font-semibold tracking-tight">{guide.percent}%</p>
           </div>
-          <Progress value={guide.percent} aria-label={`${guide.percent}% complete`} />
+          <Progress value={guide.percent} aria-label={de ? `${guide.percent} % abgeschlossen` : `${guide.percent}% complete`} />
         </CardContent>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
-        <PhaseRail guide={guide} />
+        <PhaseRail guide={guide} de={de} />
 
         <div className="space-y-5">
           <Card className="overflow-hidden border-primary/25 shadow-md shadow-primary/5">
             <CardHeader className="border-b bg-muted/25 px-5 pb-5 sm:px-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-medium text-primary">Step {currentIndex + 1}</p>
+                <p className="text-sm font-medium text-primary">{de ? `Schritt ${currentIndex + 1}` : `Step ${currentIndex + 1}`}</p>
                 <Badge variant="outline" className={meta.className}>
-                  <StatusIcon className="h-3 w-3" /> {meta.label}
+                  <StatusIcon className="h-3 w-3" /> {stateLabel}
                 </Badge>
               </div>
               <CardTitle className="mt-2 text-2xl tracking-tight">{currentStep.title}</CardTitle>
@@ -218,9 +227,9 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
                 <div className="flex gap-3">
                   <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                   <div>
-                    <p className="text-sm font-medium">Keep it simple</p>
+                    <p className="text-sm font-medium">{de ? "Einfach halten" : "Keep it simple"}</p>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Only the information needed for this step will be shown. You can come back and edit it later.
+                      {de ? "Es werden nur die für diesen Schritt benötigten Angaben angezeigt. Sie können später zurückkehren und sie bearbeiten." : "Only the information needed for this step will be shown. You can come back and edit it later."}
                     </p>
                   </div>
                 </div>
@@ -230,15 +239,15 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
                   <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
                   <div>
                     <p className="text-sm font-medium">
-                      {currentStep.issueCount} {currentStep.issueCount === 1 ? "item needs" : "items need"} attention
+                      {de ? `${currentStep.issueCount} ${currentStep.issueCount === 1 ? "Eintrag benötigt" : "Einträge benötigen"} Aufmerksamkeit` : `${currentStep.issueCount} ${currentStep.issueCount === 1 ? "item needs" : "items need"} attention`}
                     </p>
-                    <p className="mt-1 text-sm text-red-700">Open this step to see exactly what needs to be corrected.</p>
+                    <p className="mt-1 text-sm text-red-700">{de ? "Öffnen Sie diesen Schritt, um zu sehen, was korrigiert werden muss." : "Open this step to see exactly what needs to be corrected."}</p>
                   </div>
                 </div>
               ) : null}
               {upcomingSteps.length > 0 ? (
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Coming next</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{de ? "Als Nächstes" : "Coming next"}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {upcomingSteps.map((step) => (
                       <Badge key={step.id} variant="secondary" className="font-normal">{step.title}</Badge>
@@ -251,23 +260,23 @@ export function BusinessSetupGuide({ guide }: { guide: OwnerSettingsGuide }) {
               {previousStep ? (
                 <Button asChild variant="ghost" className="w-full sm:w-auto">
                   <Link href={previousStep.href}>
-                    <ArrowLeft className="h-4 w-4" /> Back
+                    <ArrowLeft className="h-4 w-4" /> {de ? "Zurück" : "Back"} <LinkLoadingIndicator />
                   </Link>
                 </Button>
               ) : (
                 <Button variant="ghost" className="w-full sm:w-auto" disabled>
-                  <ArrowLeft className="h-4 w-4" /> Back
+                  <ArrowLeft className="h-4 w-4" /> {de ? "Zurück" : "Back"}
                 </Button>
               )}
               <Button asChild size="lg" className="w-full sm:w-auto">
                 <Link href={currentStep.href} aria-current="step">
-                  {continueLabel(currentStep)} <ArrowRight className="h-4 w-4" />
+                  {continueLabel(currentStep, de)} <ArrowRight className="h-4 w-4" /> <LinkLoadingIndicator />
                 </Link>
               </Button>
             </CardFooter>
           </Card>
 
-          <CompletedSettings steps={completedSteps} />
+          <CompletedSettings steps={completedSteps} de={de} />
         </div>
       </div>
     </div>

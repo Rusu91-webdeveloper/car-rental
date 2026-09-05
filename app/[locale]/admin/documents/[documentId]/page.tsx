@@ -2,6 +2,11 @@ import { PrivateDocumentError } from "@/lib/private-documents/domain/errors"
 import { loadPrivateDocumentRequestContext } from "@/lib/private-documents/server/request-context"
 import { ReauthenticatePanel } from "@/components/private-documents/reauthenticate-panel"
 import { DocumentReviewClient } from "./review-client"
+import { prisma } from "@/lib/db"
+import { Link } from "@/navigation"
+import { ArrowLeft, CalendarDays, UserRound } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { formatBookingDateTime } from "@/lib/booking-time-zone"
 
 export const dynamic = "force-dynamic"
 
@@ -19,8 +24,29 @@ async function loadReviewPage(documentId: string) {
     permission: context.permission,
   })
   const replacementHistory = await context.repository.listSessionDocuments(context.scope.uploadSessionId ?? "")
+  const caseContext = await prisma.customerDocument.findUnique({
+    where: { id: documentId },
+    select: {
+      uploadSession: {
+        select: {
+          bookingApplication: {
+            select: {
+              id: true,
+              status: true,
+              pickupAt: true,
+              returnAt: true,
+              businessTimeZone: true,
+              customer: { select: { name: true, email: true } },
+              car: { select: { name: true, nameDe: true } },
+            },
+          },
+        },
+      },
+    },
+  })
   return {
     document,
+    application: caseContext?.uploadSession?.bookingApplication ?? null,
     history: history.map((item) => ({
       ...item,
       reviewedAt: item.reviewedAt.toISOString(),
@@ -47,7 +73,7 @@ export default async function DocumentReviewPage({
   params: Promise<{ locale: string; documentId: string }>
 }) {
   const { locale, documentId } = await params
-  const returnTo = `/${locale}/admin/documents/${documentId}`
+  const reauthenticationReturnTo = `/${locale}/admin/documents/${documentId}`
   let state: Awaited<ReturnType<typeof loadReviewPage>> | { reauthenticate: true } | { error: string }
   try {
     state = await loadReviewPage(documentId)
@@ -61,7 +87,7 @@ export default async function DocumentReviewPage({
   if ("reauthenticate" in state)
     return (
       <main className="mx-auto max-w-2xl p-6">
-        <ReauthenticatePanel returnTo={returnTo} />
+        <ReauthenticatePanel returnTo={reauthenticationReturnTo} />
       </main>
     )
   if ("error" in state)
@@ -73,11 +99,31 @@ export default async function DocumentReviewPage({
     )
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <header>
-        <p className="text-sm font-medium text-primary">Documents</p>
-        <h1 className="text-2xl font-semibold">Can this document be accepted?</h1>
+      <header className="space-y-4">
+        <Link href={state.application ? `/admin/documents/applications/${state.application.id}` : "/admin/documents"} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {state.application ? (locale === "de" ? "Zurück zum Buchungsantrag" : "Back to booking application") : (locale === "de" ? "Zurück zur Prüfliste" : "Back to review queue")}
+        </Link>
+        <div>
+          <p className="text-sm font-medium text-primary">{locale === "de" ? "Dokumentenentscheidung" : "Document decision"}</p>
+          <h1 className="text-2xl font-semibold">{locale === "de" ? "Kann dieses Dokument akzeptiert werden?" : "Can this document be accepted?"}</h1>
+        </div>
+        {state.application ? (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border bg-muted/20 p-4 text-sm">
+            <strong>{locale === "de" ? state.application.car.nameDe || state.application.car.name : state.application.car.name}</strong>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><UserRound className="h-4 w-4" />{state.application.customer.name || state.application.customer.email}</span>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="h-4 w-4" />{formatBookingDateTime(state.application.pickupAt, locale, state.application.businessTimeZone, { dateStyle: "medium" })} – {formatBookingDateTime(state.application.returnAt, locale, state.application.businessTimeZone, { dateStyle: "medium" })}</span>
+            <Badge variant="secondary">{state.application.status.replaceAll("_", " ").toLowerCase()}</Badge>
+          </div>
+        ) : null}
       </header>
-      <DocumentReviewClient document={state.document} history={state.history} replacements={state.replacements} />
+      <DocumentReviewClient
+        document={state.document}
+        history={state.history}
+        replacements={state.replacements}
+        locale={locale}
+        businessTimeZone={state.application?.businessTimeZone ?? "UTC"}
+        returnTo={state.application ? `/admin/documents/applications/${state.application.id}` : "/admin/documents"}
+      />
     </main>
   )
 }

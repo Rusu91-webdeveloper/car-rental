@@ -1,8 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/db"
+import { PrismaBusinessConfigurationRepository } from "@/lib/business-configuration/prisma-repository"
+import { ConfigurationWorkflowError } from "@/lib/business-configuration/workflow-errors"
 import {
-  attachLegalDraftToRelease,
-  createLegalAcceptanceDraft,
+  createLegalDraft,
   loadLegalAdministrationPage,
 } from "@/lib/legal/service"
 import {
@@ -28,11 +29,42 @@ export async function ownerSettingsPageMode(
   searchParams: Promise<OwnerSettingsPageSearchParams>,
   setupNextHref: string,
 ) {
-  const editing = (await searchParams).edit === "1"
+  const requestedEdit = (await searchParams).edit === "1"
+  const activeRelease = requestedEdit
+    ? true
+    : Boolean(
+        await prisma.businessConfigurationRelease.findFirst({
+          where: { status: "ACTIVE" },
+          select: { id: true },
+        }),
+      )
+  const editing = requestedEdit || activeRelease
   return {
     editing,
     nextHref: editing ? "/admin/settings" : setupNextHref,
   }
+}
+
+const PREPARATION_RETRY_LIMIT = 6
+
+function retryablePreparationError(error: unknown) {
+  if (error instanceof ConfigurationWorkflowError) {
+    return ["OPTIMISTIC_LOCK_FAILED", "AUDIT_WRITE_FAILED"].includes(error.code)
+  }
+  return error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)
+}
+
+async function prepareWithConflictRetry<T>(operation: () => Promise<T>) {
+  for (let attempt = 1; attempt <= PREPARATION_RETRY_LIMIT; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (!retryablePreparationError(error) || attempt === PREPARATION_RETRY_LIMIT) throw error
+      const backoffMilliseconds = Math.min(75 * 2 ** (attempt - 1), 600)
+      await new Promise((resolve) => setTimeout(resolve, backoffMilliseconds))
+    }
+  }
+  throw new Error("Owner settings preparation retry limit was exhausted.")
 }
 
 export async function ensureOwnerDraftRelease(actorId: string, db: PrismaClient = prisma) {
@@ -92,85 +124,114 @@ export async function ensureOwnerDraftRelease(actorId: string, db: PrismaClient 
 }
 
 export async function prepareOwnerPricingEdit(actorId: string) {
-  await ensureOwnerDraftRelease(actorId)
-  let data = await loadPricingConfigurationPage()
-  if (!data.draftPricing || !data.draftFleet) {
-    await createPricingDraft({
-      actorId,
-      source: data.livePricing ? "LIVE" : "LEGACY",
-      changeSummary: "Rental rules update",
-    })
-    data = await loadPricingConfigurationPage()
-  }
-  if (!data.pricingDraftAttached || !data.fleetDraftAttached) {
-    await attachPricingDraftToRelease({ actorId })
-  }
-  return loadPricingConfigurationPage()
+  return prepareWithConflictRetry(async () => {
+    await ensureOwnerDraftRelease(actorId)
+    let data = await loadPricingConfigurationPage()
+    if (!data.draftPricing || !data.draftFleet) {
+      await createPricingDraft({
+        actorId,
+        source: data.livePricing ? "LIVE" : "LEGACY",
+        changeSummary: "Rental rules update",
+      })
+      data = await loadPricingConfigurationPage()
+    }
+    if (!data.pricingDraftAttached || !data.fleetDraftAttached) {
+      await attachPricingDraftToRelease({ actorId })
+    }
+    return loadPricingConfigurationPage()
+  })
 }
 
 export async function prepareOwnerBookingExperienceEdit(actorId: string) {
-  await ensureOwnerDraftRelease(actorId)
-  let data = await loadPhase6ConfigurationPage()
-  const missing = [
-    {
-      domain: "INSURANCE" as const,
-      missing: !data.draftInsurance,
-      source: data.liveInsurance ? ("LIVE" as const) : ("DEFAULT" as const),
-    },
-    {
-      domain: "CUSTOMER_DRIVER_REQUIREMENTS" as const,
-      missing: !data.draftCustomerDriver,
-      source: data.liveCustomerDriver ? ("LIVE" as const) : ("DEFAULT" as const),
-    },
-    {
-      domain: "BOOKING_WORKFLOW" as const,
-      missing: !data.draftWorkflow,
-      source: data.liveWorkflow ? ("LIVE" as const) : ("DEFAULT" as const),
-    },
-  ]
-  for (const item of missing) {
-    if (!item.missing) continue
-    await createPhase6Draft({
-      actorId,
-      domain: item.domain,
-      source: item.source,
-      changeSummary: "Booking experience update",
+  return prepareWithConflictRetry(async () => {
+    await ensureOwnerDraftRelease(actorId)
+    let data = await loadPhase6ConfigurationPage()
+    const missing = [
+      {
+        domain: "INSURANCE" as const,
+        missing: !data.draftInsurance,
+        source: data.liveInsurance ? ("LIVE" as const) : ("DEFAULT" as const),
+      },
+      {
+        domain: "CUSTOMER_DRIVER_REQUIREMENTS" as const,
+        missing: !data.draftCustomerDriver,
+        source: data.liveCustomerDriver ? ("LIVE" as const) : ("DEFAULT" as const),
+      },
+      {
+        domain: "BOOKING_WORKFLOW" as const,
+        missing: !data.draftWorkflow,
+        source: data.liveWorkflow ? ("LIVE" as const) : ("DEFAULT" as const),
+      },
+    ]
+    for (const item of missing) {
+      if (!item.missing) continue
+      await createPhase6Draft({
+        actorId,
+        domain: item.domain,
+        source: item.source,
+        changeSummary: "Booking experience update",
+      })
+    }
+    data = await loadPhase6ConfigurationPage()
+    if (!data.attached.insurance || !data.attached.customerDriver || !data.attached.workflow) {
+      await attachPhase6DraftsToRelease({ actorId })
+    }
+    return loadPhase6ConfigurationPage()
+  })
+}
+
+export async function loadOwnerBookingWorkflowDependencies(
+  releaseId: string | undefined,
+  db: PrismaClient = prisma,
+) {
+  const repository = new PrismaBusinessConfigurationRepository(db)
+  const release = releaseId
+    ? await repository.findReleaseAggregate(releaseId)
+    : await repository.findActiveRelease()
+  const documents = release?.domains["document-policy"]
+  const legal = release?.domains["legal-acceptance"]
+  if (!documents || !legal) {
+    throw new Error("Complete Documents and Legal terms before reviewing the customer booking steps.")
+  }
+  const dependencyKey = ["document-policy", "legal-acceptance"]
+    .map((domain) => {
+      const version = release.versions[domain as "document-policy" | "legal-acceptance"]
+      return `${version.id}:${version.revision}`
     })
-  }
-  data = await loadPhase6ConfigurationPage()
-  if (!data.attached.insurance || !data.attached.customerDriver || !data.attached.workflow) {
-    await attachPhase6DraftsToRelease({ actorId })
-  }
-  return loadPhase6ConfigurationPage()
+    .join("-")
+  return { documents, legal, dependencyKey }
 }
 
 export async function prepareOwnerNotificationEdit(actorId: string) {
-  await ensureOwnerDraftRelease(actorId)
-  let data = await loadNotificationConfigurationPage()
-  if (!data.draftPayment || !data.draftConfirmation) {
-    await createNotificationConfigurationDraft({
-      actorId,
-      changeSummary: "Customer payment and message update",
-    })
-    data = await loadNotificationConfigurationPage()
-  }
-  return data
+  return prepareWithConflictRetry(async () => {
+    await ensureOwnerDraftRelease(actorId)
+    let data = await loadNotificationConfigurationPage()
+    if (!data.draftPayment || !data.draftConfirmation) {
+      await createNotificationConfigurationDraft({
+        actorId,
+        changeSummary: "Customer payment and message update",
+      })
+      data = await loadNotificationConfigurationPage()
+    }
+    return data
+  })
 }
 
 export async function prepareOwnerLegalEdit(actorId: string) {
-  await ensureOwnerDraftRelease(actorId)
-  let data = await loadLegalAdministrationPage()
-  let createdAcceptance = false
-  if (!data.draftAcceptance) {
-    await createLegalAcceptanceDraft({
-      actorId,
-      source: data.liveAcceptance ? "LIVE" : "DEFAULT",
-    })
-    data = await loadLegalAdministrationPage()
-    createdAcceptance = true
-  }
-  if (createdAcceptance && data.draftAcceptance) {
-    await attachLegalDraftToRelease({ actorId, versionId: data.draftAcceptance.id })
-  }
-  return loadLegalAdministrationPage()
+  return prepareWithConflictRetry(async () => {
+    await ensureOwnerDraftRelease(actorId)
+    let data = await loadLegalAdministrationPage()
+    for (const type of ["RENTAL_TERMS", "PRIVACY_NOTICE"] as const) {
+      const documents = data.documents.filter((document) => document.type === type)
+      if (documents.some((document) => document.status === "DRAFT") || documents.some((document) => document.status === "PUBLISHED")) continue
+      await createLegalDraft({
+        actorId,
+        type,
+        primaryLocale: "en",
+        changeSummary: `${type === "RENTAL_TERMS" ? "Rental Terms" : "Privacy Notice"} setup`,
+      })
+      data = await loadLegalAdministrationPage()
+    }
+    return data
+  })
 }

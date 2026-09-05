@@ -4,6 +4,11 @@ import {
   CUSTOMER_FIELDS,
   type BusinessConfigurationDomains,
 } from "@/lib/business-configuration/domains"
+import {
+  DEFAULT_HANDOVER_POLICY,
+  DEFAULT_OPENING_HOURS_EXCEPTIONS,
+  DEFAULT_WEEKLY_OPENING_HOURS,
+} from "@/lib/business-hours"
 
 const requiredCustomerFields = new Set(["FIRST_NAME", "LAST_NAME", "EMAIL", "DATE_OF_BIRTH"])
 
@@ -13,6 +18,9 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       businessTimeZone: "Europe/Berlin",
       currency: "EUR",
       supportedLocales: ["de", "en"],
+      weeklyOpeningHours: DEFAULT_WEEKLY_OPENING_HOURS,
+      openingHoursExceptions: DEFAULT_OPENING_HOURS_EXCEPTIONS,
+      handoverPolicy: DEFAULT_HANDOVER_POLICY,
     },
     "pricing-billing": {
       weeklyPricingEnabled: false,
@@ -21,6 +29,7 @@ export function validBusinessConfigurationDomains(): BusinessConfigurationDomain
       rentalMonthDefinition: "FIXED_30_DAYS",
       billableDayRule: "STARTED_24_HOUR_PERIODS",
       gracePeriodMinutes: 0,
+      preparationBufferMinutes: 120,
       minimumRentalMinutes: 1,
       minimumChargeDays: 1,
       pricesIncludeTax: true,

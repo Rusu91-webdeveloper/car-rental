@@ -5,9 +5,15 @@
  * if DATABASE_URL is not set.
  */
 
-import { normalizeDatabaseUrl } from "../lib/db-url"
+import { getMigrationDatabaseUrl, normalizeDatabaseUrl } from "../lib/db-url"
 import { execSync } from "child_process"
+import { existsSync } from "node:fs"
+import { loadEnvFile } from "node:process"
 
+// Standalone scripts do not get Next.js environment loading automatically.
+for (const file of [".env.local", ".env"]) {
+  if (existsSync(file)) loadEnvFile(file)
+}
 // Normalize the database URL
 normalizeDatabaseUrl()
 
@@ -18,6 +24,13 @@ if (args.length === 0) {
   console.error("Error: No command provided")
   console.error("Usage: tsx scripts/with-db-url.ts <command> [args...]")
   process.exit(1)
+}
+
+// Prisma Migrate uses a session-level advisory lock. Running it through
+// Neon pooling can leave that lock attached to a reused backend connection,
+// blocking later production deployments even after the command exits.
+if (args[0] === "prisma" && args[1] === "migrate") {
+  process.env.DATABASE_URL = getMigrationDatabaseUrl()
 }
 
 // Execute the command
@@ -32,4 +45,3 @@ try {
 } catch (error) {
   process.exit(1)
 }
-

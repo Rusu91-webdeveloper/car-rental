@@ -4,28 +4,65 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/db"
 import { requireAdmin } from "@/lib/auth"
 import { createCarSchema, updateCarSchema } from "@/lib/validations"
-import { getUnavailableDates, isCarAvailable } from "@/lib/availability"
-import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import { getUnavailableDates, hasActiveVehicleCommitments } from "@/lib/availability"
+import {
+  createCarSlugBase,
+  getNextCarSlug,
+  isSlugUniqueConstraintError,
+} from "@/lib/cars/slug"
 import { z } from "zod"
 import { Prisma } from "@prisma/client"
+import { prepareOwnerPricingEdit } from "@/lib/admin/owner-settings-edit"
+import { newCarPublishingMode } from "@/lib/admin/new-car-publishing"
+import { activateDraftRelease, validateDraftRelease } from "@/lib/business-configuration/workflow-service"
+import { getHandoverEvents } from "@/lib/handover-capacity"
+import { addDateOnlyDays, parseDateOnlyLocal } from "@/lib/business-date"
+import {
+  businessLocalDateTimeToInstant,
+  normalizeHandoverPolicy,
+  normalizeOpeningHoursExceptions,
+  normalizeWeeklyOpeningHours,
+} from "@/lib/business-hours"
+import {
+  dateOnlySearchHandoverWindows,
+  hasAvailableSearchWindow,
+} from "@/lib/date-only-search-availability"
+import { effectiveMinimumRentalMinutes } from "@/lib/booking-configuration/minimum-rental"
+
+const MAX_CAR_SLUG_CREATE_ATTEMPTS = 10
 
 export async function createCar(data: unknown) {
   try {
     const admin = await requireAdmin()
 
+    const [activeRelease, pendingRelease] = await Promise.all([
+      prisma.businessConfigurationRelease.findFirst({ where: { status: "ACTIVE" }, select: { id: true } }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: { in: ["DRAFT", "VALIDATED"] } },
+        select: { id: true },
+      }),
+    ])
+    const publishingMode = newCarPublishingMode({
+      hasActiveRelease: Boolean(activeRelease),
+      hasPendingRelease: Boolean(pendingRelease),
+    })
+
     // Validate input
     const validated = createCarSchema.parse(data)
 
-    // Generate slug from name
-    const slug = validated.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "")
+    const slugBase = createCarSlugBase(validated.name)
+    const matchingSlugs = await prisma.car.findMany({
+      where: {
+        OR: [{ slug: slugBase }, { slug: { startsWith: `${slugBase}-` } }],
+      },
+      select: { slug: true },
+    })
+    const reservedSlugs = new Set(matchingSlugs.map(({ slug }) => slug))
 
-    const { car, inheritedSetup } = await prisma.$transaction(async (tx) => {
+    const createCarRecord = (carSlug: string) => prisma.$transaction(async (tx) => {
       const car = await tx.car.create({
         data: {
-          slug,
+          slug: carSlug,
           name: validated.name,
           nameDe: validated.nameDe,
           subtitle: validated.subtitle,
@@ -91,12 +128,70 @@ export async function createCar(data: unknown) {
       return { car, inheritedSetup: Boolean(fleetDraft) }
     })
 
+    let createdResult: Awaited<ReturnType<typeof createCarRecord>> | undefined
+    let lastSlugConflict: unknown
+
+    for (let attempt = 0; attempt < MAX_CAR_SLUG_CREATE_ATTEMPTS; attempt += 1) {
+      const candidateSlug = getNextCarSlug(slugBase, reservedSlugs)
+
+      try {
+        createdResult = await createCarRecord(candidateSlug)
+        break
+      } catch (error) {
+        if (!isSlugUniqueConstraintError(error)) {
+          throw error
+        }
+
+        lastSlugConflict = error
+        reservedSlugs.add(candidateSlug)
+      }
+    }
+
+    if (!createdResult) {
+      throw lastSlugConflict ?? new Error("Unable to allocate a unique car URL")
+    }
+
+    const { car, inheritedSetup } = createdResult
+    let bookingStatus: "ACTIVE" | "PENDING_REVIEW" | "SETUP_DRAFT" | "PRICING_ATTENTION" =
+      publishingMode === "AUTO_PUBLISH" ? "PRICING_ATTENTION" : publishingMode
+
+    try {
+      const pricing = await prepareOwnerPricingEdit(admin.id)
+      if (!pricing.draftRelease || !pricing.vehicles.some((vehicle) => vehicle.vehicleId === car.id && vehicle.draftRateId)) {
+        throw new Error("The new car was not attached to the pricing draft.")
+      }
+
+      if (publishingMode === "AUTO_PUBLISH") {
+        const validation = await validateDraftRelease(pricing.draftRelease.id, admin.id)
+        const blockers = validation.result.issues.filter(({ severity }) => severity === "BLOCKER")
+        if (blockers.length === 0) {
+          const current = await prisma.businessConfigurationRelease.findUniqueOrThrow({
+            where: { id: pricing.draftRelease.id },
+            select: { revision: true },
+          })
+          await activateDraftRelease({
+            releaseId: pricing.draftRelease.id,
+            expectedRevision: current.revision,
+            actorId: admin.id,
+            warningsAcknowledged: true,
+          })
+          bookingStatus = "ACTIVE"
+        }
+      }
+    } catch (setupError) {
+      console.error("[CREATE_CAR_PRICING_SETUP_ERROR]", {
+        carId: car.id,
+        name: setupError instanceof Error ? setupError.name : "Unknown",
+      })
+      bookingStatus = "PRICING_ATTENTION"
+    }
+
     revalidatePath("/")
     revalidatePath("/admin")
     revalidatePath("/admin/cars/pricing")
     revalidatePath("/admin/advanced/configuration")
 
-    return { success: true, car, inheritedSetup }
+    return { success: true, car, inheritedSetup, bookingStatus }
   } catch (error) {
     console.error("[CREATE_CAR_ERROR]", error)
 
@@ -181,11 +276,13 @@ export async function createCar(data: unknown) {
       }
     }
 
-    if (error instanceof Error) {
-      return { error: error.message }
+    if (isSlugUniqueConstraintError(error)) {
+      return {
+        error: "We could not create a unique page for this car. Please try again.",
+      }
     }
 
-    return { error: "Failed to create car. Please try again." }
+    return { error: "The car could not be added. Please try again." }
   }
 }
 
@@ -349,33 +446,33 @@ export async function updateCar(carId: string, data: unknown) {
 export async function deleteCar(carId: string) {
   try {
     const admin = await requireAdmin()
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${carId} FOR UPDATE`
+      const existingCar = await tx.car.findUnique({ where: { id: carId } })
+      if (!existingCar) throw new Error("Car not found")
+      if (existingCar.isDeleted) throw new Error("Car is already deleted")
+      if (await hasActiveVehicleCommitments(carId, tx))
+        throw new Error(
+          "This car has an active booking, booking application, buffer period, or manual reservation and cannot be deleted.",
+        )
 
-    const existingCar = await prisma.car.findUnique({
-      where: { id: carId },
-    })
+      await tx.car.update({
+        where: { id: carId },
+        data: {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+      })
 
-    if (!existingCar) {
-      return { error: "Car not found" }
-    }
-
-    // Soft delete
-    await prisma.car.update({
-      where: { id: carId },
-      data: {
-        isDeleted: true,
-        deletedAt: new Date(),
-      },
-    })
-
-    // Create audit log
-    await prisma.adminAuditLog.create({
-      data: {
-        adminId: admin.id,
-        action: "CAR_DELETED",
-        targetType: "car",
-        targetId: carId,
-        oldValue: existingCar,
-      },
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: admin.id,
+          action: "CAR_DELETED",
+          targetType: "car",
+          targetId: carId,
+          oldValue: existingCar,
+        },
+      })
     })
 
     revalidatePath("/")
@@ -403,10 +500,23 @@ export async function getCarAvailability(carId: string) {
       return { error: "Car not found" }
     }
 
-    await runBookingLifecycleMaintenance()
-    const unavailableDates = await getUnavailableDates(carId)
+    const now = new Date()
+    const capacityHorizon = new Date(now)
+    capacityHorizon.setFullYear(capacityHorizon.getFullYear() + 2)
+    const [unavailableDates, handoverEvents, activeRelease] = await Promise.all([
+      getUnavailableDates(carId),
+      getHandoverEvents(prisma, now, capacityHorizon),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { generalRentalConfig: { select: { businessTimeZone: true } } },
+      }),
+    ])
 
-    return { unavailableDates }
+    return {
+      unavailableDates,
+      handoverEvents,
+      businessTimeZone: activeRelease?.generalRentalConfig.businessTimeZone ?? "UTC",
+    }
   } catch (error) {
     console.error("[GET_CAR_AVAILABILITY_ERROR]", error)
     return { error: "Failed to fetch availability" }
@@ -428,43 +538,99 @@ export async function filterCarsByAvailability(carIds: string[], pickupDate: str
       }
     }
 
-    // Validate and parse dates
-    // Normalize dates to midnight local time to avoid timezone issues
-    const pickup = new Date(pickupDate + "T00:00:00")
-    const dropoff = new Date(dropoffDate + "T00:00:00")
-
-    if (isNaN(pickup.getTime()) || isNaN(dropoff.getTime())) {
+    const pickupDay = parseDateOnlyLocal(pickupDate)
+    const dropoffDay = parseDateOnlyLocal(dropoffDate)
+    if (!pickupDay || !dropoffDay) {
       return {
         error: "Invalid date format provided",
       }
     }
 
-    if (pickup >= dropoff) {
+    if (pickupDay >= dropoffDay) {
       return {
         error: "Pickup date must be before dropoff date",
       }
     }
 
-    // Cancel expired bookings first
-    try {
-      await runBookingLifecycleMaintenance()
-    } catch (cancelError) {
-      console.error("[CANCEL_EXPIRED_BOOKINGS_ERROR]", cancelError)
-      // Continue with filtering even if cancellation fails
-    }
+    const uniqueCarIds = [...new Set(carIds)].slice(0, 200)
+    const [candidateCars, activeRelease] = await Promise.all([
+      prisma.car.findMany({
+        where: {
+          id: { in: uniqueCarIds },
+          isDeleted: false,
+          status: { in: ["AVAILABLE", "LOW_STOCK"] },
+        },
+        select: { id: true },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: {
+          generalRentalConfig: {
+            select: {
+              businessTimeZone: true,
+              weeklyOpeningHours: true,
+              openingHoursExceptions: true,
+              handoverPolicy: true,
+            },
+          },
+          pricingBillingConfig: {
+            select: { minimumRentalMinutes: true, minimumChargeDays: true },
+          },
+          fleetRateSet: {
+            select: {
+              rates: {
+                where: { carId: { in: uniqueCarIds } },
+                select: { carId: true },
+              },
+            },
+          },
+        },
+      }),
+    ])
+    if (!activeRelease) return { error: "Active booking configuration not found" }
+    const pricedCarIds = new Set(activeRelease.fleetRateSet.rates.map(({ carId }) => carId))
+    const bookableCars = candidateCars.filter(({ id }) => pricedCarIds.has(id))
+    if (bookableCars.length === 0) return { availableCarIds: [] }
 
-    // Check availability for each car
+    const configuration = {
+      businessTimeZone: activeRelease.generalRentalConfig.businessTimeZone,
+      weeklyOpeningHours: normalizeWeeklyOpeningHours(activeRelease.generalRentalConfig.weeklyOpeningHours),
+      openingHoursExceptions: normalizeOpeningHoursExceptions(activeRelease.generalRentalConfig.openingHoursExceptions),
+      handoverPolicy: normalizeHandoverPolicy(activeRelease.generalRentalConfig.handoverPolicy),
+      minimumRentalMinutes: effectiveMinimumRentalMinutes(
+        activeRelease.pricingBillingConfig.minimumRentalMinutes,
+        activeRelease.pricingBillingConfig.minimumChargeDays,
+      ),
+    }
+    const dayAfterReturn = addDateOnlyDays(dropoffDate, 1)
+    const horizonStart = businessLocalDateTimeToInstant(
+      `${pickupDate}T00:00`,
+      configuration.businessTimeZone,
+    )
+    const horizonEnd = dayAfterReturn
+      ? businessLocalDateTimeToInstant(`${dayAfterReturn}T00:00`, configuration.businessTimeZone)
+      : null
+    if (!horizonStart || !horizonEnd) return { error: "Invalid date range for the configured business timezone" }
+
+    const handoverEvents = await getHandoverEvents(prisma, horizonStart, horizonEnd)
+    const windows = dateOnlySearchHandoverWindows({
+      pickupDate,
+      returnDate: dropoffDate,
+      configuration,
+      handoverEvents,
+    })
+    if (windows.length === 0) return { availableCarIds: [] }
+
     const availabilityChecks = await Promise.all(
-      carIds.map(async (carId) => {
+      bookableCars.map(async ({ id: carId }) => {
         try {
-          const available = await isCarAvailable(carId, pickup, dropoff)
-          return { carId, available }
+          const unavailableRanges = await getUnavailableDates(carId)
+          return { carId, available: hasAvailableSearchWindow(windows, unavailableRanges) }
         } catch (carError) {
           console.error(`[CAR_AVAILABILITY_CHECK_ERROR] Car ID: ${carId}`, carError)
-          // If we can't check availability for a specific car, assume it's unavailable
           return { carId, available: false }
         }
-      })
+      }),
     )
 
     return {

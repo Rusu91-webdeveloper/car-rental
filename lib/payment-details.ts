@@ -9,10 +9,10 @@ export async function getPaymentDetails() {
 
     if (settings) {
       return {
-        bankName: settings.bankName || process.env.NEXT_PUBLIC_BANK_NAME || "Your Bank Name",
-        accountName: settings.accountName || process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Car Rental Company",
-        accountNumber: settings.accountNumber || process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "1234567890",
-        swiftCode: settings.swiftCode || process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "YOURSWIFT",
+        bankName: settings.bankName || process.env.NEXT_PUBLIC_BANK_NAME || "",
+        accountName: settings.accountName || process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
+        accountNumber: settings.accountNumber || process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "",
+        swiftCode: settings.swiftCode || process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "",
         iban: settings.iban,
       }
     }
@@ -22,18 +22,18 @@ export async function getPaymentDetails() {
 
   // Fallback to environment variables or defaults
   return {
-    bankName: process.env.NEXT_PUBLIC_BANK_NAME || "Your Bank Name",
-    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Car Rental Company",
-    accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "1234567890",
-    swiftCode: process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "YOURSWIFT",
+    bankName: process.env.NEXT_PUBLIC_BANK_NAME || "",
+    accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
+    accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "",
+    swiftCode: process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "",
     iban: undefined,
   }
 }
 
 // Legacy export for backward compatibility (deprecated - use getPaymentDetails instead)
 export const paymentDetails = {
-  bankName: process.env.NEXT_PUBLIC_BANK_NAME || "Your Bank Name",
-  accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "Car Rental Company",
-  accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "1234567890",
-  swiftCode: process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "YOURSWIFT",
+  bankName: process.env.NEXT_PUBLIC_BANK_NAME || "",
+  accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
+  accountNumber: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER || "",
+  swiftCode: process.env.NEXT_PUBLIC_BANK_SWIFT_CODE || "",
 }

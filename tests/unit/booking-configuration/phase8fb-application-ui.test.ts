@@ -8,7 +8,7 @@ describe("Phase 8F-B application and UI integration", () => {
   it("uses forward-only database gates for shared location and manual approval", () => {
     const migration = read("prisma/migrations/20260713141000_enforce_phase8fb_shared_location_and_review/migration.sql")
     expect(migration).toContain('CHECK ("pickupLocation" = "returnLocation")')
-    expect(migration).toContain('document."manualReviewStatus" = \'APPROVED\'')
+    expect(migration).toContain("document.\"manualReviewStatus\" = 'APPROVED'")
     expect(migration).toContain("BookingApplication_manual_review_gate")
   })
 
@@ -17,7 +17,27 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(checkout).toContain("beginBookingApplication")
     expect(checkout).toContain("Pick-up and return location")
     expect(checkout).toContain("Continue to document upload")
+    expect(checkout).toContain("The car must be picked up and returned at the rental company’s location.")
+    expect(checkout).not.toContain('searchParams.get("location")')
+    expect(checkout).not.toContain("SFO International Airport")
+    expect(read("app/actions/booking-applications.ts")).toContain("formatCompanyPickupLocation(companySettings)")
+    expect(read("app/actions/booking-applications.ts")).not.toContain("value.sharedLocation")
     expect(checkout).not.toContain("const result = await createBooking(")
+  })
+
+  it("requires late-return acknowledgement and explains the fixed preparation buffer", () => {
+    const checkout = read("app/[locale]/checkout/[id]/checkout-client.tsx")
+    const actions = read("app/actions/booking-applications.ts")
+    const terms = read("app/[locale]/agb/page.tsx")
+    const availability = read("lib/availability.ts")
+
+    expect(checkout).toContain("This charge does not extend your booking")
+    expect(checkout).toContain("legalAcknowledgements.lateReturnPolicy")
+    expect(actions).toContain("lateReturnPolicy: z.literal(true")
+    expect(actions).toContain("booking_application.late_return_policy_acknowledged")
+    expect(terms).toContain("§ 545 BGB wird ausgeschlossen")
+    expect(availability).toContain("addOperationalBuffer(b.dropoffDate, preparationBufferMinutes)")
+    expect(availability).toContain("subtractOperationalBuffer(b.pickupDate, preparationBufferMinutes)")
   })
 
   it("provides opaque resume, upload, review, access, and worker routes", () => {
@@ -30,7 +50,15 @@ describe("Phase 8F-B application and UI integration", () => {
       "app/api/private-documents/[documentId]/view/route.ts",
       "app/api/private-documents/[documentId]/download/route.ts",
       "app/api/internal/phase8fb/[job]/route.ts",
-    ]) expect(read(path).length).toBeGreaterThan(20)
+    ])
+      expect(read(path).length).toBeGreaterThan(20)
+  })
+
+  it("shows the newest replacement attempt in the application review workspace", () => {
+    const workspace = read("app/[locale]/admin/documents/applications/[applicationId]/page.tsx")
+
+    expect(workspace).toContain("selectLatestDocumentAttempts(")
+    expect(workspace).toContain('customerDocuments: {\n            where: { deletionStatus: { not: "DELETED" } }')
   })
 
   it("locks application and car and writes all snapshots in serializable finalization", () => {
@@ -38,15 +66,40 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(adapter).toContain('FROM "BookingApplication" WHERE id = ${input.applicationId} FOR UPDATE')
     expect(adapter).toContain('FROM "Car" WHERE id = ${row.carId} FOR UPDATE')
     expect(adapter).toContain("TransactionIsolationLevel.Serializable")
-    for (const snapshot of ["bookingPricingSnapshot.create", "bookingCustomerDriverSnapshot.create", "bookingInsuranceSnapshot.create", "bookingLegalAcceptance.createMany", "customerDocument.updateMany"])
+    expect(adapter).toContain("maxWait: 10_000")
+    expect(adapter).toContain("timeout: 30_000")
+    for (const snapshot of [
+      "bookingPricingSnapshot.create",
+      "bookingCustomerDriverSnapshot.create",
+      "bookingInsuranceSnapshot.create",
+      "bookingLegalAcceptance.createMany",
+      "customerDocument.updateMany",
+    ])
       expect(adapter).toContain(snapshot)
     expect(adapter).toContain('status: "FINALIZED"')
   })
 
-  it("keeps production providers gated and workers explicitly opt-in", () => {
+  it("keeps interactive transactions alive through a serverless database cold start", () => {
+    const database = read("lib/db.ts")
+    const deployment = read("vercel.json")
+    expect(database).toContain("transactionOptions")
+    expect(database).toContain("maxWait: 10_000")
+    expect(database).toContain("timeout: 30_000")
+    expect(deployment).toContain('"regions": ["fra1"]')
+  })
+
+  it("records actionable production errors without exposing them to customers", () => {
+    const actions = read("app/actions/booking-applications.ts")
+    expect(actions).toContain('console.error("[BOOKING_APPLICATION_ERROR]"')
+    expect(actions).toContain("error.message")
+    expect(actions).toContain('error: "The application could not be saved."')
+  })
+
+  it("requires a safe private-document provider and keeps workers explicitly opt-in", () => {
     const uploads = read("lib/private-documents/server/lifecycle-context.ts")
     const workers = read("app/api/internal/phase8fb/[job]/route.ts")
-    expect(uploads).toContain("environment.production || !environment.featureEnabled")
+    expect(uploads).toContain("!environment.featureEnabled || environment.issues.length > 0")
+    expect(uploads).toContain("createPrivateDocumentStorage")
     expect(workers).toContain('process.env.PHASE8FB_WORKERS_ENABLED !== "true"')
     expect(workers).toContain("hasValidBearerSecret")
     expect(workers).toContain("PHASE8FB_WORKER_SECRET")
@@ -57,5 +110,101 @@ describe("Phase 8F-B application and UI integration", () => {
     expect(reauth).toContain("reauthenticatePrivateDocumentAccess")
     expect(read("app/[locale]/admin/documents/[documentId]/page.tsx")).toContain("RECENT_AUTH_")
     expect(read("app/[locale]/admin/documents/security/page.tsx")).toContain("requireRecentAuthentication")
+  })
+
+  it("makes the document-review handoff visible and prevents accidental cancellation", () => {
+    const application = read("app/[locale]/applications/[applicationId]/booking-application-client.tsx")
+    const actions = read("app/actions/booking-applications.ts")
+    const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
+    const trips = read("app/[locale]/bookings/page.tsx")
+    const adminPage = read("app/[locale]/admin/page.tsx")
+    const adminDashboard = read("app/[locale]/admin/admin-client.tsx")
+
+    expect(application).toContain("application.businessTimeZone")
+    expect(application).not.toContain('timeZone: "Europe/Berlin"')
+    expect(application).toContain("submittedForReview")
+    expect(application).toContain("Documents submitted for review")
+    expect(application).toContain("Uploaded · awaiting approval")
+    expect(application).toContain("Upload failed · please try again")
+    expect(application).toContain('application.actionRequiredReason === "DOCUMENT_REPLACEMENT_REQUIRED"')
+    expect(application).toContain("Cancel this booking application?")
+    expect(application).toContain("Cancel permanently")
+    expect(actions).toContain("submittedForReview: true")
+    expect(adapter).toContain('input.reason === "DOCUMENT_REPLACEMENT_REQUIRED" ? "AWAITING_DOCUMENT_UPLOAD"')
+    expect(trips).toContain("prisma.bookingApplication.findMany")
+    expect(trips).toContain("Awaiting document review")
+    expect(adminPage).toContain('car: { isDeleted: false }')
+    expect(adminPage).toContain("bookingApplications={bookingApplications.map")
+    expect(adminDashboard).toContain("Booking applications before confirmation")
+    expect(adminDashboard).toContain("Reviewer access is missing")
+    expect(adminDashboard).toContain("DOCUMENT_REVIEWER")
+  })
+
+  it("groups private documents into an application review workspace", () => {
+    const queue = read("app/[locale]/admin/documents/review-queue-client.tsx")
+    const workspace = read("app/[locale]/admin/documents/applications/[applicationId]/page.tsx")
+    const presenter = read("lib/private-documents/application/review-queue-presenter.ts")
+    const documentReview = read("app/[locale]/admin/documents/[documentId]/review-client.tsx")
+
+    expect(queue).toContain("groupIntoCases")
+    expect(queue).toContain("Review application")
+    expect(queue).toContain("Document review progress")
+    expect(presenter).toContain("bookingApplication")
+    expect(presenter).toContain("approvedDocuments")
+    expect(presenter).toContain("documentTypeKey")
+    expect(workspace).toContain("Customer and driver")
+    expect(workspace).toContain("Document checklist")
+    expect(workspace).toContain("Legal acceptances")
+    expect(documentReview).toContain("router.push(`${returnTo}${confirmationQuery}`)")
+  })
+
+  it("creates the payment-method-specific booking and queues customer email after final document approval", () => {
+    const reviewRoute = read("app/api/private-documents/[documentId]/review/route.ts")
+    const adapter = read("lib/booking-applications/infrastructure/prisma-repository.ts")
+    const delivery = read("lib/booking-confirmation-delivery.ts")
+    const adminDashboard = read("app/[locale]/admin/admin-client.tsx")
+    const applicationActions = read("app/actions/booking-applications.ts")
+
+    expect(reviewRoute).toContain("reconcileConfirmedQuoteAfterReview")
+    expect(reviewRoute.indexOf("reconcileConfirmedQuoteAfterReview")).toBeLessThan(
+      reviewRoute.lastIndexOf("evaluateReadiness"),
+    )
+    expect(reviewRoute).toContain('readiness.blockers[0]?.code === "QUOTE_EXPIRED"')
+    expect(reviewRoute).toContain('body.decision === "APPROVED" && readiness.ready')
+    expect(reviewRoute).toContain("repository.finalize")
+    expect(reviewRoute).toContain("dispatchPendingBookingNotificationsForBooking")
+    expect(adapter).toContain('status: requiresAdvance ? "PENDING" : "CONFIRMED"')
+    expect(adapter).toContain("confirmed_quote_renewed_after_review")
+    expect(adapter).toContain('actionRequiredReason: "PRICE_CHANGED"')
+    expect(adapter).toContain("bookingPaymentPolicySnapshot.create")
+    expect(adapter).toContain("enqueueInitialBookingNotifications")
+    expect(delivery).toContain("sendBookingConfirmationEmail")
+    expect(delivery).toContain("sendAdminBookingConfirmationNotification")
+    expect(applicationActions).toContain("dispatchPendingBookingNotificationsForBooking")
+    expect(adminDashboard).toContain("resendBookingConfirmationAsAdmin")
+    expect(adminDashboard).toContain("handleConfirmTransferDeposit")
+    expect(adminDashboard).toContain("Cancel / remove")
+    expect(applicationActions).toContain("cancelBookingApplicationAsAdmin")
+  })
+
+  it("emails both sides during document handoff and tells the customer when replacement is required", () => {
+    const reviewRoute = read("app/api/private-documents/[documentId]/review/route.ts")
+    const applicationActions = read("app/actions/booking-applications.ts")
+
+    expect(applicationActions).toContain("sendBookingApplicationSubmittedEmail")
+    expect(applicationActions).toContain("sendAdminBookingApplicationNotification")
+    expect(reviewRoute).toContain("sendDocumentReviewDecisionEmail")
+    expect(reviewRoute).toContain("repository.markCustomerActionRequired")
+    expect(reviewRoute).toContain('reason: "DOCUMENT_REPLACEMENT_REQUIRED"')
+  })
+
+  it("repairs uninitialized policy permissions without assigning restricted roles", () => {
+    const migration = read("prisma/migrations/20260721031500_backfill_reviewer_permissions_for_existing_documents/migration.sql")
+    expect(migration).toContain("policies_requiring_access")
+    expect(migration).toContain("DOCUMENT_REVIEWER")
+    expect(migration).toContain("DocumentPolicyRolePermission")
+    expect(migration).toContain('DISABLE TRIGGER "DocumentPolicyRolePermission_immutable"')
+    expect(migration).toContain('ENABLE TRIGGER "DocumentPolicyRolePermission_immutable"')
+    expect(migration).not.toContain('INSERT INTO "UserAccessRole"')
   })
 })

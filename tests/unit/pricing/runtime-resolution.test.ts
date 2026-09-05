@@ -78,6 +78,19 @@ describe("runtime pricing source resolution", () => {
     expect(quote.source.configurationReleaseId).toBe("release-1")
   })
 
+  it("allows an earlier return for legacy charge-floor settings while charging the floor", async () => {
+    const quote = await quoteVehicleRental(
+      repository({ ...active, minimumRentalMinutes: 2_880, minimumChargeDays: 2 }),
+      {
+        ...request,
+        pickupAt: new Date("2026-07-31T12:00:00.000Z"),
+        returnAt: new Date("2026-08-02T06:00:00.000Z"),
+      },
+    )
+
+    expect(quote.chargeableDuration.chargeableDays).toBe(2)
+  })
+
   it("fails safely for an invalid active release without calling legacy", async () => {
     let legacyCalled = false
     const invalidRepository: PricingContextRepository = {

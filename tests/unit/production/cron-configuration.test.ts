@@ -5,15 +5,28 @@ import { PRODUCTION_CRON_SCHEDULES } from "@/lib/production/cron-schedule"
 import { AUTOMATED_PRODUCTION_WORKER_JOBS } from "@/lib/production/operations-environment"
 
 describe("Vercel Cron configuration", () => {
-  it("uses only the two fixed daily production routes and contains no secrets or query parameters", async () => {
+  it("uses Hobby-compatible daily fallback routes and contains no secrets or query parameters", async () => {
     const config = JSON.parse(await readFile(resolve(process.cwd(), "vercel.json"), "utf8"))
     expect(config.crons).toEqual(PRODUCTION_CRON_SCHEDULES.map(({ path, schedule }) => ({ path, schedule })))
-    expect(config.crons).toHaveLength(2)
+    expect(config.crons).toHaveLength(3)
     for (const cron of config.crons) {
       expect(cron.path).not.toContain("?")
-      expect(cron.schedule).toMatch(/^\d+ \d+ \* \* \*$/)
+      expect(cron.schedule).toMatch(/^[\d*/-]+ [\d*/-]+ \* \* \*$/)
     }
     expect(JSON.stringify(config)).not.toMatch(/secret|token|authorization/i)
+  })
+
+  it("keeps the frequent booking workers in the protected GitHub scheduler", async () => {
+    const workflow = await readFile(
+      resolve(process.cwd(), ".github/workflows/booking-workers.yml"),
+      "utf8",
+    )
+    expect(workflow).toContain("cron: \"*/10 * * * *\"")
+    expect(workflow).toContain("secrets.CRON_SECRET")
+    expect(workflow).toContain("vars.PRODUCTION_APP_URL")
+    expect(workflow).toContain("/api/cron/cancel-expired-bookings")
+    expect(workflow).toContain("/api/cron/booking-notifications")
+    expect(workflow).not.toMatch(/https:\/\/[^$]/)
   })
 
   it("dispatches only the approved non-destructive Phase 8F-B jobs", async () => {

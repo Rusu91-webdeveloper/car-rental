@@ -167,9 +167,10 @@ Each booking gets a unique transfer code (e.g., `A1B2C3D4`):
 ### Environment Variables
 
 ```env
-# Email Configuration (Optional but Recommended)
-RESEND_API_KEY=re_xxx
-EMAIL_FROM="Your Car Rental <noreply@yourdomain.com>"
+# Email Configuration (Required for automated messages)
+GMAIL_SMTP_USER=bookings@example.com
+GMAIL_SMTP_APP_PASSWORD=<16-character-google-app-password>
+EMAIL_FROM="Qujo Autovermietung GmbH <bookings@example.com>"
 
 # App URL (for email links)
 NEXT_PUBLIC_APP_URL=https://yourdomain.com
@@ -376,4 +377,3 @@ For questions or issues:
 **System Status**: ✅ Fully Implemented and Tested  
 **Documentation Version**: 1.0  
 **Last Updated**: ${new Date().toLocaleDateString()}
-

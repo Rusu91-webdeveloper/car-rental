@@ -3,6 +3,8 @@ import { redirect } from "@/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
+import { AdminNavigationFeedback } from "@/components/admin/admin-navigation-feedback";
+import { isMaintenanceDeveloperEmail } from "@/lib/developer-maintenance/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +16,10 @@ export default async function AdminLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const [user, capabilities] = await Promise.all([
-    getCurrentUser(),
-    getBusinessConfigurationCapabilities(),
-  ]);
+  // These request-memoized reads are intentionally sequential so navigation
+  // never spends the full production connection pool on authorization alone.
+  const user = await getCurrentUser();
+  const capabilities = await getBusinessConfigurationCapabilities();
 
   if (!user) redirect({ href: "/sign-in?redirect_url=/admin", locale });
   if (
@@ -30,10 +32,14 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-muted/25">
+      <AdminNavigationFeedback />
       <AdminNavigation
         canViewDocuments={capabilities.canViewDocuments}
         canViewConfiguration={capabilities.canView}
         isAdmin={user!.role === "ADMIN"}
+        isMaintenanceDeveloper={
+          user!.role === "ADMIN" && isMaintenanceDeveloperEmail(user!.email)
+        }
         userName={user!.name || user!.email}
       />
       <div className="lg:pl-64">{children}</div>

@@ -6,6 +6,7 @@ import { getPaymentDetails } from "@/lib/payment-details"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { CheckoutClient } from "./checkout-client"
 import { resolvePublicBookingConfiguration } from "@/lib/booking-configuration/runtime"
+import { formatCompanyPickupLocation } from "@/lib/company-pickup-location"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,11 @@ export default async function CheckoutPage({
 }) {
   const { id, locale } = await params
   const car = await prisma.car.findFirst({
-    where: { id, isDeleted: false },
+    where: {
+      id,
+      isDeleted: false,
+      status: { in: ["AVAILABLE", "LOW_STOCK"] },
+    },
   })
 
   if (!car) {
@@ -57,12 +62,25 @@ export default async function CheckoutPage({
   const reviewStats = getCarReviewStats(reviewStatsByCar, car.id)
 
   // Payment instructions are display-only; pricing is resolved server-side.
-  const paymentDetails = await getPaymentDetails()
-  const bookingConfiguration = await resolvePublicBookingConfiguration({
-    db: prisma,
-    vehicleId: car.id,
-    locale,
-  })
+  const [paymentDetails, bookingConfiguration, companySettings] = await Promise.all([
+    getPaymentDetails(),
+    resolvePublicBookingConfiguration({
+      db: prisma,
+      vehicleId: car.id,
+      locale,
+    }),
+    prisma.companySettings.findUnique({
+      where: { id: "company-settings" },
+      select: {
+        companyAddress: true,
+        companyCity: true,
+        companyState: true,
+        companyZipCode: true,
+        companyCountry: true,
+      },
+    }),
+  ])
+  const pickupLocation = formatCompanyPickupLocation(companySettings)
 
   return (
     <CheckoutClient
@@ -78,6 +96,8 @@ export default async function CheckoutPage({
       signInUrl={signInUrl}
       paymentDetails={paymentDetails}
       bookingConfiguration={bookingConfiguration}
+      pickupLocation={pickupLocation}
+      checkoutOpenedAt={new Date().toISOString()}
       initialCustomer={{
         firstName: user!.name?.trim().split(/\s+/)[0] ?? "",
         lastName: user!.name?.trim().split(/\s+/).slice(1).join(" ") ?? "",

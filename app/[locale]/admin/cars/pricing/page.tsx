@@ -6,6 +6,7 @@ import { PricingSummaryCard } from "@/components/business-configuration/pricing-
 import { VehicleRateTable } from "@/components/business-configuration/vehicle-rate-table";
 import { PricingIssueList } from "@/components/business-configuration/pricing-issue-list";
 import { ConfigurationAccessDenied } from "@/components/admin/configuration-access-denied";
+import { ConfigurationReturnLink } from "@/components/admin/configuration-return-link";
 
 export default async function CarPricingPage() {
   const caps = await getBusinessConfigurationCapabilities();
@@ -17,6 +18,7 @@ export default async function CarPricingPage() {
         eyebrow="Cars"
         title="What should each car cost?"
         description="Set daily, weekly, and monthly prices. Customers keep seeing current prices until you publish the changes."
+        action={<ConfigurationReturnLink />}
       />
       <PricingDraftControls
         data={data}

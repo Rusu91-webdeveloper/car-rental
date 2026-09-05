@@ -8,7 +8,9 @@ import { updateDriverRequirementsDraftAction } from "@/app/actions/phase6-config
 import { completeOwnerSetupStep, ownerSetupSaveLabel } from "@/components/admin/complete-owner-setup-step"
 import { evaluateDriverEligibility } from "@/lib/booking-configuration/driver-eligibility"
 import type { Phase6AdminPageData } from "@/lib/phase6-admin/types"
+import { useLocale } from "next-intl"
 export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phase6AdminPageData; canEdit: boolean; nextHref?: string }) {
+  const de = useLocale() === "de"
   const draft = data.draftCustomerDriver
   const router = useRouter()
   const [config, setConfig] = useState(draft?.configuration)
@@ -42,18 +44,18 @@ export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phas
         changeSummary: summary,
       })
       if ("error" in result) {
-        setMessage(result.error)
+        setMessage(de ? "Die Fahrerregeln konnten nicht gespeichert werden." : result.error)
         return
       }
-      setMessage("Driver rules saved.")
+      setMessage(de ? "Fahrerregeln gespeichert." : "Driver rules saved.")
       const navigationError = await completeOwnerSetupStep("driver-rules", nextHref, router)
-      if (navigationError) setMessage(navigationError)
+      if (navigationError) setMessage(de ? "Die Fahrerregeln wurden gespeichert, aber der nächste Schritt konnte nicht geöffnet werden." : navigationError)
     })
   return (
     <div className="space-y-5">
       <section className="rounded-xl border bg-background p-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Minimum driver age" hint={`Driver must be at least ${config.minimumDriverAge} on pickup.`}>
+          <Field label={de ? "Mindestalter des Fahrers" : "Minimum driver age"} hint={de ? `Der Fahrer muss bei Abholung mindestens ${config.minimumDriverAge} Jahre alt sein.` : `Driver must be at least ${config.minimumDriverAge} on pickup.`}>
             <Input
               type="number"
               min={18}
@@ -68,7 +70,7 @@ export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phas
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Maximum driver age (optional)" hint="Leave empty when no maximum applies.">
+          <Field label={de ? "Höchstalter des Fahrers (optional)" : "Maximum driver age (optional)"} hint={de ? "Leer lassen, wenn kein Höchstalter gilt." : "Leave empty when no maximum applies."}>
             <Input
               type="number"
               min={18}
@@ -83,7 +85,7 @@ export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phas
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Minimum time holding a licence (months)" hint={`${config.minimumLicenceHeldMonths} months at pickup.`}>
+          <Field label={de ? "Mindestdauer des Führerscheinbesitzes (Monate)" : "Minimum time holding a licence (months)"} hint={de ? `${config.minimumLicenceHeldMonths} Monate bei Abholung.` : `${config.minimumLicenceHeldMonths} months at pickup.`}>
             <Input
               type="number"
               min={0}
@@ -100,13 +102,13 @@ export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phas
           </Field>
           <label className="flex gap-2 rounded border p-3 text-sm">
             <Checkbox checked={config.licenceMustCoverRentalEnd} onCheckedChange={(v) => setConfig({ ...config, licenceMustCoverRentalEnd: v === true })} disabled={!canEdit} />
-            Licence must remain valid through return
+            {de ? "Der Führerschein muss bis zur Rückgabe gültig bleiben" : "Licence must remain valid through return"}
           </label>
         </div>
         <details className="mt-4 rounded-lg border p-4 text-sm">
-          <summary className="cursor-pointer font-medium">Advanced country restrictions</summary>
+          <summary className="cursor-pointer font-medium">{de ? "Erweiterte Länderbeschränkungen" : "Advanced country restrictions"}</summary>
           <div className="mt-4">
-            <Field label="Allowed licence countries" hint="Enter two-letter country codes separated by commas, such as RO, DE. Leave empty to accept any country.">
+            <Field label={de ? "Zulässige Ausstellungsstaaten" : "Allowed licence countries"} hint={de ? "Geben Sie zweistellige Ländercodes durch Kommas getrennt ein, z. B. RO, DE. Leer lassen, um jedes Land zu akzeptieren." : "Enter two-letter country codes separated by commas, such as RO, DE. Leave empty to accept any country."}>
               <Input
                 value={config.allowedLicenceCountries.join(", ")}
                 onChange={(e) =>
@@ -125,27 +127,27 @@ export function DriverRequirementsForm({ data, canEdit, nextHref }: { data: Phas
         </details>
       </section>
       <section className="rounded-xl border bg-background p-5">
-        <h2 className="font-semibold">Would this example driver be allowed?</h2>
+        <h2 className="font-semibold">{de ? "Wäre dieser Beispielfahrer zugelassen?" : "Would this example driver be allowed?"}</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Field label="Date of birth" hint="Sample only">
+          <Field label={de ? "Geburtsdatum" : "Date of birth"} hint={de ? "Nur Beispiel" : "Sample only"}>
             <Input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} />
           </Field>
-          <Field label="Licence issue date" hint="Sample only">
+          <Field label={de ? "Ausstellungsdatum des Führerscheins" : "Licence issue date"} hint={de ? "Nur Beispiel" : "Sample only"}>
             <Input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} />
           </Field>
-          <Field label="Licence expiry date" hint="Sample only">
+          <Field label={de ? "Ablaufdatum des Führerscheins" : "Licence expiry date"} hint={de ? "Nur Beispiel" : "Sample only"}>
             <Input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
           </Field>
         </div>
-        <p className={`mt-3 font-medium ${eligibility.eligible ? "text-emerald-700" : "text-destructive"}`}>{eligibility.eligible ? `Eligible · age ${eligibility.ageAtPickup} · licence held ${eligibility.licenceHeldMonthsAtPickup} months` : eligibility.issues[0]?.message}</p>
+        <p className={`mt-3 font-medium ${eligibility.eligible ? "text-emerald-700" : "text-destructive"}`}>{eligibility.eligible ? (de ? `Zugelassen · Alter ${eligibility.ageAtPickup} · Führerschein seit ${eligibility.licenceHeldMonthsAtPickup} Monaten` : `Eligible · age ${eligibility.ageAtPickup} · licence held ${eligibility.licenceHeldMonthsAtPickup} months`) : (de ? "Dieser Fahrer erfüllt die eingestellten Regeln nicht." : eligibility.issues[0]?.message)}</p>
       </section>
       <section className="rounded-xl border bg-background p-5">
         {canEdit ? (
           <Button className="mt-3" onClick={save} disabled={pending}>
-            {ownerSetupSaveLabel(nextHref)}
+            {ownerSetupSaveLabel(nextHref, de)}
           </Button>
         ) : (
-          <p className="mt-3 text-sm text-muted-foreground">View-only access</p>
+          <p className="mt-3 text-sm text-muted-foreground">{de ? "Nur Lesezugriff" : "View-only access"}</p>
         )}
         {message ? <p className="mt-2 text-sm">{message}</p> : null}
       </section>

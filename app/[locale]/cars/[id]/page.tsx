@@ -10,6 +10,7 @@ import { ShareButton } from "@/components/share-button"
 import { getTranslations } from "next-intl/server"
 import { BookNowButton } from "./book-now-button"
 import { CarAvailabilityCalendar } from "./car-availability-calendar"
+import { getPublicCarPrices } from "@/lib/cars/public-pricing"
 
 export const dynamic = "force-dynamic"
 
@@ -23,6 +24,10 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
   if (!car) {
     notFound()
   }
+
+  const publicPrice = (await getPublicCarPrices(prisma, [car])).get(car.id)!
+  const bookingEnabled =
+    publicPrice.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK")
 
   const [recentReviews, ratingBuckets, reviewAggregate] = await Promise.all([
     prisma.review.findMany({
@@ -74,7 +79,9 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
   const displaySubtitle = locale === "de" ? car.subtitleDe || car.subtitle : car.subtitle
   const displayDescription = locale === "de" ? car.descriptionDe || car.description : car.description
   const statusKey =
-    car.status === "AVAILABLE"
+    !publicPrice.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK")
+      ? "comingSoon"
+      : car.status === "AVAILABLE"
       ? "available"
       : car.status === "LOW_STOCK"
         ? "lowStock"
@@ -139,7 +146,9 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
           </div>
           <span
             className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
-              car.status === "AVAILABLE"
+              !publicPrice.pricingPublished && (car.status === "AVAILABLE" || car.status === "LOW_STOCK")
+                ? "bg-slate-100 text-slate-600"
+                : car.status === "AVAILABLE"
                 ? "bg-green-50 text-success"
                 : car.status === "LOW_STOCK"
                   ? "bg-orange-50 text-warning"
@@ -323,15 +332,20 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div>
             <div className="text-xl font-bold sm:text-2xl">
-              {formatCents(car.price)}
-              <span className="text-sm font-normal text-muted-foreground sm:text-base"> / {t("car.pricePerDay")}</span>
+              {publicPrice.pricingPublished && publicPrice.price !== null
+                ? formatCents(publicPrice.price)
+                : t("car.priceComingSoon")}
+              {publicPrice.pricingPublished ? (
+                <span className="text-sm font-normal text-muted-foreground sm:text-base"> / {t("car.pricePerDay")}</span>
+              ) : null}
             </div>
           </div>
           <BookNowButton
             carId={car.id}
             signInUrl={signInUrl}
             isSignedIn={Boolean(user)}
-            label={t("common.bookNow")}
+            label={bookingEnabled ? t("common.bookNow") : t("car.bookingUnavailable")}
+            disabled={!bookingEnabled}
           />
         </div>
       </div>

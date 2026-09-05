@@ -17,8 +17,9 @@ async function makeAdmin(email: string) {
     console.log(`✅ Successfully made ${user.email} an admin!`)
     console.log(`   Name: ${user.name || "N/A"}`)
     console.log(`   Role: ${user.role}`)
-  } catch (error: any) {
-    if (error.code === "P2025") {
+  } catch (error: unknown) {
+    const details = error as { code?: string; message?: string }
+    if (details.code === "P2025") {
       console.error(`❌ User with email ${email} not found`)
       console.log("\nAvailable users:")
       const users = await prisma.user.findMany({
@@ -28,7 +29,7 @@ async function makeAdmin(email: string) {
         console.log(`   - ${u.email} (${u.name || "No name"}) - ${u.role}`)
       })
     } else {
-      console.error("❌ Error:", error.message)
+      console.error("❌ Error:", details.message ?? "Unknown error")
     }
     process.exit(1)
   }
@@ -48,4 +49,3 @@ makeAdmin(email)
     console.error(error)
     process.exit(1)
   })
-

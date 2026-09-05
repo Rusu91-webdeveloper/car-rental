@@ -16,7 +16,8 @@ for (const key of [
   "RATE_LIMIT_HASH_SECRET",
   "NEXT_PUBLIC_APP_URL",
   "NEXTAUTH_URL",
-  "RESEND_API_KEY",
+  "GMAIL_SMTP_USER",
+  "GMAIL_SMTP_APP_PASSWORD",
   "EMAIL_FROM",
   "PRIVATE_DOCUMENT_BLOB_STORE_ID",
   "BLOB_STORE_ID",
@@ -40,9 +41,12 @@ if ((env.NEXTAUTH_SECRET?.length ?? 0) < 32) issues.add("NEXTAUTH_SECRET_TOO_SHO
 if ((env.RATE_LIMIT_HASH_SECRET?.length ?? 0) < 32) issues.add("RATE_LIMIT_HASH_SECRET_TOO_SHORT")
 if ((env.PHASE8FB_WORKER_SECRET?.length ?? 0) < 32) issues.add("PHASE8FB_WORKER_SECRET_TOO_SHORT")
 if ((env.CRON_SECRET?.length ?? 0) < 32) issues.add("CRON_SECRET_TOO_SHORT")
-if (env.RESEND_API_KEY && !env.RESEND_API_KEY.startsWith("re_")) issues.add("RESEND_API_KEY_FORMAT_INVALID")
+if (env.GMAIL_SMTP_USER && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(env.GMAIL_SMTP_USER))
+  issues.add("GMAIL_SMTP_USER_INVALID")
+if (env.GMAIL_SMTP_APP_PASSWORD && env.GMAIL_SMTP_APP_PASSWORD.replace(/\s+/g, "").length !== 16)
+  issues.add("GMAIL_SMTP_APP_PASSWORD_INVALID")
 if (env.EMAIL_FROM && (!env.EMAIL_FROM.includes("@") || env.EMAIL_FROM.includes("noreply@rentcar.com")))
-  issues.add("EMAIL_FROM_UNVERIFIED_OR_DEFAULT")
+  issues.add("EMAIL_FROM_INVALID_OR_DEFAULT")
 
 if (env.PRIVATE_DOCUMENTS_ENABLED !== "true") issues.add("PRIVATE_DOCUMENTS_DISABLED")
 if (env.PRIVATE_DOCUMENT_STORAGE_PROVIDER !== "vercel-blob-private") issues.add("PRIVATE_DOCUMENT_PROVIDER_INVALID")
@@ -71,6 +75,8 @@ if (env.BOOKING_MAINTENANCE_WORKER_ENABLED !== "true") issues.add("BOOKING_MAINT
 
 for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"])
   if (env[key]) issues.add(`ONLINE_PAYMENT_VARIABLE_FORBIDDEN_${key}`)
+for (const key of ["EMAIL_USER", "EMAIL_PASS", "RESEND_API_KEY", "RESEND_FROM_EMAIL"])
+  if (env[key]) issues.add(`OBSOLETE_EMAIL_VARIABLE_FORBIDDEN_${key}`)
 
 const result = {
   ready: issues.size === 0,

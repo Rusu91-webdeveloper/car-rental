@@ -109,6 +109,31 @@ describe("capability evaluation", () => {
     });
   });
 
+  it("combines administrator compatibility with explicitly assigned restricted capabilities", () => {
+    const administratorReviewer: CapabilityPrincipal = {
+      authenticated: true,
+      userId: "admin-reviewer-1",
+      role: "ADMIN",
+      capabilities: new Set([
+        CAPABILITIES.DOCUMENTS_VIEW,
+        CAPABILITIES.DOCUMENTS_REVIEW,
+      ]),
+    };
+    expect(
+      checkAllCapabilities(administratorReviewer, [
+        CAPABILITIES.CONFIGURATION_EDIT,
+        CAPABILITIES.DOCUMENTS_VIEW,
+        CAPABILITIES.DOCUMENTS_REVIEW,
+      ]),
+    ).toEqual({ allowed: true });
+    expect(
+      checkCapability(
+        administratorReviewer,
+        CAPABILITIES.DOCUMENTS_DOWNLOAD,
+      ),
+    ).toMatchObject({ allowed: false, reason: "UNAUTHORIZED" });
+  });
+
   it("filters restricted capabilities inherited through ADMIN_COMPAT", async () => {
     const repository = new PrismaCapabilityRepository({
       userAccessRole: {

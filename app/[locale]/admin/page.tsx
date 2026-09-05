@@ -1,15 +1,16 @@
 import { redirect } from "@/navigation"
 import { prisma } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
 import { getCarReviewStats, getCarReviewStatsMap } from "@/lib/car-review-stats"
 import { getBusinessConfigurationCapabilities } from "@/lib/authorization/server"
-import { loadConfigurationOverview } from "@/lib/business-configuration/workflow-service"
 import { buildOwnerSettingsGuide } from "@/lib/admin/owner-settings-guide"
+import { loadOwnerSettingsOverview } from "@/lib/admin/owner-settings-overview"
 import { legalContentHash } from "@/lib/legal/content"
 import { maskLicenceNumber } from "@/lib/booking-configuration/field-resolver"
 import AdminDashboard from "./admin-client"
 import type { Car, User } from "@prisma/client"
+import { runBookingLifecycleMaintenance } from "@/lib/booking-expiration"
+import { getAdminCarPublishingStatuses } from "@/lib/admin/car-publishing-status"
 
 export const dynamic = "force-dynamic"
 
@@ -70,9 +71,9 @@ export default async function AdminPage({
   // At this point, user is guaranteed to be non-null and ADMIN
   const adminUser = user!
   const capabilities = await getBusinessConfigurationCapabilities()
-
   await runBookingLifecycleMaintenance()
-  const [cars, bookings, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps] =
+
+  const [cars, bookings, bookingApplications, users, blockedDates, reviews, companySettings, configurationOverview, documentReviewCount, completedSetupSteps, activeGeneralRental] =
     await Promise.all([
       prisma.car.findMany({
         where: { isDeleted: false },
@@ -83,6 +84,17 @@ export default async function AdminPage({
         include: {
           pricingSnapshot: true,
           insuranceSnapshot: true,
+          paymentPolicySnapshot: true,
+          payments: {
+            where: { status: { in: ["PAID", "REFUNDED"] } },
+            select: { amount: true, receivedAt: true, kind: true, status: true },
+          },
+          notifications: {
+            where: { recipient: "CUSTOMER" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, event: true, status: true, sentAt: true, lastErrorCode: true },
+          },
           customerDriverSnapshot: capabilities.canViewSensitiveCustomerData,
           legalAcceptances: {
             include: {
@@ -93,6 +105,33 @@ export default async function AdminPage({
             orderBy: { acceptedAt: "asc" },
           },
         },
+      }),
+      prisma.bookingApplication.findMany({
+        where: {
+          bookingId: null,
+          status: { notIn: ["FINALIZING", "FINALIZED", "CANCELLED", "EXPIRED", "REJECTED"] },
+          car: { isDeleted: false },
+        },
+        select: {
+          id: true,
+          customerUserId: true,
+          carId: true,
+          status: true,
+          revision: true,
+          pickupAt: true,
+          returnAt: true,
+          businessTimeZone: true,
+          pickupLocation: true,
+          paymentMethod: true,
+          updatedAt: true,
+          pricingQuotes: {
+            where: { isCurrent: true },
+            select: { grandTotal: true, currency: true },
+            take: 1,
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 50,
       }),
       prisma.user.findMany({
         orderBy: { createdAt: "desc" },
@@ -124,10 +163,14 @@ export default async function AdminPage({
         },
       }),
       prisma.companySettings.findUnique({ where: { id: "company-settings" } }),
-      loadConfigurationOverview({ includeAudit: false }),
+      loadOwnerSettingsOverview(),
       capabilities.canViewDocuments
         ? prisma.bookingApplication.count({
-            where: { status: "AWAITING_DOCUMENT_REVIEW" },
+            where: {
+              bookingId: null,
+              status: "AWAITING_DOCUMENT_REVIEW",
+              car: { isDeleted: false },
+            },
           })
         : Promise.resolve(null),
       prisma.auditEvent.findMany({
@@ -138,6 +181,10 @@ export default async function AdminPage({
         },
         distinct: ["targetId"],
         select: { targetId: true },
+      }),
+      prisma.businessConfigurationRelease.findFirst({
+        where: { status: "ACTIVE" },
+        select: { generalRentalConfig: { select: { businessTimeZone: true } } },
       }),
     ])
 
@@ -161,12 +208,17 @@ export default async function AdminPage({
     })
     .filter((reservation): reservation is NonNullable<typeof reservation> => reservation !== null)
   const reviewStatsByCar = await getCarReviewStatsMap(cars.map((car) => car.id))
+  const carPublishingStatuses = await getAdminCarPublishingStatuses(
+    prisma,
+    cars.map((car) => car.id),
+  )
   const allowedSections = new Set(["overview", "cars", "bookings", "users", "reviews", "analytics"])
   const initialSection = requestedSection && allowedSections.has(requestedSection) ? requestedSection : "overview"
   const settingsGuide = buildOwnerSettingsGuide({
     company: companySettings,
     overview: configurationOverview,
     completedStepIds: completedSetupSteps.map(({ targetId }) => targetId),
+    locale,
   })
   const setup = {
     completed: settingsGuide.completed,
@@ -181,14 +233,17 @@ export default async function AdminPage({
       complete: step.state === "complete",
     })),
   }
+  const generatedAt = new Date().toISOString()
 
   return (
     <AdminDashboard
-      key={initialSection}
+      key={`${initialSection}:${generatedAt}`}
       initialSection={initialSection}
-      generatedAt={new Date().toISOString()}
+      generatedAt={generatedAt}
+      businessTimeZone={activeGeneralRental?.generalRentalConfig.businessTimeZone ?? "UTC"}
       setup={setup}
       documentReviewCount={documentReviewCount}
+      canReviewDocuments={capabilities.canViewDocuments}
       currentUser={{
         id: adminUser.id,
         name: adminUser.name || adminUser.email,
@@ -208,6 +263,7 @@ export default async function AdminPage({
           image: car.image,
           images: car.images,
           status: car.status,
+          pricingPublication: carPublishingStatuses.get(car.id) ?? "NEEDS_PRICING",
           specs: {
             gearbox: car.gearbox,
             seats: car.seats,
@@ -227,12 +283,37 @@ export default async function AdminPage({
         carId: booking.carId,
         pickupDate: booking.pickupDate.toISOString(),
         dropoffDate: booking.dropoffDate.toISOString(),
+        businessTimeZone: booking.businessTimeZone,
         location: booking.location,
         totalPrice: booking.pricingSnapshot?.grandTotal ?? booking.totalPrice,
         currency: booking.pricingSnapshot?.currency ?? "EUR",
         guaranteeAmount: booking.guaranteeAmount,
+        bookingNumber: booking.bookingNumber,
+        transferCode: booking.transferCode,
+        depositAmount: booking.depositAmount,
+        advancePaymentAmount: booking.advancePaymentAmount,
         status: booking.status,
+        paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod,
+        paymentDueAt: booking.paymentDueAt?.toISOString() ?? null,
+        amountReceived: booking.payments.reduce(
+          (sum, payment) => sum + (payment.kind === "RECEIPT" ? payment.amount : -payment.amount),
+          0,
+        ),
+        refundReviewStatus: booking.refundReviewStatus,
+        paymentPolicy: booking.paymentPolicySnapshot
+          ? {
+              depositEnabled: booking.paymentPolicySnapshot.depositType !== "NONE",
+              depositRateBps: booking.paymentPolicySnapshot.depositRateBps,
+              remainingBalanceRule: booking.paymentPolicySnapshot.remainingBalanceRule,
+            }
+          : null,
+        emailDelivery: booking.notifications[0]
+          ? {
+              ...booking.notifications[0],
+              sentAt: booking.notifications[0].sentAt?.toISOString() ?? null,
+            }
+          : null,
         createdAt: booking.createdAt.toISOString(),
         provenance: {
           configurationReleaseId: booking.pricingSnapshot?.configurationReleaseId ?? null,
@@ -270,6 +351,21 @@ export default async function AdminPage({
           hashVerified:
             acceptance.contentHash === legalContentHash(acceptance.legalDocumentTranslation.canonicalContent),
         })),
+      }))}
+      bookingApplications={bookingApplications.map((application) => ({
+        id: application.id,
+        userId: application.customerUserId,
+        carId: application.carId,
+        status: application.status,
+        revision: application.revision,
+        pickupDate: application.pickupAt.toISOString(),
+        dropoffDate: application.returnAt.toISOString(),
+        businessTimeZone: application.businessTimeZone,
+        location: application.pickupLocation,
+        totalPrice: application.pricingQuotes[0]?.grandTotal ?? null,
+        currency: application.pricingQuotes[0]?.currency ?? "EUR",
+        paymentMethod: application.paymentMethod,
+        updatedAt: application.updatedAt.toISOString(),
       }))}
       users={users.map((item: User) => ({
         id: item.id,

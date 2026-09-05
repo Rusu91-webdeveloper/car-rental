@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest"
 import type { BookingApplicationRepository } from "@/lib/booking-applications/repository"
 import type { ApplicationMutationInput, BookingApplicationView, CreateBookingApplicationInput } from "@/lib/booking-applications/domain"
 import {
+  bookingApplicationExpiresAt,
+  isApplicationFinalizationTimeValid,
+  isCarLifecycleBookable,
+} from "@/lib/booking-applications/domain"
+import {
   cancelBookingApplication,
   createBookingApplication,
   finalizeBookingApplication,
@@ -20,6 +25,7 @@ function view(overrides: Partial<BookingApplicationView> = {}): BookingApplicati
     locale: "en",
     pickupAt: new Date("2026-07-14T10:00:00.000Z"),
     returnAt: new Date("2026-07-16T10:00:00.000Z"),
+    businessTimeZone: "Europe/Berlin",
     pickupLocation: "Airport desk",
     returnLocation: "Airport desk",
     status: "AWAITING_DOCUMENT_UPLOAD",
@@ -57,6 +63,7 @@ class MemoryRepository implements BookingApplicationRepository {
   async submitForReview(input: ApplicationMutationInput) {
     return this.mutate(input, { status: "AWAITING_DOCUMENT_REVIEW" })
   }
+  async reconcileConfirmedQuoteAfterReview() { return "VALID" as const }
   async evaluateReadiness() { return { ready: false, blockers: [{ code: "DOCUMENT_APPROVAL_REQUIRED", message: "Document approval required." }] } }
   async markCustomerActionRequired(input: ApplicationMutationInput) {
     return this.mutate(input, { status: "CUSTOMER_ACTION_REQUIRED", actionRequiredReason: "PRICE_CHANGED" })
@@ -91,6 +98,27 @@ const createInput: CreateBookingApplicationInput = {
 }
 
 describe("Phase 8F-B BookingApplication services", () => {
+  it("caps the application hold at pickup and rejects stale finalization", () => {
+    const createdAt = new Date("2026-07-13T12:00:00.000Z")
+    const pickupAt = new Date("2026-07-13T12:30:00.000Z")
+
+    expect(bookingApplicationExpiresAt({ now: createdAt, pickupAt })).toEqual(pickupAt)
+    expect(
+      isApplicationFinalizationTimeValid(
+        { expiresAt: pickupAt, pickupAt },
+        new Date("2026-07-13T12:30:00.000Z"),
+      ),
+    ).toBe(false)
+  })
+
+  it("allows only live bookable vehicle lifecycle states", () => {
+    expect(isCarLifecycleBookable({ isDeleted: false, status: "AVAILABLE" })).toBe(true)
+    expect(isCarLifecycleBookable({ isDeleted: false, status: "LOW_STOCK" })).toBe(true)
+    expect(isCarLifecycleBookable({ isDeleted: false, status: "MAINTENANCE" })).toBe(false)
+    expect(isCarLifecycleBookable({ isDeleted: false, status: "RENTED" })).toBe(false)
+    expect(isCarLifecycleBookable({ isDeleted: true, status: "AVAILABLE" })).toBe(false)
+  })
+
   it("preserves the exact single-location business rule and mapping", async () => {
     const repository = new MemoryRepository()
     expect((await createBookingApplication(repository, createInput)).pickupLocation).toBe("Airport desk")

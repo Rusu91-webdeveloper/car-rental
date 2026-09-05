@@ -8,7 +8,7 @@ import { createBookingReviewSchema } from "@/lib/validations"
 import { z } from "zod"
 
 const canReviewBooking = (booking: Pick<Booking, "status" | "paymentStatus" | "paymentMethod">) => {
-  return booking.status === "COMPLETED" && (booking.paymentStatus === "PAID" || booking.paymentMethod === "PAY_AT_PICKUP")
+  return booking.status === "COMPLETED" && booking.paymentStatus === "PAID"
 }
 
 async function syncCarRatingStats(tx: Prisma.TransactionClient, carId: string) {

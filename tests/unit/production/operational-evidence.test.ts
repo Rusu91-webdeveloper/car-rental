@@ -54,6 +54,7 @@ describe("alert delivery evidence", () => {
       type: "ALERT_DELIVERY",
       operatorId: "operator-1",
     })
+    expect(repository.created[0]?.deduplicationKey).toMatch(/^alert:production:\d+:[a-f0-9]{16}$/)
     expect(repository.finished).toHaveLength(0)
     const confirmation = await confirmAlertDelivery({
       evidenceId: result.evidenceId!,
