@@ -1,6 +1,7 @@
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@auth/prisma-adapter"
+import { googleAccountLinkingOptions, hasVerifiedGoogleEmail } from "./auth/google-account-linking"
 import { prisma } from "./db"
 import { config } from "./config"
 import type { Adapter } from "next-auth/adapters"
@@ -25,13 +26,20 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // Google verifies the email claim, allowing the first Google login to
+      // attach to a user that an administrator created beforehand.
+      ...googleAccountLinkingOptions,
     }),
   ],
   session: {
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google" && !hasVerifiedGoogleEmail(profile)) {
+        return false
+      }
+
       // User is automatically created by the adapter
       // After user is created, update role based on admin emails
       if (user.email) {
