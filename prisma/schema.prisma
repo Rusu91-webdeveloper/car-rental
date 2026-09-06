@@ -132,7 +132,7 @@ model Car {
   gearbox      String
   seats        Int
   fuelType     String
-  acceleration String
+  acceleration String?
   year         Int?
 
   // Ratings
@@ -169,6 +169,8 @@ enum CarCategory {
   SUV
   SEDAN
   EV
+  FAMILY_CAR
+  KOMBI
 }
 
 enum CarStatus {

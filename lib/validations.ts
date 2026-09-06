@@ -68,7 +68,7 @@ export const createCarSchema = z.object({
   subtitleDe: z.string().max(200).optional(),
   description: z.string().min(10),
   descriptionDe: z.string().min(10),
-  category: z.enum(["ELECTRIC", "LUXURY", "SUV", "SEDAN", "EV"]),
+  category: z.enum(["ELECTRIC", "LUXURY", "SUV", "SEDAN", "EV", "FAMILY_CAR", "KOMBI"]),
   price: z.number().int().positive(),
   image: imageSchema,
   images: z.array(imageSchema).max(10).optional(),
@@ -76,8 +76,8 @@ export const createCarSchema = z.object({
   gearbox: z.string(),
   seats: z.number().int().min(2).max(9),
   fuelType: z.string(),
-  acceleration: z.string(),
-  year: z.number().int().min(1900).max(2030),
+  acceleration: z.string().trim().max(100).default("").transform((value) => value || null),
+  year: z.number().int().min(1900).max(2030).nullable().optional(),
 })
 
 export const updateCarSchema = createCarSchema.partial()

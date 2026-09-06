@@ -80,7 +80,7 @@ interface AdminCar {
   nameDe?: string | null
   subtitle?: string | null
   subtitleDe?: string | null
-  category: "ELECTRIC" | "LUXURY" | "SUV" | "SEDAN" | "EV"
+  category: "ELECTRIC" | "LUXURY" | "SUV" | "SEDAN" | "EV" | "FAMILY_CAR" | "KOMBI"
   price: number
   image: string
   images: string[]
@@ -90,7 +90,7 @@ interface AdminCar {
     gearbox: string
     seats: number
     fuel: string
-    acceleration: string
+    acceleration: string | null
   }
   year: number | null
   rating: number
@@ -582,7 +582,7 @@ export default function AdminDashboard({
     gearbox: string
     seats: number
     fuelType: string
-    acceleration: string
+    acceleration: string | null
     year?: number | null
     rating: number
     reviewCount: number
@@ -2365,7 +2365,7 @@ interface CarFormValues {
   seats: number
   fuelType: string
   acceleration: string
-  year: number
+  year: number | null
   description: string
   descriptionDe: string
 }
@@ -2784,8 +2784,8 @@ function CarForm({
           gearbox: initialCar.specs.gearbox,
           seats: initialCar.specs.seats,
           fuelType: initialCar.specs.fuel,
-          acceleration: initialCar.specs.acceleration,
-          year: initialCar.year ?? new Date().getFullYear(),
+          acceleration: initialCar.specs.acceleration ?? "",
+          year: initialCar.year,
           description: initialCar.description || "",
           descriptionDe: initialCar.descriptionDe || "",
         }
@@ -2802,8 +2802,8 @@ function CarForm({
           gearbox: "Automatic",
           seats: 5,
           fuelType: "Gas",
-          acceleration: "0-60 in 6.0sec",
-          year: new Date().getFullYear(),
+          acceleration: "",
+          year: null,
           description: "",
           descriptionDe: "",
         },
@@ -2824,8 +2824,7 @@ function CarForm({
     if (!data.gearbox.trim()) errors.push(tr("Gearbox is required.", "Die Getriebeart ist erforderlich."))
     if (!Number.isFinite(data.seats) || data.seats < 2 || data.seats > 9) errors.push(tr("Seats must be between 2 and 9.", "Die Anzahl der Sitzplätze muss zwischen 2 und 9 liegen."))
     if (!data.fuelType.trim()) errors.push(tr("Fuel type is required.", "Die Kraftstoffart ist erforderlich."))
-    if (!data.acceleration.trim()) errors.push(tr("Acceleration is required.", "Die Beschleunigungsangabe ist erforderlich."))
-    if (!Number.isFinite(data.year) || data.year < 1900 || data.year > 2030)
+    if (data.year !== null && (!Number.isFinite(data.year) || data.year < 1900 || data.year > 2030))
       errors.push(tr("Year must be between 1900 and 2030.", "Das Baujahr muss zwischen 1900 und 2030 liegen."))
     if (!data.status) errors.push(tr("Status is required.", "Der Status ist erforderlich."))
     if (!data.description.trim()) errors.push(tr("Description (EN) is required.", "Die englische Beschreibung ist erforderlich."))
@@ -3033,6 +3032,8 @@ function CarForm({
             <SelectItem value="LUXURY">{tr("Luxury", "Luxus")}</SelectItem>
             <SelectItem value="ELECTRIC">{tr("Electric", "Elektrisch")}</SelectItem>
             <SelectItem value="EV">{tr("EV", "Elektrofahrzeug")}</SelectItem>
+            <SelectItem value="FAMILY_CAR">{tr("Family Car", "Familienauto")}</SelectItem>
+            <SelectItem value="KOMBI">Kombi</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -3138,26 +3139,26 @@ function CarForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="acceleration">0-60 mph</Label>
+          <Label htmlFor="acceleration">{tr("0-60 mph (optional)", "0-60 mph (optional)")}</Label>
           <Input
             id="acceleration"
             value={formData.acceleration}
             onChange={(e) => setFormData({ ...formData, acceleration: e.target.value })}
-            required
           />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="year">{tr("Year", "Baujahr")}</Label>
+        <Label htmlFor="year">{tr("Year (optional)", "Baujahr (optional)")}</Label>
         <Select
           value={formData.year?.toString() || ""}
-          onValueChange={(value) => setFormData({ ...formData, year: Number(value) })}
+          onValueChange={(value) => setFormData({ ...formData, year: value === "NONE" ? null : Number(value) })}
         >
           <SelectTrigger>
             <SelectValue placeholder={tr("Select year", "Baujahr auswählen")} />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="NONE">{tr("Not specified", "Nicht angegeben")}</SelectItem>
             {Array.from({ length: 26 }, (_, i) => {
               const year = 2000 + i
               return (

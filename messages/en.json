@@ -355,7 +355,15 @@
     "luxury": "Luxury",
     "suv": "SUV",
     "sedan": "Sedan",
-    "ev": "EV"
+    "ev": "EV",
+    "family_car": "Family Car",
+    "kombi": "Kombi"
+  },
+  "privacyPopup": {
+    "title": "Your privacy",
+    "body": "We do not sell your personal data or use marketing or profiling cookies. We process only the technical data needed to operate this website and the information you choose to provide for an account, enquiry or booking. Necessary service providers process data only to deliver those services.",
+    "notice": "Read the full Privacy Notice",
+    "acknowledge": "Understood"
   },
   "carStatus": {
     "available": "Available",
