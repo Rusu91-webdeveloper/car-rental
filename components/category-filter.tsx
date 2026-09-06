@@ -9,6 +9,8 @@ const categories = [
   { value: "LUXURY", labelKey: "luxury" },
   { value: "ELECTRIC", labelKey: "electric" },
   { value: "EV", labelKey: "ev" },
+  { value: "FAMILY_CAR", labelKey: "family_car" },
+  { value: "KOMBI", labelKey: "kombi" },
 ]
 
 interface CategoryFilterProps {

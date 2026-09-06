@@ -355,7 +355,15 @@
     "luxury": "Luxus",
     "suv": "SUV",
     "sedan": "Limousine",
-    "ev": "Elektrofahrzeug"
+    "ev": "Elektrofahrzeug",
+    "family_car": "Familienauto",
+    "kombi": "Kombi"
+  },
+  "privacyPopup": {
+    "title": "Ihre Privatsphäre",
+    "body": "Wir verkaufen Ihre personenbezogenen Daten nicht und verwenden keine Marketing- oder Profiling-Cookies. Wir verarbeiten nur technisch erforderliche Daten für den Betrieb dieser Website sowie Angaben, die Sie freiwillig für ein Konto, eine Anfrage oder eine Buchung bereitstellen. Erforderliche Dienstleister verarbeiten Daten nur zur Erbringung dieser Leistungen.",
+    "notice": "Vollständige Datenschutzerklärung lesen",
+    "acknowledge": "Verstanden"
   },
   "carStatus": {
     "available": "Verfügbar",

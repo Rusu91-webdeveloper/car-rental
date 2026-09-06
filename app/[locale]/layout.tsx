@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer"
 import { Toaster } from "@/components/ui/toaster"
 import { getBusinessInfo } from "@/lib/business-info"
 import { locales } from "@/i18n"
+import { PrivacyNoticePopup } from "@/components/privacy-notice-popup"
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }))
@@ -48,6 +49,7 @@ export default async function LocaleLayout({
         <main className="flex-1">{children}</main>
         <Footer businessInfo={businessInfo} />
         <Toaster />
+        <PrivacyNoticePopup />
       </div>
     </NextIntlClientProvider>
   )

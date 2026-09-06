@@ -30,7 +30,7 @@ interface Car {
     gearbox: string
     seats: number
     fuel: string
-    acceleration: string
+    acceleration: string | null
   }
   rating: number
   reviews: number

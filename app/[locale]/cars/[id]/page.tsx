@@ -213,7 +213,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
               <p className="text-xs text-muted-foreground mb-1">{t("car.capacity")}</p>
               <p className="font-semibold">{t("car.seats", { count: car.seats })}</p>
             </div>
-            <div className="p-4 bg-muted rounded-xl">
+            {car.acceleration ? <div className="p-4 bg-muted rounded-xl">
               <div className="text-primary mb-2">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -226,7 +226,7 @@ export default async function CarDetailPage({ params }: { params: Promise<{ loca
               </div>
               <p className="text-xs text-muted-foreground mb-1">{t("car.accelerationLabel")}</p>
               <p className="font-semibold">{car.acceleration}</p>
-            </div>
+            </div> : null}
           </div>
         </div>
 
